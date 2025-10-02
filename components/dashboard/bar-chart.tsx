@@ -1,34 +1,9 @@
 "use client"
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Bar, Line, Chart } from "react-chartjs-2"
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-  Legend,
-  BarController,
-  LineController,
-} from "chart.js"
-
-// Register required controllers explicitly (fixes production error: "'bar' is not a registered controller")
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-  Legend,
-  BarController,
-  LineController,
-)
+import { Bar, Line, Chart as MixedChart } from "react-chartjs-2"
+// Import auto bundle to ensure all controllers/elements are registered (avoids 'bar is not a registered controller')
+import { Chart as ChartJS } from "chart.js/auto"
 
 interface BarChartProps {
   data: {
@@ -277,7 +252,7 @@ const BarChartComponent = ({
             {/* khung cố định chiều cao để Chart.js fill vào (nhờ maintainAspectRatio:false) */}
             <div className="h-[280px] sm:h-[320px] lg:h-[360px] w-full">
               {selectedMonth === 0 ? (
-                <Chart type="bar" data={barData} options={barOptions} />
+                <MixedChart type="bar" data={barData as any} options={barOptions} />
               ) : (
                 <Line data={lineData} options={lineOptions} />
               )}
