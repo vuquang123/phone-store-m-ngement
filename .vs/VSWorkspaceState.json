@@ -1,0 +1,15 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\app",
+    "\\app\\api",
+    "\\app\\api\\login",
+    "\\app\\auth",
+    "\\app\\auth\\login",
+    "\\app\\dashboard",
+    "\\components\\auth",
+    "\\components\\ban-hang"
+  ],
+  "SelectedNode": "\\.gitignore",
+  "PreviewInSolutionExplorer": true
+}
