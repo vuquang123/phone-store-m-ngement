@@ -39,15 +39,30 @@ export async function getBaoHanhProducts() {
 }
 import { google } from "googleapis"
 
-const GOOGLE_SHEETS_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || ""
-const GOOGLE_SHEETS_PRIVATE_KEY = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n")
+// Hỗ trợ cả hai bộ tên biến môi trường để tránh nhầm lẫn:
+//  - Cũ: GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, GOOGLE_SHEETS_SPREADSHEET_ID
+//  - Khuyến nghị / Bạn đã tạo: GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_KEY, GOOGLE_SHEETS_ID
+const GOOGLE_SHEETS_CLIENT_EMAIL =
+  process.env.GOOGLE_CLIENT_EMAIL ||
+  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+  ""
 
-if (!GOOGLE_SHEETS_CLIENT_EMAIL || !GOOGLE_SHEETS_PRIVATE_KEY) {
-  console.error("Google Sheets API: Missing GOOGLE_CLIENT_EMAIL or GOOGLE_PRIVATE_KEY in environment variables.")
-  console.error("GOOGLE_CLIENT_EMAIL:", GOOGLE_SHEETS_CLIENT_EMAIL)
-  console.error("GOOGLE_PRIVATE_KEY (first 100 chars):", GOOGLE_SHEETS_PRIVATE_KEY?.substring(0, 100))
+const RAW_PRIVATE_KEY =
+  process.env.GOOGLE_PRIVATE_KEY ||
+  process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
+  ""
+
+const GOOGLE_SHEETS_PRIVATE_KEY = RAW_PRIVATE_KEY.replace(/\\n/g, "\n")
+
+const GOOGLE_SHEETS_SPREADSHEET_ID =
+  (process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEETS_ID || "") as string
+
+if (!GOOGLE_SHEETS_CLIENT_EMAIL || !GOOGLE_SHEETS_PRIVATE_KEY || !GOOGLE_SHEETS_SPREADSHEET_ID) {
+  console.error("[Google Sheets] Thiếu biến môi trường cần thiết.")
+  console.error("  GOOGLE_SHEETS_CLIENT_EMAIL:", GOOGLE_SHEETS_CLIENT_EMAIL ? "OK" : "MISSING")
+  console.error("  PRIVATE_KEY present:", RAW_PRIVATE_KEY ? "YES" : "NO")
+  console.error("  SPREADSHEET_ID:", GOOGLE_SHEETS_SPREADSHEET_ID ? "OK" : "MISSING")
 }
-const GOOGLE_SHEETS_SPREADSHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID as string
 
 
 const auth = new google.auth.JWT({
