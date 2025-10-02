@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+
+export const dynamic = "force-dynamic"
 import { readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
 
 function toColumnLetter(colNum: number) {
@@ -19,17 +21,48 @@ export async function POST(request: NextRequest) {
     }
 
     const SHEET_NAME = "USERS"
-    const { header, rows } = await readFromGoogleSheets(SHEET_NAME)
+    let header: string[] = []
+    let rows: any[][] = []
+    try {
+      const sheetData = await readFromGoogleSheets(SHEET_NAME)
+      header = sheetData.header
+      rows = sheetData.rows as any[][]
+    } catch (err: any) {
+      console.error("[LOGIN] Không đọc được sheet USERS:", err?.message)
+      const envStatus = {
+        EMAIL: !!process.env.GOOGLE_CLIENT_EMAIL || !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        KEY: !!process.env.GOOGLE_PRIVATE_KEY || !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
+        SHEET_ID: !!process.env.GOOGLE_SHEETS_SPREADSHEET_ID || !!process.env.GOOGLE_SHEETS_ID,
+      }
+      console.error("[LOGIN] Env presence:", envStatus)
+      return NextResponse.json({ success: false, message: "Không kết nối được Google Sheets (USERS)", detail: err?.message, env: envStatus }, { status: 500 })
+    }
 
-    const emailIdx = header.indexOf("Email")
-    const passwordIdx = header.indexOf("Mật Khẩu")
-    const nameIdx = header.indexOf("Tên")
-    const roleIdx = header.indexOf("Vai Trò")
-    const statusIdx = header.indexOf("Trạng Thái")
-    const lastLoginIdx = header.indexOf("Lần Đăng Nhập Cuối")
+    const norm = (s: string) => (s || "")
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .trim()
+      .toLowerCase()
 
-    if ([emailIdx, passwordIdx, nameIdx, roleIdx, statusIdx].includes(-1)) {
-      return NextResponse.json({ success: false, message: "Cấu trúc sheet không hợp lệ" }, { status: 500 })
+    const HNorm = header.map(h => norm(h))
+    const find = (candidates: string[]) => {
+      for (const c of candidates) {
+        const n = norm(c)
+        const i = HNorm.findIndex(h => h === n)
+        if (i !== -1) return i
+      }
+      return -1
+    }
+
+    const emailIdx = find(["Email", "E-mail", "email"])
+    const passwordIdx = find(["Mật Khẩu", "Mat Khau", "Password", "Pass", "pwd"]) 
+    const nameIdx = find(["Tên", "Ten", "Name"])
+    const roleIdx = find(["Vai Trò", "Vai Tro", "Role", "Quyen"]) 
+    const statusIdx = find(["Trạng Thái", "Trang Thai", "Status"]) 
+    const lastLoginIdx = find(["Lần Đăng Nhập Cuối", "Lan Dang Nhap Cuoi", "Last Login"]) 
+
+    if ([emailIdx, passwordIdx].includes(-1)) {
+      return NextResponse.json({ success: false, message: "Thiếu cột Email hoặc Mật Khẩu trong sheet USERS" }, { status: 500 })
     }
 
     const userRow = rows.find(
@@ -66,7 +99,7 @@ export async function POST(request: NextRequest) {
   employeeId: idxIdNhanVien !== -1 ? userRow[idxIdNhanVien] : "",
     }
 
-    if (user.status !== "hoat_dong") {
+    if (statusIdx !== -1 && user.status && user.status !== "hoat_dong") {
       return NextResponse.json({ success: false, message: "Tài khoản bị khóa" }, { status: 403 })
     }
 
@@ -81,8 +114,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, user })
-  } catch (err) {
-    console.error(err)
-    return NextResponse.json({ success: false, message: "Lỗi server" }, { status: 500 })
+  } catch (err: any) {
+    console.error("[LOGIN] Unhandled error:", err)
+    return NextResponse.json({ success: false, message: "Lỗi server", detail: err?.message }, { status: 500 })
   }
 }

@@ -12,9 +12,23 @@ import {
   Title,
   Tooltip,
   Legend,
+  BarController,
+  LineController,
 } from "chart.js"
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
+// Register required controllers explicitly (fixes production error: "'bar' is not a registered controller")
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend,
+  BarController,
+  LineController,
+)
 
 interface BarChartProps {
   data: {
