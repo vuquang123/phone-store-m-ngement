@@ -111,7 +111,16 @@ export async function readFromGoogleSheets(sheetName: string, range: string = "A
     const rows = values.slice(1)
     return { header, rows }
   } catch (error: any) {
-    console.error("Lỗi đọc Google Sheets:", error)
+    console.error("[Sheets] Read error:", {
+      sheet: sheetName,
+      range,
+      message: error?.message,
+      code: error?.code,
+      errors: error?.errors,
+      hasBegin: GOOGLE_SHEETS_PRIVATE_KEY.includes('BEGIN'),
+      keyFirstLine: GOOGLE_SHEETS_PRIVATE_KEY.split('\n')[0],
+      email: GOOGLE_SHEETS_CLIENT_EMAIL,
+    })
     throw new Error(error.message || "Lỗi đọc Google Sheets")
   }
 }
