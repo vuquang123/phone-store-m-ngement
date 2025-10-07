@@ -48,25 +48,31 @@ const GOOGLE_SHEETS_CLIENT_EMAIL =
   ""
 
 const RAW_PRIVATE_KEY =
-  process.env.GOOGLE_PRIVATE_KEY ||
-  process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
-  ""
+  (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "")
 
-// Một số môi trường (Vercel UI) tự động thêm \n hoặc người dùng dán base64 -> xử lý linh hoạt
-let GOOGLE_SHEETS_PRIVATE_KEY = RAW_PRIVATE_KEY
-// Nếu có dạng bắt đầu bằng '-----BEGIN' nhưng vẫn chứa ký tự \n literal -> thay thế
-if (GOOGLE_SHEETS_PRIVATE_KEY.includes("BEGIN") && GOOGLE_SHEETS_PRIVATE_KEY.includes("\\n")) {
-  GOOGLE_SHEETS_PRIVATE_KEY = GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, "\n")
+function normalizePrivateKey(raw: string) {
+  if (!raw) return ""
+  let key = raw.trim()
+  // Nếu người dùng dán kèm dấu quote bao quanh → bỏ
+  if ((key.startsWith("\"") && key.endsWith("\"")) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1)
+  }
+  // Luôn thay literal \n thành newline thật (an toàn, kể cả đã có newline sẵn)
+  key = key.replace(/\\n/g, "\n")
+  // Một số copy có thoát dấu gạch ngang \- (hiếm) → chuẩn hoá nhẹ
+  key = key.replace(/-----BEGIN[ -]PRIVATE KEY-----/, '-----BEGIN PRIVATE KEY-----')
+  key = key.replace(/-----END[ -]PRIVATE KEY-----/, '-----END PRIVATE KEY-----')
+  // Nếu thiếu BEGIN nhưng là base64 thuần → thử decode
+  if (!key.includes('BEGIN') && /^[A-Za-z0-9+/=]+$/.test(key)) {
+    try {
+      const decoded = Buffer.from(key, 'base64').toString('utf8')
+      if (decoded.includes('BEGIN PRIVATE KEY')) key = decoded
+    } catch {}
+  }
+  return key
 }
-// Nếu không có 'BEGIN' mà là một chuỗi base64 dài -> thử decode
-if (GOOGLE_SHEETS_PRIVATE_KEY && !GOOGLE_SHEETS_PRIVATE_KEY.includes("BEGIN") && /^[A-Za-z0-9+/=]+$/.test(GOOGLE_SHEETS_PRIVATE_KEY)) {
-  try {
-    const decoded = Buffer.from(GOOGLE_SHEETS_PRIVATE_KEY, 'base64').toString('utf8')
-    if (decoded.includes('BEGIN PRIVATE KEY')) {
-      GOOGLE_SHEETS_PRIVATE_KEY = decoded
-    }
-  } catch {}
-}
+
+const GOOGLE_SHEETS_PRIVATE_KEY = normalizePrivateKey(RAW_PRIVATE_KEY)
 
 const GOOGLE_SHEETS_SPREADSHEET_ID =
   (process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEETS_ID || "") as string
