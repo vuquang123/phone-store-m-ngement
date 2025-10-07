@@ -52,7 +52,21 @@ const RAW_PRIVATE_KEY =
   process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
   ""
 
-const GOOGLE_SHEETS_PRIVATE_KEY = RAW_PRIVATE_KEY.replace(/\\n/g, "\n")
+// Một số môi trường (Vercel UI) tự động thêm \n hoặc người dùng dán base64 -> xử lý linh hoạt
+let GOOGLE_SHEETS_PRIVATE_KEY = RAW_PRIVATE_KEY
+// Nếu có dạng bắt đầu bằng '-----BEGIN' nhưng vẫn chứa ký tự \n literal -> thay thế
+if (GOOGLE_SHEETS_PRIVATE_KEY.includes("BEGIN") && GOOGLE_SHEETS_PRIVATE_KEY.includes("\\n")) {
+  GOOGLE_SHEETS_PRIVATE_KEY = GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, "\n")
+}
+// Nếu không có 'BEGIN' mà là một chuỗi base64 dài -> thử decode
+if (GOOGLE_SHEETS_PRIVATE_KEY && !GOOGLE_SHEETS_PRIVATE_KEY.includes("BEGIN") && /^[A-Za-z0-9+/=]+$/.test(GOOGLE_SHEETS_PRIVATE_KEY)) {
+  try {
+    const decoded = Buffer.from(GOOGLE_SHEETS_PRIVATE_KEY, 'base64').toString('utf8')
+    if (decoded.includes('BEGIN PRIVATE KEY')) {
+      GOOGLE_SHEETS_PRIVATE_KEY = decoded
+    }
+  } catch {}
+}
 
 const GOOGLE_SHEETS_SPREADSHEET_ID =
   (process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEETS_ID || "") as string
@@ -65,11 +79,22 @@ if (!GOOGLE_SHEETS_CLIENT_EMAIL || !GOOGLE_SHEETS_PRIVATE_KEY || !GOOGLE_SHEETS_
 }
 
 
-const auth = new google.auth.JWT({
-  email: GOOGLE_SHEETS_CLIENT_EMAIL,
-  key: GOOGLE_SHEETS_PRIVATE_KEY,
-  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-})
+function buildAuth() {
+  // Ghi log nhẹ dạng fingerprint để debug (không in toàn bộ key)
+  const fingerprint = GOOGLE_SHEETS_PRIVATE_KEY
+    ? GOOGLE_SHEETS_PRIVATE_KEY.split('\n').slice(-2, -1)[0]?.slice(0, 16)
+    : 'none'
+  if (!GOOGLE_SHEETS_PRIVATE_KEY.includes('BEGIN')) {
+    console.error('[Google Sheets] Private key không chứa BEGIN PRIVATE KEY (có thể chưa decode đúng). Fingerprint:', fingerprint)
+  }
+  return new google.auth.JWT({
+    email: GOOGLE_SHEETS_CLIENT_EMAIL,
+    key: GOOGLE_SHEETS_PRIVATE_KEY,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  })
+}
+
+const auth = buildAuth()
 
 
 const sheets = google.sheets({ version: "v4", auth })
