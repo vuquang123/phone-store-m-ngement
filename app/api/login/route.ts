@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs" // đảm bảo dùng Node (OpenSSL đầy đủ) cho googleapis
 import { readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
 
 function toColumnLetter(colNum: number) {

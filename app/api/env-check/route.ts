@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { google } from "googleapis"
 
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
 // Utility to mask strings (keep start & end few chars)
 function mask(value: string, keep: number = 4) {
