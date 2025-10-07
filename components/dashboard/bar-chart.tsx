@@ -2,8 +2,8 @@
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Bar, Line, Chart as MixedChart } from "react-chartjs-2"
-// Import auto bundle to ensure all controllers/elements are registered (avoids 'bar is not a registered controller')
-import { Chart as ChartJS } from "chart.js/auto"
+// Auto-register all controllers/scales/elements once (prevents 'category' or 'bar' not registered' in prod)
+import "chart.js/auto"
 
 interface BarChartProps {
   data: {
@@ -138,7 +138,7 @@ const BarChartComponent = ({
 
   const profitLineData = (data.profit ?? []).map(v => v > 0 ? v : null);
 
-  const barData = {
+  const barData: any = {
     labels: selectedMonth === 0
       ? data.labels
       : simpleDayLabels,
