@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Edit, Eye } from "lucide-react"
 import { useState, useEffect } from "react"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface Customer {
   id: string
@@ -23,6 +24,7 @@ export default function KhachHangPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [selectedCustomer, setSelectedCustomer] = useState<Customer|null>(null)
+  const isMobile = useIsMobile()
 
   const fetchCustomers = async () => {
     try {
@@ -78,53 +80,83 @@ export default function KhachHangPage() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="pl-8"
+                    inputMode="search"
+                    enterKeyHint="search"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ngày tạo</TableHead>
-                    <TableHead>Tên Khách Hàng</TableHead>
-                    <TableHead>Số Điện Thoại</TableHead>
-                    <TableHead>Tổng Mua</TableHead>
-                    <TableHead>Lần Mua Cuối</TableHead>
-                    <TableHead>Ghi Chú</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
-                        Đang tải...
-                      </TableCell>
-                    </TableRow>
-                  ) : customers.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
-                        Không có khách hàng nào
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    customers.map((customer) => (
-                      <TableRow key={customer.so_dien_thoai}>
-                        <TableCell>
-                          {customer.ngay_tao ? (() => { const d = new Date(customer.ngay_tao); return isNaN(d.getTime()) ? customer.ngay_tao : d.toLocaleDateString("vi-VN"); })() : ""}
-                        </TableCell>
-                        <TableCell className="font-medium">{customer.ho_ten}</TableCell>
-                        <TableCell>{customer.so_dien_thoai}</TableCell>
-                        <TableCell>{customer.tong_mua || ""}</TableCell>
-                        <TableCell>{customer.lan_mua_cuoi || ""}</TableCell>
-                        <TableCell>{customer.ghi_chu || ""}</TableCell>
+            {/* Mobile card list */}
+            {isLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Đang tải...</div>
+            ) : customers.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">Không có khách hàng nào</div>
+            ) : (
+              <>
+                <div className="md:hidden grid grid-cols-1 gap-3">
+                  {customers.map((customer) => {
+                    const created = customer.ngay_tao
+                      ? (() => { const d = new Date(customer.ngay_tao); return isNaN(d.getTime()) ? customer.ngay_tao : d.toLocaleDateString('vi-VN') })()
+                      : ''
+                    return (
+                      <div key={customer.so_dien_thoai} className="border rounded-xl p-3 bg-white shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-semibold text-slate-900 leading-tight">{customer.ho_ten || 'Khách lẻ'}</div>
+                            <div className="text-sm text-slate-600">{customer.so_dien_thoai}</div>
+                          </div>
+                          <div className="text-right text-xs text-slate-500 min-w-[88px]">{created}</div>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <div className="text-slate-500">Tổng mua</div>
+                            <div className="font-medium text-slate-800">{customer.tong_mua || '—'}</div>
+                          </div>
+                          <div>
+                            <div className="text-slate-500">Lần mua cuối</div>
+                            <div className="font-medium text-slate-800 break-words">{customer.lan_mua_cuoi || '—'}</div>
+                          </div>
+                        </div>
+                        {customer.ghi_chu ? (
+                          <div className="mt-2 text-xs text-slate-600 line-clamp-2">{customer.ghi_chu}</div>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden md:block rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Ngày tạo</TableHead>
+                        <TableHead>Tên Khách Hàng</TableHead>
+                        <TableHead>Số Điện Thoại</TableHead>
+                        <TableHead>Tổng Mua</TableHead>
+                        <TableHead>Lần Mua Cuối</TableHead>
+                        <TableHead>Ghi Chú</TableHead>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                    </TableHeader>
+                    <TableBody>
+                      {customers.map((customer) => (
+                        <TableRow key={customer.so_dien_thoai}>
+                          <TableCell>
+                            {customer.ngay_tao ? (() => { const d = new Date(customer.ngay_tao); return isNaN(d.getTime()) ? customer.ngay_tao : d.toLocaleDateString("vi-VN"); })() : ""}
+                          </TableCell>
+                          <TableCell className="font-medium">{customer.ho_ten}</TableCell>
+                          <TableCell>{customer.so_dien_thoai}</TableCell>
+                          <TableCell>{customer.tong_mua || ""}</TableCell>
+                          <TableCell>{customer.lan_mua_cuoi || ""}</TableCell>
+                          <TableCell>{customer.ghi_chu || ""}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -32,7 +32,17 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
         </div>
       </div>
       {/* Mobile drawer sidebar */}
-      <Drawer open={open} onOpenChange={setOpen}>
+      <Drawer
+        open={open}
+        onOpenChange={(next) => {
+          if (next) {
+            // Blur any currently focused element before Drawer modifies aria-hidden on the page
+            try { (document.activeElement as HTMLElement | null)?.blur() } catch {}
+          }
+          setOpen(next)
+        }}
+        shouldScaleBackground={false}
+      >
         <DrawerContent className="p-0 md:hidden top-0 h-screen rounded-none">
           <div className="h-full overflow-auto relative pb-safe">
             {/* Radix/vaul yêu cầu có Title trong Content để đảm bảo a11y */}

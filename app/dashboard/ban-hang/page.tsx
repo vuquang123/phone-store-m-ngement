@@ -72,6 +72,8 @@ export default function BanHangPage() {
   }, [])
   // State cho đơn đặt cọc
   const [depositOrdersState, setDepositOrders] = useState<any[]>([])
+  const [depositLoading, setDepositLoading] = useState(false)
+  const [depositSearch, setDepositSearch] = useState("")
   const [activeTab, setActiveTab] = useState("ban-hang")
   const [reloadFlag, setReloadFlag] = useState(0)
   // Fetch đơn đặt cọc từ API khi vào tab hoặc khi tạo mới
@@ -79,6 +81,7 @@ export default function BanHangPage() {
     if (activeTab !== "don-dat-coc") return;
     const fetchDepositOrders = async () => {
       try {
+        setDepositLoading(true)
         const res = await fetch("/api/dat-coc")
         if (res.ok) {
           const data = await res.json()
@@ -98,6 +101,8 @@ export default function BanHangPage() {
         }
       } catch {
         setDepositOrders([]);
+      } finally {
+        setDepositLoading(false)
       }
     };
     fetchDepositOrders();
@@ -687,6 +692,44 @@ export default function BanHangPage() {
     : orders.filter(
         (o) => o.trang_thai === "Chờ thanh toán đủ" || o.loai_don === "Đặt cọc"
       )
+
+  // Hủy đặt cọc: trả sản phẩm về kho + xóa khỏi sheet đặt cọc
+  const [cancelingDepositId, setCancelingDepositId] = useState<string|null>(null)
+  const handleCancelDeposit = async (maDon: string) => {
+    try {
+      setCancelingDepositId(maDon)
+      const allRows = depositOrders.filter((o: any) => {
+        const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
+        return m === maDon;
+      });
+      const imeis = allRows.map((o: any) => o["IMEI"] || o["imei"]).filter(Boolean);
+      if (imeis.length === 0) {
+        toast({ title: 'Không tìm thấy IMEI để hủy đặt cọc', variant: 'destructive' as any })
+        return
+      }
+      await fetch("/api/update-product-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productIds: imeis, newStatus: "Còn hàng" })
+      });
+      await fetch("/api/kho-hang", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ products: allRows })
+      });
+      await fetch("/api/dat-coc", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productIds: imeis })
+      });
+      toast({ title: 'Đã hủy đặt cọc', description: 'Sản phẩm đã trả về kho.' })
+      setReloadFlag(f => f + 1)
+    } catch (e) {
+      toast({ title: 'Lỗi khi hủy đặt cọc', description: String(e), variant: 'destructive' as any })
+    } finally {
+      setCancelingDepositId(null)
+    }
+  }
 
   // === SEARCH KHÁCH ===
   useEffect(() => {
@@ -1292,12 +1335,24 @@ export default function BanHangPage() {
               <CardHeader>
                 <CardTitle>Đơn đặt cọc</CardTitle>
                 <CardDescription>Chỉ hiển thị đơn đặt cọc</CardDescription>
+                <div className="mt-2">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Tìm mã đơn, tên KH, SĐT..."
+                      value={depositSearch}
+                      onChange={(e)=> setDepositSearch(e.target.value)}
+                      className="pl-8"
+                      inputMode="search"
+                    />
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {/* Gộp các đơn có cùng mã đơn hàng */}
                 {(() => {
                   // Gộp theo mã đơn hàng
-                  const grouped = Object.values(
+                  const groupedAll = Object.values(
                     depositOrders.reduce((acc: any, order: any) => {
                       const maDon = order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || order["ma_don_hang"];
                       if (!maDon) return acc;
@@ -1307,17 +1362,125 @@ export default function BanHangPage() {
                         acc[maDon]._tien_coc_arr = [];
                         acc[maDon]._con_lai_arr = [];
                       }
-                      // Lưu từng giá trị cọc và còn lại để tính tổng đúng
                       const giaBan = typeof order["Giá Bán"] === "string" ? parseInt(order["Giá Bán"].replace(/[^\d]/g, "")) || 0 : order["Giá Bán"] || 0;
                       const tienCoc = typeof order["Số Tiền Cọc"] === "string" ? parseInt(order["Số Tiền Cọc"].replace(/[^\d]/g, "")) || 0 : order["Số Tiền Cọc"] || 0;
                       const conLai = typeof order["Số Tiền Còn Lại"] === "string" ? parseInt(order["Số Tiền Còn Lại"].replace(/[^\d]/g, "")) || 0 : order["Số Tiền Còn Lại"] || (giaBan - tienCoc);
-                      // Chỉ lưu giá trị cọc và còn lại nếu khác 0
                       if (tienCoc) acc[maDon]._tien_coc_arr.push(tienCoc);
                       if (conLai) acc[maDon]._con_lai_arr.push(conLai);
                       acc[maDon]._products.push(order["Tên Sản Phẩm"] || order["ten_san_pham"]);
                       return acc;
                     }, {})
-                  );
+                  ) as any[];
+
+                  const norm = (s: any) => String(s || "").toLowerCase();
+                  const filtered = groupedAll.filter((order: any) => {
+                    const q = norm(depositSearch);
+                    if (!q) return true;
+                    const code = norm(order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || order["ma_don_hang"]);
+                    const name = norm(order["Tên Khách Hàng"] || order["ten_khach_hang"]);
+                    const phone = norm(order["Số Điện Thoại"] || order["so_dien_thoai"]);
+                    const products = norm((order._products || []).join(", "));
+                    return code.includes(q) || name.includes(q) || phone.includes(q) || products.includes(q);
+                  });
+
+                  if (depositLoading) {
+                    return <div className="py-8 text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Đang tải...</div>
+                  }
+
+                  if (filtered.length === 0) {
+                    return <div className="py-8 text-center text-muted-foreground">Không có đơn đặt cọc</div>
+                  }
+
+                  if (isMobile) {
+                    return (
+                      <div className="grid grid-cols-1 gap-3">
+                        {filtered.map((order: any, idx: number) => {
+                          const now = dayjs();
+                          const hanRaw = order["Hạn Thanh Toán"];
+                          const han = hanRaw ? dayjs(hanRaw, "YYYY-MM-DD") : null;
+                          const ngayDatCocRaw = order["Ngày Đặt Cọc"];
+                          const ngayDatCoc = ngayDatCocRaw ? dayjs(ngayDatCocRaw, "DD/MM/YYYY") : null;
+                          const tongCoc = (order._tien_coc_arr || []).reduce((s: number, v: number) => s + v, 0);
+                          const tongConLai = (order._con_lai_arr || []).reduce((s: number, v: number) => s + v, 0);
+                          const isOverdue = han && han.isValid() && han.isBefore(now) && tongConLai > 0;
+                          const isPaid = tongConLai <= 0;
+                          const key = order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || idx;
+                          const maDon = order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || order["ma_don_hang"];
+                          const handleThanhToanTiep = () => {
+                            const allRows = depositOrders.filter((o: any) => {
+                              const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
+                              return m === maDon;
+                            });
+                            const products: CartItem[] = allRows.map((o: any) => ({
+                              id: o["IMEI"] || o["ID Máy"] || o["Tên Sản Phẩm"] || o["ten_san_pham"] || o["imei"] || o["id"],
+                              type: "product",
+                              ten_san_pham: o["Tên Sản Phẩm"] || o["ten_san_pham"] || "",
+                              gia_ban: typeof o["Giá Bán"] === "string" ? parseInt(o["Giá Bán"].replace(/[^\d]/g, "")) || 0 : o["Giá Bán"] || 0,
+                              gia_nhap: typeof o["Giá Nhập"] === "string" ? parseInt(o["Giá Nhập"].replace(/[^\d]/g, "")) || 0 : o["Giá Nhập"] || 0,
+                              so_luong: 1,
+                              max_quantity: 1,
+                              imei: o["IMEI"] || "",
+                              trang_thai: o["Tình Trạng Máy"] || o["tinh_trang_may"] || "",
+                              loai_may: o["Loại Máy"] || o["loai_may"] || "",
+                              dung_luong: o["Dung Lượng"] || o["dung_luong"] || "",
+                              mau_sac: o["Màu Sắc"] || o["mau_sac"] || "",
+                              pin: o["Pin (%)"] || o["pin"] || "",
+                              tinh_trang: o["Tình Trạng Máy"] || o["tinh_trang_may"] || ""
+                            }));
+                            setCart(products);
+                            setSelectedCustomer({
+                              id: order["Số Điện Thoại"] || order["so_dien_thoai"] || "",
+                              ho_ten: order["Tên Khách Hàng"] || order["ten_khach_hang"] || "Khách lẻ",
+                              so_dien_thoai: order["Số Điện Thoại"] || order["so_dien_thoai"] || ""
+                            });
+                            setGiamGia(0);
+                            setActiveTab('ban-hang');
+                            setMobileView('thanh-toan');
+                          };
+                          return (
+                            <div key={key} className={`border rounded-lg p-3 shadow-sm ${isOverdue? 'bg-red-50': isPaid? 'bg-green-50': 'bg-white'}`}>
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="font-semibold">{maDon}</div>
+                                  <div className="text-sm text-slate-600">{order["Tên Khách Hàng"] || order["ten_khach_hang"] || "-"}</div>
+                                  <div className="text-xs text-muted-foreground">{order["Số Điện Thoại"] || order["so_dien_thoai"] || "-"}</div>
+                                </div>
+                                {isOverdue && <Badge className="bg-red-600 text-white">Quá hạn</Badge>}
+                                {isPaid && <Badge className="bg-emerald-600 text-white">Đã tất toán</Badge>}
+                              </div>
+                              <div className="mt-2 text-sm line-clamp-2">{(order._products || []).join(', ')}</div>
+                              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                  <div className="text-slate-500">Đã cọc</div>
+                                  <div className="font-semibold text-blue-700">₫{tongCoc.toLocaleString()}</div>
+                                </div>
+                                <div>
+                                  <div className="text-slate-500">Còn lại</div>
+                                  <div className="font-semibold text-green-700">₫{tongConLai.toLocaleString()}</div>
+                                </div>
+                              </div>
+                              <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
+                                <div>Ngày cọc: {ngayDatCoc && ngayDatCoc.isValid() ? ngayDatCoc.format("DD/MM/YYYY") : '-'}</div>
+                                <div>Hạn TT: {han && han.isValid() ? han.format("DD/MM/YYYY") : '-'}</div>
+                              </div>
+                              <div className="mt-3 flex gap-2">
+                                {!isPaid && (
+                                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white flex-1" onClick={handleThanhToanTiep}>Thanh toán tiếp</Button>
+                                )}
+                                {!isPaid && (
+                                  <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white" onClick={()=> handleCancelDeposit(maDon)} disabled={cancelingDepositId===maDon}>
+                                    {cancelingDepositId===maDon ? <><Loader2 className="h-4 w-4 animate-spin mr-1"/> Đang hủy</> : 'Hủy đặt cọc'}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  }
+
+                  // Desktop/tablet: bảng chi tiết
                   return (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
@@ -1334,125 +1497,92 @@ export default function BanHangPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {grouped.length === 0 ? (
-                            <tr><td colSpan={8} className="text-center py-6">Không có đơn đặt cọc</td></tr>
-                          ) : (
-                            grouped.map((order: any, idx: number) => {
-                              const now = dayjs();
-                              const hanRaw = order["Hạn Thanh Toán"];
-                              const han = hanRaw ? dayjs(hanRaw, "YYYY-MM-DD") : null;
-                              const ngayDatCocRaw = order["Ngày Đặt Cọc"];
-                              const ngayDatCoc = ngayDatCocRaw ? dayjs(ngayDatCocRaw, "DD/MM/YYYY") : null;
-                              const isOverdue = han && han.isValid() && han.isBefore(now) && order._tong_con_lai > 0;
-                              const isPaid = order._tong_con_lai <= 0;
-                              const key = order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || idx;
-                              // Hàm xử lý chuyển thông tin sang tab Bán hàng
-                              const handleThanhToanTiep = () => {
-                                // Tìm tất cả sản phẩm có cùng mã đơn hàng
-                                const maDon = order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || order["ma_don_hang"];
-                                const allRows = depositOrders.filter((o: any) => {
-                                  const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
-                                  return m === maDon;
-                                });
-                                // Tạo mảng sản phẩm cho giỏ hàng
-                                const products: CartItem[] = allRows.map((o: any) => ({
-                                  id: o["IMEI"] || o["ID Máy"] || o["Tên Sản Phẩm"] || o["ten_san_pham"] || o["imei"] || o["id"],
-                                  type: "product",
-                                  ten_san_pham: o["Tên Sản Phẩm"] || o["ten_san_pham"] || "",
-                                  gia_ban: typeof o["Giá Bán"] === "string" ? parseInt(o["Giá Bán"].replace(/[^\d]/g, "")) || 0 : o["Giá Bán"] || 0,
-                                  gia_nhap: typeof o["Giá Nhập"] === "string" ? parseInt(o["Giá Nhập"].replace(/[^\d]/g, "")) || 0 : o["Giá Nhập"] || 0,
-                                  so_luong: 1,
-                                  max_quantity: 1,
-                                  imei: o["IMEI"] || "",
-                                  trang_thai: o["Tình Trạng Máy"] || o["tinh_trang_may"] || "",
-                                  loai_may: o["Loại Máy"] || o["loai_may"] || "",
-                                  dung_luong: o["Dung Lượng"] || o["dung_luong"] || "",
-                                  mau_sac: o["Màu Sắc"] || o["mau_sac"] || "",
-                                  pin: o["Pin (%)"] || o["pin"] || "",
-                                  tinh_trang: o["Tình Trạng Máy"] || o["tinh_trang_may"] || ""
-                                }));
-                                setCart(products);
-                                setSelectedCustomer({
-                                  id: order["Số Điện Thoại"] || order["so_dien_thoai"] || "",
-                                  ho_ten: order["Tên Khách Hàng"] || order["ten_khach_hang"] || "Khách lẻ",
-                                  so_dien_thoai: order["Số Điện Thoại"] || order["so_dien_thoai"] || ""
-                                });
-                                setGiamGia(0);
-                                setActiveTab("ban-hang");
-                              };
-                              return (
-                                <tr
-                                  key={key}
-                                  className={`border-b hover:bg-slate-50 transition ${isOverdue ? "bg-red-50" : isPaid ? "bg-green-50" : ""}`}
-                                >
-                                  <td className="align-middle text-left px-3 py-2 font-semibold">{order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || order["ma_don_hang"]}</td>
-                                  <td className="align-middle text-left px-3 py-2">
-                                    <div className="font-semibold text-slate-800">{order["Tên Khách Hàng"] || order["ten_khach_hang"] || "-"}</div>
-                                    <div className="text-xs text-muted-foreground">{order["Số Điện Thoại"] || order["so_dien_thoai"] || "-"}</div>
-                                  </td>
-                                  <td className="align-middle text-left px-3 py-2">{order._products.join(", ")}</td>
-                                  <td className="align-middle text-left px-3 py-2 font-semibold text-blue-700">₫{(order._tien_coc_arr[0]||0).toLocaleString()}</td>
-                                  <td className="align-middle text-left px-3 py-2 font-semibold text-green-700">₫{(order._con_lai_arr[0]||0).toLocaleString()}</td>
-                                  <td className="align-middle text-left px-3 py-2">{ngayDatCoc && ngayDatCoc.isValid() ? ngayDatCoc.format("DD/MM/YYYY") : "-"}</td>
-                                  <td className="align-middle text-left px-3 py-2">{han && han.isValid() ? han.format("DD/MM/YYYY") : "-"}</td>
-                                  <td className="align-middle text-left px-3 py-2">
-                                    <div className="flex gap-2">
-                                      {!isPaid && (
-                                        <Button
-                                          size="sm"
-                                          className="bg-green-500 hover:bg-green-600 text-white rounded px-4 py-1 font-semibold shadow"
-                                          onClick={handleThanhToanTiep}
-                                        >
-                                          Thanh toán tiếp
-                                        </Button>
-                                      )}
-                                      {!isPaid && (
-                                        <Button
-                                          size="sm"
-                                          className="bg-red-500 hover:bg-red-600 text-white rounded px-4 py-1 font-semibold shadow"
-                                          onClick={async () => {
-                                            // Tìm tất cả sản phẩm có cùng mã đơn hàng
-                                            const maDon = order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || order["ma_don_hang"];
-                                            const allRows = depositOrders.filter((o: any) => {
-                                              const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
-                                              return m === maDon;
-                                            });
-                                            // Lấy danh sách imei sản phẩm
-                                            const imeis = allRows.map((o: any) => o["IMEI"] || o["imei"]).filter(Boolean);
-                                            // Gọi API cập nhật trạng thái sản phẩm về 'Còn hàng'
-                                            await fetch("/api/update-product-status", {
-                                              method: "POST",
-                                              headers: { "Content-Type": "application/json" },
-                                              body: JSON.stringify({ productIds: imeis, newStatus: "Còn hàng" })
-                                            });
-                                            // Gọi API thêm lại sản phẩm vào sheet Kho_Hang
-                                            await fetch("/api/kho-hang", {
-                                              method: "POST",
-                                              headers: { "Content-Type": "application/json" },
-                                              body: JSON.stringify({ products: allRows })
-                                            });
-                                            // Gọi API xóa sản phẩm khỏi sheet Dat_Coc
-                                            await fetch("/api/dat-coc", {
-                                              method: "DELETE",
-                                              headers: { "Content-Type": "application/json" },
-                                              body: JSON.stringify({ productIds: imeis })
-                                            });
-                                            alert("Đã hủy đặt cọc. Sản phẩm đã được trả về kho và xóa khỏi sheet Đặt Cọc.");
-                                            window.location.reload();
-                                          }}
-                                        >
-                                          Hủy đặt cọc
-                                        </Button>
-                                      )}
-                                      {isPaid && (
-                                        <Button size="sm" variant="default">Chuyển sang đơn bán</Button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )}
+                          {filtered.map((order: any, idx: number) => {
+                            const now = dayjs();
+                            const hanRaw = order["Hạn Thanh Toán"];
+                            const han = hanRaw ? dayjs(hanRaw, "YYYY-MM-DD") : null;
+                            const ngayDatCocRaw = order["Ngày Đặt Cọc"];
+                            const ngayDatCoc = ngayDatCocRaw ? dayjs(ngayDatCocRaw, "DD/MM/YYYY") : null;
+                            const tongCoc = (order._tien_coc_arr || []).reduce((s: number, v: number) => s + v, 0);
+                            const tongConLai = (order._con_lai_arr || []).reduce((s: number, v: number) => s + v, 0);
+                            const isOverdue = han && han.isValid() && han.isBefore(now) && tongConLai > 0;
+                            const isPaid = tongConLai <= 0;
+                            const key = order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || idx;
+                            const maDon = order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || order["ma_don_hang"];
+                            const handleThanhToanTiep = () => {
+                              const allRows = depositOrders.filter((o: any) => {
+                                const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
+                                return m === maDon;
+                              });
+                              const products: CartItem[] = allRows.map((o: any) => ({
+                                id: o["IMEI"] || o["ID Máy"] || o["Tên Sản Phẩm"] || o["ten_san_pham"] || o["imei"] || o["id"],
+                                type: "product",
+                                ten_san_pham: o["Tên Sản Phẩm"] || o["ten_san_pham"] || "",
+                                gia_ban: typeof o["Giá Bán"] === "string" ? parseInt(o["Giá Bán"].replace(/[^\d]/g, "")) || 0 : o["Giá Bán"] || 0,
+                                gia_nhap: typeof o["Giá Nhập"] === "string" ? parseInt(o["Giá Nhập"].replace(/[^\d]/g, "")) || 0 : o["Giá Nhập"] || 0,
+                                so_luong: 1,
+                                max_quantity: 1,
+                                imei: o["IMEI"] || "",
+                                trang_thai: o["Tình Trạng Máy"] || o["tinh_trang_may"] || "",
+                                loai_may: o["Loại Máy"] || o["loai_may"] || "",
+                                dung_luong: o["Dung Lượng"] || o["dung_luong"] || "",
+                                mau_sac: o["Màu Sắc"] || o["mau_sac"] || "",
+                                pin: o["Pin (%)"] || o["pin"] || "",
+                                tinh_trang: o["Tình Trạng Máy"] || o["tinh_trang_may"] || ""
+                              }));
+                              setCart(products);
+                              setSelectedCustomer({
+                                id: order["Số Điện Thoại"] || order["so_dien_thoai"] || "",
+                                ho_ten: order["Tên Khách Hàng"] || order["ten_khach_hang"] || "Khách lẻ",
+                                so_dien_thoai: order["Số Điện Thoại"] || order["so_dien_thoai"] || ""
+                              });
+                              setGiamGia(0);
+                              setActiveTab("ban-hang");
+                            };
+                            return (
+                              <tr
+                                key={key}
+                                className={`border-b hover:bg-slate-50 transition ${isOverdue ? "bg-red-50" : isPaid ? "bg-green-50" : ""}`}
+                              >
+                                <td className="align-middle text-left px-3 py-2 font-semibold">{maDon}</td>
+                                <td className="align-middle text-left px-3 py-2">
+                                  <div className="font-semibold text-slate-800">{order["Tên Khách Hàng"] || order["ten_khach_hang"] || "-"}</div>
+                                  <div className="text-xs text-muted-foreground">{order["Số Điện Thoại"] || order["so_dien_thoai"] || "-"}</div>
+                                </td>
+                                <td className="align-middle text-left px-3 py-2">{(order._products || []).join(", ")}</td>
+                                <td className="align-middle text-left px-3 py-2 font-semibold text-blue-700">₫{tongCoc.toLocaleString()}</td>
+                                <td className="align-middle text-left px-3 py-2 font-semibold text-green-700">₫{tongConLai.toLocaleString()}</td>
+                                <td className="align-middle text-left px-3 py-2">{ngayDatCoc && ngayDatCoc.isValid() ? ngayDatCoc.format("DD/MM/YYYY") : "-"}</td>
+                                <td className="align-middle text-left px-3 py-2">{han && han.isValid() ? han.format("DD/MM/YYYY") : "-"}</td>
+                                <td className="align-middle text-left px-3 py-2">
+                                  <div className="flex gap-2">
+                                    {!isPaid && (
+                                      <Button
+                                        size="sm"
+                                        className="bg-green-500 hover:bg-green-600 text-white rounded px-4 py-1 font-semibold shadow"
+                                        onClick={handleThanhToanTiep}
+                                      >
+                                        Thanh toán tiếp
+                                      </Button>
+                                    )}
+                                    {!isPaid && (
+                                      <Button
+                                        size="sm"
+                                        className="bg-red-500 hover:bg-red-600 text-white rounded px-4 py-1 font-semibold shadow"
+                                        onClick={() => handleCancelDeposit(maDon)}
+                                        disabled={cancelingDepositId===maDon}
+                                      >
+                                        {cancelingDepositId===maDon ? <><Loader2 className="h-4 w-4 animate-spin mr-1"/> Đang hủy</> : 'Hủy đặt cọc'}
+                                      </Button>
+                                    )}
+                                    {isPaid && (
+                                      <Button size="sm" variant="default">Chuyển sang đơn bán</Button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
