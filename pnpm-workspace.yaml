@@ -1,0 +1,10 @@
+packages:
+  - .
+
+# Allow these dependencies to run their postinstall/build scripts
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+
+# You can explicitly deny others (optional)
+# ignoredBuiltDependencies: []
