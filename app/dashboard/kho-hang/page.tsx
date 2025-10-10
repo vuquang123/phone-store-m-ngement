@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -244,6 +245,7 @@ export default function KhoHangPage() {
   const [baoHanhHistory, setBaoHanhHistory] = useState<any[]>([])
   const [cncProducts, setCNCProducts] = useState<CNCProduct[]>([])
   const [accessories, setAccessories] = useState<any[]>([])
+  const [accessorySearch, setAccessorySearch] = useState("")
   // Role-based hiển thị giá nhập
   const [userRole, setUserRole] = useState<"quan_ly" | "nhan_vien">("nhan_vien")
   const isManager = userRole === "quan_ly"
@@ -303,6 +305,9 @@ export default function KhoHangPage() {
   const [trangThai, setTrangThai] = useState("all")
   const [sourceFilter, setSourceFilter] = useState<"all" | "kho" | "doi_tac">("all")
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
+  const [cncSearch, setCncSearch] = useState("")
+  const [baoHanhSearch, setBaoHanhSearch] = useState("")
 
   // Bảo hành - Xác nhận hoàn thành bảo hành
   async function handleConfirmCompleteBaoHanh() {
@@ -465,8 +470,24 @@ export default function KhoHangPage() {
       filtered = filtered.filter(p => p.nguon === "Đối tác")
     }
 
+    // Search text
+    if (searchTerm.trim()) {
+      const q = norm(searchTerm)
+      filtered = filtered.filter(p => {
+        const joined = [
+          p.ten_san_pham,
+          p.imei,
+          p.mau_sac,
+          p.dung_luong,
+          p.tinh_trang,
+          p.ghi_chu,
+        ].map(norm).join("|")
+        return joined.includes(q)
+      })
+    }
+
     setFilteredProducts(filtered)
-  }, [products, trangThai, sourceFilter])
+  }, [products, trangThai, sourceFilter, searchTerm])
 
   // Stats
   const tongSanPham = products.length
@@ -507,14 +528,35 @@ export default function KhoHangPage() {
   const soPhuKienSapHet = accessories.filter(a => Number(a.so_luong_ton) >= 1 && Number(a.so_luong_ton) <= 5).length
 
   // Danh sách hiển thị cho CNC và Bảo hành (áp điều kiện lọc như đếm số lượng)
-  const filteredCNC = useMemo(() =>
-    cncProducts.filter(p => (p.trang_thai === "Đang CNC") || (p.trang_thai === "Hoàn thành CNC" && p.nguon === "Khách ngoài")),
-    [cncProducts]
-  )
-  const filteredBaoHanh = useMemo(() =>
-    baoHanhHistory.filter((p: any) => p["Trạng Thái"] === "Bảo hành" || (p["Trạng Thái"] === "Hoàn thành bảo hành" && p["Nguồn"] === "Khách ngoài")),
-    [baoHanhHistory]
-  )
+  const filteredCNC = useMemo(() => {
+    const norm = (s: any) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    let base = cncProducts.filter(p => (p.trang_thai === "Đang CNC") || (p.trang_thai === "Hoàn thành CNC" && p.nguon === "Khách ngoài"))
+    if (cncSearch.trim()) {
+      const q = norm(cncSearch)
+      base = base.filter(p => [p.ten_san_pham, p.imei, p.nguon, p.tinh_trang, p.loai_may].map(norm).join("|").includes(q))
+    }
+    return base
+  }, [cncProducts, cncSearch])
+  const filteredBaoHanh = useMemo(() => {
+    const norm = (s: any) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    let base = baoHanhHistory.filter((p: any) => p["Trạng Thái"] === "Bảo hành" || (p["Trạng Thái"] === "Hoàn thành bảo hành" && p["Nguồn"] === "Khách ngoài"))
+    if (baoHanhSearch.trim()) {
+      const q = norm(baoHanhSearch)
+      base = base.filter((p: any) => [p["Tên Sản Phẩm"], p["IMEI"], p["Nguồn"], p["Trạng Thái"], p["Loại Máy"], p["Lỗi"]].map(norm).join("|").includes(q))
+    }
+    return base
+  }, [baoHanhHistory, baoHanhSearch])
+
+  // Danh sách hiển thị cho Phụ kiện (áp dụng tìm kiếm)
+  const filteredAccessories = useMemo(() => {
+    const norm = (s: any) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    if (!accessorySearch.trim()) return accessories
+    const q = norm(accessorySearch)
+    return accessories.filter((a: any) => [a.ten_phu_kien, a.loai_phu_kien, a.ghi_chu, a.nhan_hieu]
+      .map(norm)
+      .join("|")
+      .includes(q))
+  }, [accessories, accessorySearch])
 
   return (
     <div className="space-y-8 px-4 pb-8">
@@ -600,6 +642,14 @@ export default function KhoHangPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <div className="hidden md:block">
+                    <Input
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Tìm theo tên, IMEI, màu..."
+                      className="w-56"
+                    />
+                  </div>
                   <Button onClick={() => { setSelectedProduct(null); setIsDialogOpen(true) }} className="bg-blue-600 text-white font-semibold rounded-lg shadow hover:bg-blue-700">
                     <Plus className="w-4 h-4 mr-1" /> Nhập hàng
                   </Button>
@@ -646,6 +696,14 @@ export default function KhoHangPage() {
                       {opt.label}
                     </button>
                   ))}
+                </div>
+                <div>
+                  <Input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Tìm theo tên, IMEI, màu..."
+                    className="w-full"
+                  />
                 </div>
               </div>
 
@@ -1018,23 +1076,32 @@ export default function KhoHangPage() {
         <TabsContent value="phu-kien" className="space-y-6">
           <Card className="shadow-lg border-0">
             <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-3 gap-3">
+                <div className="w-full md:w-80">
+                  <Input
+                    value={accessorySearch}
+                    onChange={(e) => setAccessorySearch(e.target.value)}
+                    placeholder="Tìm phụ kiện theo tên, loại..."
+                  />
+                </div>
+              </div>
               <div className="border rounded-lg overflow-hidden shadow-sm">
                 <div className="bg-slate-50 px-6 py-4 border-b">
                   <h3 className="font-semibold">Danh sách phụ kiện</h3>
-                  <p className="text-sm">Hiển thị {accessories.length} phụ kiện</p>
+                  <p className="text-sm">Hiển thị {filteredAccessories.length} phụ kiện</p>
                 </div>
                 {isMobile ? (
                   <>
                     {isLoadingAccessories ? (
                       <div className="p-6 text-center text-slate-400">Đang tải...</div>
-                    ) : accessories.length === 0 ? (
+                    ) : filteredAccessories.length === 0 ? (
                       <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">
                         <div className="text-3xl mb-2">📦</div>
                         <div className="font-medium">Chưa có phụ kiện nào</div>
                       </div>
                     ) : (
                       <ul className="divide-y">
-                        {accessories.map((a, idx) => (
+                        {filteredAccessories.map((a, idx) => (
                           <li key={a.id || idx} className="p-4 bg-white">
                             <div className="flex items-start justify-between gap-3">
                               <div>
@@ -1080,10 +1147,10 @@ export default function KhoHangPage() {
                     <TableBody>
                       {isLoadingAccessories ? (
                         <TableRow><TableCell colSpan={isManager ? 6 : 5} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
-                      ) : accessories.length === 0 ? (
+                      ) : filteredAccessories.length === 0 ? (
                         <TableRow><TableCell colSpan={isManager ? 6 : 5} className="text-center py-8 text-slate-400">Chưa có phụ kiện nào</TableCell></TableRow>
                       ) : (
-                        accessories.map((a, idx) => (
+                        filteredAccessories.map((a, idx) => (
                           <TableRow key={a.id || idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
                             <TableCell className="font-medium text-slate-800">{a.ten_phu_kien}</TableCell>
                             <TableCell className="text-sm text-slate-700">{a.loai_phu_kien}</TableCell>
@@ -1144,8 +1211,29 @@ export default function KhoHangPage() {
             <CardContent className="p-6">
               <div className="border rounded-lg overflow-hidden shadow-sm">
                 <div className="bg-blue-50 px-6 py-4 border-b">
-                  <h3 className="font-semibold text-blue-700">Danh sách sản phẩm Đang CNC</h3>
-                  <p className="text-sm">Hiển thị {filteredCNC.length} sản phẩm</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-semibold text-blue-700">Danh sách sản phẩm Đang CNC</h3>
+                      <p className="text-sm">Hiển thị {filteredCNC.length} sản phẩm</p>
+                    </div>
+                    {/* Desktop search */}
+                    <div className="hidden md:block w-80 max-w-sm">
+                      <Input
+                        value={cncSearch}
+                        onChange={(e) => setCncSearch(e.target.value)}
+                        placeholder="Tìm theo tên, IMEI, nguồn, tình trạng..."
+                      />
+                    </div>
+                  </div>
+                </div>
+                {/* Mobile search */}
+                <div className="md:hidden px-4 py-3 bg-white border-b">
+                  <Input
+                    value={cncSearch}
+                    onChange={(e) => setCncSearch(e.target.value)}
+                    placeholder="Tìm theo tên, IMEI, nguồn, tình trạng..."
+                    className="w-full"
+                  />
                 </div>
                 {isMobile && filteredCNC.length === 0 ? (
                   <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">
@@ -1303,8 +1391,29 @@ export default function KhoHangPage() {
           <CardContent className="p-6">
             <div className="border rounded-lg overflow-hidden shadow-sm">
               <div className="bg-blue-50 px-6 py-4 border-b">
-                <h3 className="font-semibold text-blue-700">Danh sách sản phẩm Bảo hành</h3>
-                <p className="text-sm">Hiển thị {filteredBaoHanh.length} sản phẩm</p>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-blue-700">Danh sách sản phẩm Bảo hành</h3>
+                    <p className="text-sm">Hiển thị {filteredBaoHanh.length} sản phẩm</p>
+                  </div>
+                  {/* Desktop search */}
+                  <div className="hidden md:block w-80 max-w-sm">
+                    <Input
+                      value={baoHanhSearch}
+                      onChange={(e) => setBaoHanhSearch(e.target.value)}
+                      placeholder="Tìm theo tên, IMEI, nguồn, lỗi..."
+                    />
+                  </div>
+                </div>
+              </div>
+              {/* Mobile search */}
+              <div className="md:hidden px-4 py-3 bg-white border-b">
+                <Input
+                  value={baoHanhSearch}
+                  onChange={(e) => setBaoHanhSearch(e.target.value)}
+                  placeholder="Tìm theo tên, IMEI, nguồn, lỗi..."
+                  className="w-full"
+                />
               </div>
               {isMobile && filteredBaoHanh.length === 0 ? (
                 <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">

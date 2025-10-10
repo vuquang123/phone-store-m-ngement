@@ -163,6 +163,9 @@ export function Header({ title, onMenuClick }: HeaderProps) {
             size="icon"
             className="relative h-9 w-9 sm:h-10 sm:w-10 rounded-full hover:bg-slate-100 transition-colors"
             disabled={isLoading}
+            onClick={() => router.push("/dashboard/thong-bao")}
+            aria-label="Mở trang thông báo"
+            title="Thông báo"
           >
             <Bell className="h-5 w-5 text-slate-600" />
             <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse" />
