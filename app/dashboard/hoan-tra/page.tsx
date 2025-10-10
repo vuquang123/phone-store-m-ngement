@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Search, Eye, RotateCcw } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { formatDistanceToNow } from "date-fns"
+import { formatDistanceToNow, parse } from "date-fns"
 import { vi } from "date-fns/locale"
 
 interface ReturnOrder {
@@ -143,6 +143,47 @@ export default function HoanTraPage() {
     }).format(amount)
   }
 
+  // Parse chuỗi ngày dạng VN (dd/MM/yyyy[, ]HH:mm:ss) sang Date an toàn
+  function parseVNDate(input?: string | null): Date | null {
+    if (!input) return null
+    const s = String(input).trim()
+    if (!s) return null
+    // Numeric timestamp
+    if (/^\d{10,}$/.test(s)) {
+      const t = Number(s)
+      if (Number.isFinite(t)) return new Date(t)
+    }
+    const candidates = [
+      "dd/MM/yyyy, HH:mm:ss",
+      "dd/MM/yyyy HH:mm:ss",
+      "dd/MM/yyyy, HH:mm",
+      "dd/MM/yyyy HH:mm",
+      "dd/MM/yyyy",
+    ] as const
+    for (const fmt of candidates) {
+      try {
+        const d = parse(s, fmt, new Date())
+        if (!isNaN(d.getTime())) return d
+      } catch {}
+    }
+    // Fallback (ít tin cậy trên mobile/Safari)
+    try {
+      const d = new Date(s)
+      if (!isNaN(d.getTime())) return d
+    } catch {}
+    return null
+  }
+
+  function relativeFromNowSafe(input?: string | null): string {
+    try {
+      const d = parseVNDate(input)
+      if (!d) return ""
+      return formatDistanceToNow(d, { addSuffix: true, locale: vi })
+    } catch {
+      return ""
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -217,9 +258,7 @@ export default function HoanTraPage() {
                     )}
                   </div>
                   <div className="flex items-start sm:items-end justify-between sm:flex-col sm:justify-end sm:text-right gap-3">
-                    <div className="text-xs text-muted-foreground">
-                      {r.ngay_yeu_cau ? formatDistanceToNow(new Date(r.ngay_yeu_cau), { addSuffix: true, locale: vi }) : ''}
-                    </div>
+                    <div className="text-xs text-muted-foreground">{relativeFromNowSafe(r.ngay_yeu_cau)}</div>
                     {r.ly_do && <div className="text-xs text-slate-600">{r.ly_do}</div>}
                     <Button
                       variant="outline"
