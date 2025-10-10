@@ -54,9 +54,12 @@ function getCols(header: string[]) {
 }
 
 /* =================== PUT: cập nhật thông tin nhân viên =================== */
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
   try {
-  // Next.js dynamic API: params luôn là object đồng bộ
+  // Hỗ trợ cả kiểu params đồng bộ và Promise<{id:string}> (Next.js validator)
+    const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
+      ? await (ctx as any).params
+      : (ctx as any).params
     const body = await request.json()
     console.log("Nhan vien PUT payload:", body)
     const ho_ten: string | undefined = body?.ho_ten
@@ -70,15 +73,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       else if (s === "ngunghoatdong" || s === "ngung_hoat_dong" || s === "ngưnghoạtđộng" || s === "ngưng hoạt động") status = "ngung_hoat_dong"
     }
 
-    const { header, rows } = await readFromGoogleSheets(SHEET)
+  const { header, rows } = await readFromGoogleSheets(SHEET)
     const C = getCols(header)
 
     if (C.id === -1 || C.name === -1) {
       return NextResponse.json({ error: "USERS thiếu các cột bắt buộc" }, { status: 500 })
     }
 
-    // Next.js yêu cầu phải await params trước khi dùng thuộc tính
-    const { id } = await params;
+  const { id } = params;
     const targetIdx = rows.findIndex((r) => String(r[C.id]) === String(id))
     if (targetIdx === -1) {
       return NextResponse.json({ error: "Không tìm thấy nhân viên" }, { status: 404 })
@@ -141,7 +143,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 /* =================== DELETE: vô hiệu hóa theo chủ trương =================== */
-export async function DELETE(_request: NextRequest, _ctx: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, _ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
   // Theo chủ trương: quản lý tạo/xóa trực tiếp trong Google Sheets; API xóa bị vô hiệu hóa.
   return NextResponse.json(
     { error: "Xóa tài khoản được thực hiện trực tiếp trên Google Sheets. API này đã bị vô hiệu hóa." },

@@ -218,8 +218,11 @@ async function getUserRole(userId: string) {
 }
 
 // ================== ROUTES ==================
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
   try {
+    const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
+      ? await (ctx as any).params
+      : (ctx as any).params
     await getUserFromRequest(request)
 
     const all = await getAllValues(PK_SHEET)
@@ -237,8 +240,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
   try {
+    const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
+      ? await (ctx as any).params
+      : (ctx as any).params
     await getUserFromRequest(request)
     const body = (await request.json()) as Partial<APIItem>
 
@@ -263,8 +269,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
   try {
+    const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
+      ? await (ctx as any).params
+      : (ctx as any).params
     const user = await getUserFromRequest(request)
     const role = await getUserRole(user.id)
 

@@ -521,15 +521,41 @@ export default function KhoHangPage() {
       {/* Stats bar gộp lại */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {/* Card Sản phẩm */}
-        <Card className="rounded-xl shadow bg-gradient-to-br from-green-50 to-blue-50 p-6 flex flex-row items-center gap-4">
-          <span className="text-green-600 text-3xl mr-2">📲</span>
-          <div>
-            <div className="text-lg font-bold text-green-700 mb-1">Sản phẩm</div>
-            <div className="flex gap-6 text-sm mt-2">
-              <span className="flex items-center gap-1 text-green-700"><span className="text-base">🟢</span> Còn hàng: <span className="font-bold">{soSanPhamCon}</span></span>
-              <span className="flex items-center gap-1 text-orange-700"><span className="text-base">🟠</span> CNC: <span className="font-bold">{soSanPhamCNC}</span></span>
-                  <span className="flex items-center gap-1 text-blue-700"><span className="text-base">🔵</span> Bảo hành: <span className="font-bold">{soSanPhamBH}</span></span>
-                </div>
+        <Card className="rounded-xl shadow bg-gradient-to-br from-green-50 to-blue-50 p-4 md:p-6">
+          <div className="flex items-start gap-3">
+            <span className="text-green-600 text-3xl">📲</span>
+            <div className="flex-1">
+              <div className="text-lg font-bold text-green-700">Sản phẩm</div>
+              <div className="mt-2 grid grid-cols-3 gap-2 md:gap-4 text-sm">
+                <button
+                  className="flex items-center justify-center gap-1 rounded-lg border bg-white/70 px-2 py-1 md:px-3 md:py-2 text-green-700 hover:bg-white transition"
+                  onClick={() => setActiveTab('san-pham')}
+                  aria-label="Xem sản phẩm còn hàng"
+                >
+                  <span className="text-base">🟢</span>
+                  <span className="hidden sm:inline">Còn hàng:</span>
+                  <span className="font-bold">{soSanPhamCon}</span>
+                </button>
+                <button
+                  className="flex items-center justify-center gap-1 rounded-lg border bg-white/70 px-2 py-1 md:px-3 md:py-2 text-orange-700 hover:bg-white transition"
+                  onClick={() => setActiveTab('dang-cnc')}
+                  aria-label="Xem sản phẩm CNC"
+                >
+                  <span className="text-base">🟠</span>
+                  <span className="hidden sm:inline">CNC:</span>
+                  <span className="font-bold">{soSanPhamCNC}</span>
+                </button>
+                <button
+                  className="flex items-center justify-center gap-1 rounded-lg border bg-white/70 px-2 py-1 md:px-3 md:py-2 text-blue-700 hover:bg-white transition"
+                  onClick={() => setActiveTab('bao-hanh')}
+                  aria-label="Xem sản phẩm bảo hành"
+                >
+                  <span className="text-base">🔵</span>
+                  <span className="hidden sm:inline">Bảo hành:</span>
+                  <span className="font-bold">{soSanPhamBH}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </Card>
         {/* Card Phụ kiện */}
@@ -997,36 +1023,80 @@ export default function KhoHangPage() {
                   <h3 className="font-semibold">Danh sách phụ kiện</h3>
                   <p className="text-sm">Hiển thị {accessories.length} phụ kiện</p>
                 </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-blue-50/50 text-blue-700">
-                      <TableHead className="font-semibold">Tên phụ kiện</TableHead>
-                      <TableHead className="font-semibold">Loại</TableHead>
-                      <TableHead className="font-semibold">Số lượng tồn</TableHead>
-                      {isManager && <TableHead className="font-semibold">Giá nhập</TableHead>}
-                      <TableHead className="font-semibold">Giá bán</TableHead>
-                      <TableHead className="font-semibold">Ngày cập nhật</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                {isMobile ? (
+                  <>
                     {isLoadingAccessories ? (
-                      <TableRow><TableCell colSpan={isManager ? 6 : 5} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
+                      <div className="p-6 text-center text-slate-400">Đang tải...</div>
                     ) : accessories.length === 0 ? (
-                      <TableRow><TableCell colSpan={isManager ? 6 : 5} className="text-center py-8 text-slate-400">Chưa có phụ kiện nào</TableCell></TableRow>
+                      <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">
+                        <div className="text-3xl mb-2">📦</div>
+                        <div className="font-medium">Chưa có phụ kiện nào</div>
+                      </div>
                     ) : (
-                      accessories.map((a, idx) => (
-                        <TableRow key={a.id || idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                          <TableCell className="font-medium text-slate-800">{a.ten_phu_kien}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{a.loai_phu_kien}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{a.so_luong_ton}</TableCell>
-                          {isManager && <TableCell className="text-sm text-blue-700 font-semibold">{a.gia_nhap?.toLocaleString("vi-VN")} VNĐ</TableCell>}
-                          <TableCell className="text-sm text-green-700 font-semibold">{a.gia_ban?.toLocaleString("vi-VN")} VNĐ</TableCell>
-                          <TableCell className="text-sm text-slate-700">{a.updated_at ? new Date(a.updated_at).toLocaleDateString("vi-VN") : "-"}</TableCell>
-                        </TableRow>
-                      ))
+                      <ul className="divide-y">
+                        {accessories.map((a, idx) => (
+                          <li key={a.id || idx} className="p-4 bg-white">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-semibold text-slate-800">{a.ten_phu_kien}</div>
+                                <div className="text-xs text-slate-500 mt-0.5">{a.loai_phu_kien || '-'}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-semibold text-green-700">{a.gia_ban?.toLocaleString('vi-VN')} VNĐ</div>
+                                {isManager && <div className="text-xs text-blue-700">{a.gia_nhap?.toLocaleString('vi-VN')} VNĐ</div>}
+                              </div>
+                            </div>
+                            <div className="mt-2 flex items-center justify-between">
+                              <div>
+                                {a.so_luong_ton === 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-red-50 text-red-600 border border-red-200">Đã hết</span>
+                                ) : a.so_luong_ton > 0 && a.so_luong_ton <= 5 ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-amber-50 text-amber-700 border border-amber-200">Sắp hết: {a.so_luong_ton}</span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Còn: {a.so_luong_ton}</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {a.updated_at ? new Date(a.updated_at).toLocaleDateString('vi-VN') : '-'}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                  </TableBody>
-                </Table>
+                  </>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-blue-50/50 text-blue-700">
+                        <TableHead className="font-semibold">Tên phụ kiện</TableHead>
+                        <TableHead className="font-semibold">Loại</TableHead>
+                        <TableHead className="font-semibold">Số lượng tồn</TableHead>
+                        {isManager && <TableHead className="font-semibold">Giá nhập</TableHead>}
+                        <TableHead className="font-semibold">Giá bán</TableHead>
+                        <TableHead className="font-semibold">Ngày cập nhật</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isLoadingAccessories ? (
+                        <TableRow><TableCell colSpan={isManager ? 6 : 5} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
+                      ) : accessories.length === 0 ? (
+                        <TableRow><TableCell colSpan={isManager ? 6 : 5} className="text-center py-8 text-slate-400">Chưa có phụ kiện nào</TableCell></TableRow>
+                      ) : (
+                        accessories.map((a, idx) => (
+                          <TableRow key={a.id || idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                            <TableCell className="font-medium text-slate-800">{a.ten_phu_kien}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{a.loai_phu_kien}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{a.so_luong_ton}</TableCell>
+                            {isManager && <TableCell className="text-sm text-blue-700 font-semibold">{a.gia_nhap?.toLocaleString("vi-VN")} VNĐ</TableCell>}
+                            <TableCell className="text-sm text-green-700 font-semibold">{a.gia_ban?.toLocaleString("vi-VN")} VNĐ</TableCell>
+                            <TableCell className="text-sm text-slate-700">{a.updated_at ? new Date(a.updated_at).toLocaleDateString("vi-VN") : "-"}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
               </div>
             </CardContent>
           </Card>

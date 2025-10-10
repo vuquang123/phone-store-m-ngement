@@ -62,8 +62,11 @@ function idxKhoHang(header: string[]) {
 }
 
 /* ================= GET ================= */
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
   try {
+    const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
+      ? await (ctx as any).params
+      : (ctx as any).params
     const { header, rows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
     const K = idxKhoHang(header)
     if (K.idMay === -1) return NextResponse.json({ error: "Kho_Hang thiếu cột 'ID Máy'" }, { status: 500 })
@@ -97,8 +100,11 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 }
 
 /* ================= PUT ================= */
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
   try {
+    const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
+      ? await (ctx as any).params
+      : (ctx as any).params
     const body = await request.json()
     const {
       ten_san_pham,
@@ -139,8 +145,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (K.pin !== -1 && typeof pin !== "undefined") current[K.pin] = pin
     if (K.imei !== -1 && typeof imei !== "undefined") current[K.imei] = imei
     if (K.tinhTrang !== -1 && typeof tinh_trang !== "undefined") current[K.tinhTrang] = tinh_trang
-    if (K.giaNhap !== -1 && typeof gia_nhap !== "undefined") current[K.giaNhap] = Number(gia_nhap)
-    if (K.giaBan !== -1 && typeof gia_ban !== "undefined") current[K.giaBan] = Number(gia_ban)
+  if (K.giaNhap !== -1 && typeof gia_nhap !== "undefined") current[K.giaNhap] = String(Number(gia_nhap))
+  if (K.giaBan !== -1 && typeof gia_ban !== "undefined") current[K.giaBan] = String(Number(gia_ban))
     if (K.ghiChu !== -1 && typeof ghi_chu !== "undefined") current[K.ghiChu] = ghi_chu
     if (K.trangThai !== -1 && typeof trang_thai !== "undefined") current[K.trangThai] = trang_thai
 
@@ -173,8 +179,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 /* ================= DELETE (soft-delete) ================= */
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
   try {
+    const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
+      ? await (ctx as any).params
+      : (ctx as any).params
     // Lấy email từ header để kiểm tra quyền (bắt buộc)
     const email = request.headers.get("x-user-email") || ""
     if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
