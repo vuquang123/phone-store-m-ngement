@@ -91,7 +91,7 @@ const handleLogin = async (e: React.FormEvent) => {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@iphonelock.com"
+                  placeholder="Nhập tài khoản email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
