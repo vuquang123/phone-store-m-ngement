@@ -1,7 +1,8 @@
 // app/api/ban-hang/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
-import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets } from "@/lib/google-sheets"
+import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
 
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
@@ -48,6 +49,57 @@ function normalizePhone(p: string) {
   return digits
 }
 
+/* =================== Partner sheet helpers =================== */
+const PARTNER_SHEET_CANDIDATES = [
+  "Hàng Đối Tác",
+  "Hang Doi Tac",
+  "Hang_Doi_Tac",
+  "Hàng Order Đối Tác",
+  "Hang Order Doi Tac",
+  "Hang_Order_Doi_Tac",
+  "Partner_Order",
+]
+
+async function tryRemoveRowByIndex(sheetName: string, rowIndexOneBased: number) {
+  try {
+    const { header, rows } = await readFromGoogleSheets(sheetName, undefined, { silent: true })
+    const zeroIdx = Math.max(0, rowIndexOneBased - 2) // rows[] bắt đầu từ dòng 2
+    if (zeroIdx >= rows.length) return { success: false, reason: "index_out_of_range" }
+    const newRows = rows.filter((_, i) => i !== zeroIdx)
+    await syncToGoogleSheets(sheetName, newRows)
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e?.message }
+  }
+}
+
+async function tryRemovePartnerRowByIMEI(imei: string) {
+  for (const name of PARTNER_SHEET_CANDIDATES) {
+    try {
+      const { header, rows } = await readFromGoogleSheets(name, undefined, { silent: true })
+      const idxIMEI = header.indexOf("IMEI")
+      const idxTrangThai = header.indexOf("Trạng Thái")
+      if (idxIMEI === -1) continue
+      const foundIndex = rows.findIndex((r) => String(r[idxIMEI] || "").trim() === imei)
+      if (foundIndex !== -1) {
+        // Cách 1: xoá hẳn dòng khỏi sheet
+        const newRows = rows.filter((_, i) => i !== foundIndex)
+        await syncToGoogleSheets(name, newRows)
+        return { success: true, sheet: name, removedBy: "imei" }
+        // Cách 2 (nếu muốn chỉ đánh dấu):
+        // if (idxTrangThai !== -1) {
+        //   rows[foundIndex][idxTrangThai] = "Đã bán"
+        //   await syncToGoogleSheets(name, rows)
+        //   return { success: true, sheet: name, updated: true }
+        // }
+      }
+    } catch {
+      continue
+    }
+  }
+  return { success: false, reason: "not_found" }
+}
+
 /* =================== Sheet-specific index helpers =================== */
 function idxBanHang(header: string[]) {
   return {
@@ -68,6 +120,9 @@ function idxBanHang(header: string[]) {
     giaNhap: colIndex(header, "Giá Nhập"),
     lai: colIndex(header, "Lãi"),
     nguoiBan: colIndex(header, "Người Bán"),
+    nguonHang: colIndex(header, "Nguồn Hàng", "Nguồn"),
+    tenDoiTac: colIndex(header, "Tên Đối Tác", "Đối Tác"),
+    sdtDoiTac: colIndex(header, "SĐT Đối Tác", "SĐT", "SDT Đối Tác"),
   }
 }
 
@@ -202,7 +257,16 @@ export async function GET(request: NextRequest) {
 /* =================== POST: Xuất hàng 1 máy =================== */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+  const body = await request.json()
+  // Phân tách nếu FE gửi cấu trúc tối ưu: coreTotal, warrantySelections, warrantyTotal, finalThanhToan
+  // Backward compatible: nếu không có coreTotal thì coi Giá Bán hiện gửi đã bao gồm.
+  const warrantySelectionsInput = Array.isArray(body.warrantySelections) ? body.warrantySelections : []
+  const coreTotalFromClient = typeof body.coreTotal === 'number' ? body.coreTotal : null
+  const warrantyTotalFromClient = typeof body.warrantyTotal === 'number' ? body.warrantyTotal : null
+  const finalTotalFromClient = typeof body.finalThanhToan === 'number' ? body.finalThanhToan : null
+    // Extract phone early for reuse (customer update + warranty contracts)
+    const rawPhone = body.customerPhone || body.so_dien_thoai || body.sdt || body["Số Điện Thoại"] || (body.khach_hang && (body.khach_hang.so_dien_thoai || body.khach_hang.sdt))
+    const customerPhoneEarly = rawPhone ? normalizePhone(String(rawPhone)) : ""
     // Tính tổng giá nhập
     let tongGiaNhap = 0
 
@@ -247,8 +311,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Đọc header sheet để map đúng thứ tự cột
-    const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
+  // Đọc header sheet để map đúng thứ tự cột
+  const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
+  // Xác định cột mở rộng (nếu admin đã thêm thủ công): Phí BH, Tổng Thu, Gói BH, Chi Tiết PK (JSON)
+  const idxPhiBH = header.indexOf('Phí BH')
+  const idxTongThu = header.indexOf('Tổng Thu')
+  const idxGoiBH = header.indexOf('Gói BH')
+  const idxGiaBanCol = header.indexOf('Giá Bán')
+  const idxChiTietPK = colIndex(header, 'Chi Tiết PK', 'Chi Tiết Phụ Kiện', 'Chi Tiet PK', 'Accessory Detail')
     // Tự động sinh ID đơn hàng DH00001-DH99999
     let idDonHang = ""
     const idxIdDon = header.indexOf("ID Đơn Hàng")
@@ -291,13 +361,41 @@ export async function POST(request: NextRequest) {
 
     let allResults = []
     let errorFlag = false
+    // Tính tổng phí bảo hành theo selections (sẽ dùng cho dòng đầu tiên)
+    let warrantyPkgCodes: string[] = []
+    let warrantyTotalFee = 0
+    if (warrantySelectionsInput.length) {
+      try {
+        const pkgMapPre = await loadWarrantyPackages()
+        for (const sel of warrantySelectionsInput) {
+          const pkg = pkgMapPre[sel.packageCode]
+            if (pkg) {
+              warrantyPkgCodes.push(pkg.code)
+              warrantyTotalFee += pkg.price || 0
+            }
+        }
+      } catch (e) {
+        console.warn('[WARRANTY] preload price failed (still continue):', e)
+      }
+    }
+
+    // Thu thập tổng core (server tính) để phản hồi FE
+    let coreTotalServer = 0
     for (let i = 0; i < mayList.length; i++) {
       const may = mayList[i]
       // Dòng đầu tiên: cộng phụ kiện, các dòng sau chỉ ghi máy
       let phuKien = ""
       let giaNhapPhuKien = 0
       if (i === 0 && normalizedAccessories.length > 0) {
-        phuKien = normalizedAccessories.map((pk: any) => pk.ten_phu_kien || pk.ten || pk.name).join(", ")
+        const labels = normalizedAccessories.map((pk: any) => {
+          const ten = pk.ten_phu_kien || pk.ten || pk.name || ''
+          const loai = pk.loai || pk.type || ''
+          const sl = pk.so_luong && !Number.isNaN(Number(pk.so_luong)) ? Number(pk.so_luong) : 1
+          const typeSuffix = loai ? ` (${loai})` : ''
+          const qtySuffix = sl > 1 ? ` x${sl}` : ''
+          return `${ten}${typeSuffix}${qtySuffix}`
+        })
+        phuKien = labels.join(", ")
         giaNhapPhuKien = normalizedAccessories.reduce((s: number, pk: any) => s + (pk.gia_nhap || 0) * (pk.so_luong || 1), 0)
       }
       // Luôn lấy giá nhập từ payload nếu có
@@ -310,6 +408,15 @@ export async function POST(request: NextRequest) {
   const hasMay = mayList.some((m: any) => m.imei)
       const isMayRow = may.imei
       const isOnlyPhuKien = !hasMay && phuKien
+      const isPartner =
+        String(may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "")
+          .toLowerCase()
+          .includes("đối tác") ||
+        String(may.source || "").toLowerCase().includes("partner")
+
+      const doiTacTen = may.ten_doi_tac || body.ten_doi_tac || may["Tên Đối Tác"] || body["Tên Đối Tác"] || ""
+      const doiTacSDT = may.sdt_doi_tac || body.sdt_doi_tac || may["SĐT Đối Tác"] || body["SĐT Đối Tác"] || ""
+
       const newRow = header.map((k) => {
         if (k === "ID Đơn Hàng") return idDonHang
         if (k === "Phụ Kiện") return i === 0 ? phuKien : ""
@@ -317,41 +424,36 @@ export async function POST(request: NextRequest) {
           const rounded = Math.round(tongGiaNhap)
           return rounded > 0 ? rounded : ""
         }
+        if (k === "Nguồn Hàng" || k === "Nguồn") {
+          // Nếu là hàng đối tác bán như bình thường → ghi chú rõ ràng
+          if (isPartner) return "Đối tác (mua lại)"
+          // Nếu FE có gửi nguồn khác thì ghi, còn lại để trống
+          return may["Nguồn Hàng"] || may.nguon || body["Nguồn Hàng"] || body["nguon_hang"] || ""
+        }
+        if (k === "Tên Đối Tác" || k === "Đối Tác") {
+          return doiTacTen
+        }
+        if (k === "SĐT Đối Tác" || k === "SĐT" || k === "SDT Đối Tác") {
+          return doiTacSDT
+        }
         if (k === "Giá Bán") {
-          // Nếu có cả máy và phụ kiện, chỉ dòng máy (imei) ghi giá, dòng phụ kiện để trống
-          // Nếu chỉ có phụ kiện, ghi giá ở dòng phụ kiện
-          if (hasMay) {
-            if (isMayRow) {
-              let thanhToan = 0;
-              if (may["gia_ban"] !== undefined && may["gia_ban"] !== "") {
-                thanhToan = Number(String(may["gia_ban"]).replace(/\D/g, "")) * (may["so_luong"] || 1)
-              } else if (body["Thanh Toan"] !== undefined && body["Thanh Toan"] !== "") {
-                thanhToan = Number(String(body["Thanh Toan"]).replace(/\D/g, ""))
-              }
-              return thanhToan > 0 ? thanhToan : ""
-            } else {
-              return ""
-            }
-          } else if (isOnlyPhuKien) {
-            let thanhToan = 0;
-            if (may["gia_ban"] !== undefined && may["gia_ban"] !== "") {
-              thanhToan = Number(String(may["gia_ban"]).replace(/\D/g, "")) * (may["so_luong"] || 1)
-            } else if (body["Thanh Toan"] !== undefined && body["Thanh Toan"] !== "") {
-              thanhToan = Number(String(body["Thanh Toan"]).replace(/\D/g, ""))
-            }
-            return thanhToan > 0 ? thanhToan : ""
-          } else {
-            return ""
+          // Giá Bán = chỉ tiền hàng (không gồm bảo hành) ở dòng máy (hoặc phụ kiện-only)
+          let base = 0
+          // Nếu FE đã gửi coreTotal thì dùng coreTotal chia đều theo máy? => Giữ đơn giản: vẫn đọc theo may.gia_ban từng máy
+          if (may["gia_ban"] !== undefined && may["gia_ban"] !== "") {
+            base = Number(String(may["gia_ban"]).replace(/\D/g, "")) * (may["so_luong"] || 1)
+          } else if (isOnlyPhuKien && body["Thanh Toan"]) {
+            base = Number(String(body["Thanh Toan"]).replace(/\D/g, ""))
           }
+          return base > 0 ? base : ""
         }
         if (k === "Lãi") {
-          let giaBan = 0;
+          // Lãi = Giá Bán (core) - Giá Nhập (không cộng bảo hành)
+          let coreGiaBan = 0
           if (may["gia_ban"] !== undefined && may["gia_ban"] !== "") {
-            giaBan = Number(String(may["gia_ban"]).replace(/\D/g, "")) * (may["so_luong"] || 1)
-          } else if (body["Thanh Toan"] !== undefined && body["Thanh Toan"] !== "") {
-            giaBan = Number(String(body["Thanh Toan"]).replace(/\D/g, ""))
+            coreGiaBan = Number(String(may["gia_ban"]).replace(/\D/g, "")) * (may["so_luong"] || 1)
           }
-          const lai = giaBan - Math.round(tongGiaNhap)
+          const lai = coreGiaBan - Math.round(tongGiaNhap)
           return lai > 0 ? lai : 0
         }
         if (k === "Loại Đơn") {
@@ -374,9 +476,54 @@ export async function POST(request: NextRequest) {
         if (k === "Tình Trạng Máy") return may.tinh_trang_may || may["Tình Trạng Máy"] || ""
         return may[k] || body[k] || ""
       })
+      // Cộng dồn coreTotalServer từ cột Giá Bán của mỗi dòng (nếu có)
+      if (idxGiaBanCol !== -1) {
+        const raw = newRow[idxGiaBanCol]
+        const num = typeof raw === 'number' ? raw : Number(String(raw||'').replace(/\D/g,''))
+        if (Number.isFinite(num)) coreTotalServer += num
+      }
+      // Nếu đây là dòng đầu tiên và có cột mở rộng, ghi Phí BH / Tổng Thu / Gói BH / Chi Tiết PK
+      if (i === 0) {
+        if (idxPhiBH !== -1) newRow[idxPhiBH] = warrantyTotalFee > 0 ? warrantyTotalFee : ''
+        if (idxTongThu !== -1) {
+          // Tổng Thu = (Giá Bán core tổng) + phí BH => tạm: lấy body.finalThanhToan nếu có
+          const baseThanhToan = finalTotalFromClient || body["Thanh Toan"] || body["finalThanhToan"]
+          if (baseThanhToan) newRow[idxTongThu] = baseThanhToan
+        }
+        if (idxGoiBH !== -1) newRow[idxGoiBH] = warrantyPkgCodes.join(', ')
+        if (idxChiTietPK !== -1 && normalizedAccessories.length > 0) {
+          const detail = normalizedAccessories.map((pk: any) => ({
+            id: pk.id,
+            ten: pk.ten_phu_kien || pk.ten || pk.name || '',
+            loai: pk.loai || pk.type || '',
+            sl: pk.so_luong && !Number.isNaN(Number(pk.so_luong)) ? Number(pk.so_luong) : 1,
+            gia_ban: pk.gia_ban ?? undefined
+          }))
+          try { newRow[idxChiTietPK] = JSON.stringify(detail) } catch { newRow[idxChiTietPK] = '' }
+        }
+      }
       const result = await appendToGoogleSheets(SHEETS.BAN_HANG, newRow)
       allResults.push(result)
       if (!result.success) errorFlag = true
+
+      // Sau khi ghi đơn thành công: nếu là máy đối tác thì xoá khỏi sheet đối tác
+      try {
+        const sourceStr = String(
+          may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "",
+        ).toLowerCase()
+        const isPartner = sourceStr.includes("đối tác") || sourceStr.includes("partner")
+        if (isPartner) {
+          const partnerSheetName = may.partner_sheet || may.sheet || body.partner_sheet || ""
+          const partnerRowIndex = Number(may.partner_row_index || may.row_index || body.partner_row_index)
+          if (partnerSheetName && Number.isFinite(partnerRowIndex) && partnerRowIndex > 1) {
+            await tryRemoveRowByIndex(partnerSheetName, partnerRowIndex)
+          } else if (may.imei) {
+            await tryRemovePartnerRowByIMEI(String(may.imei))
+          }
+        }
+      } catch (e) {
+        console.warn("[Partner] Không thể xoá dòng đối tác sau khi bán:", e)
+      }
     }
     if (errorFlag) {
       return NextResponse.json({ error: "Lỗi ghi Google Sheets" }, { status: 500 })
@@ -416,12 +563,20 @@ export async function POST(request: NextRequest) {
             const n = Number(s)
             return Number.isFinite(n) ? n : 0
         }
+        // Ưu tiên dùng tổng thanh toán cuối cùng (bao gồm BH nếu có)
         let amountToAdd = 0
         const explicitTotal = body["Thanh Toan"] || body.thanh_toan || body.tong_tien || body.tongTien || body.total
-        if (explicitTotal) {
+        const preferFinal = (finalTotalFromClient !== null && Number.isFinite(finalTotalFromClient)) ? Number(finalTotalFromClient) : null
+        const serverFinal = Number(coreTotalServer || 0) + Number(warrantyTotalFee || 0)
+        if (preferFinal !== null) {
+          amountToAdd = preferFinal
+        } else if (serverFinal > 0) {
+          amountToAdd = serverFinal
+        } else if (explicitTotal) {
+          // Fallback: tổng core (có thể chưa gồm BH nếu FE không đưa)
           amountToAdd = toNumber(explicitTotal)
         } else {
-          // Sum giá bán từng máy trong mayList (đã chuẩn hoá ở trên)
+          // Cuối cùng: cộng từng dòng máy + phụ kiện
           if (Array.isArray(mayList) && mayList.length > 0) {
             for (const m of mayList) {
               if (m && m.gia_ban !== undefined) {
@@ -430,7 +585,6 @@ export async function POST(request: NextRequest) {
               }
             }
           }
-          // Cộng giá bán phụ kiện nếu có và nếu mỗi phụ kiện có trường gia_ban
           if (normalizedAccessories.length > 0) {
             for (const pk of normalizedAccessories) {
               if (pk && pk.gia_ban !== undefined) {
@@ -439,9 +593,9 @@ export async function POST(request: NextRequest) {
             }
           }
         }
-        // Phòng trường hợp không tính được gì: fallback giá bán dòng đầu tiên / Thanh Toan
-        if (amountToAdd <= 0) {
-          amountToAdd = toNumber(explicitTotal) || 0
+        // Phòng trường hợp vẫn bằng 0
+        if (amountToAdd <= 0 && explicitTotal) {
+          amountToAdd = toNumber(explicitTotal)
         }
         if (amountToAdd > 0) {
           await upsertCustomerByPhone({ phone: customerPhone, name: customerName, amountToAdd })
@@ -454,6 +608,19 @@ export async function POST(request: NextRequest) {
 
     // Gửi thông báo về Telegram khi tạo đơn hàng mới
     try {
+      // Thu thập danh sách sản phẩm bán
+      const productList: any[] = []
+      for (const may of mayList) {
+        if (!may) continue
+        productList.push({
+          ten_san_pham: may.ten_san_pham || may["Tên Sản Phẩm"] || '',
+          loai_may: may.loai_may || may["Loại Máy"] || '',
+          dung_luong: may.dung_luong || may["Dung Lượng"] || '',
+          mau_sac: may.mau_sac || may["Màu Sắc"] || '',
+          imei: may.imei || may["IMEI"] || '',
+        })
+      }
+
       const orderInfo = {
         ma_don_hang: idDonHang,
         nhan_vien_ban: body.employeeName || body.employeeId || body.nhan_vien_ban || body.nhan_vien || body["Người Bán"] || "N/A",
@@ -464,6 +631,9 @@ export async function POST(request: NextRequest) {
         tong_tien: body["Thanh Toan"] || body.tong_tien || body.thanh_toan || 0,
         phuong_thuc_thanh_toan: body["Phuong Thuc Thanh Toan"] || body["phuong_thuc_thanh_toan"] || body.paymentMethod || body.hinh_thuc_thanh_toan || body["Hình Thức Thanh Toán"] || "N/A",
         ngay_tao: Date.now(),
+        products: productList,
+        // Gửi gói bảo hành nếu có
+        warrantyPackages: warrantyPkgCodes,
       }
       console.log("[TELEGRAM DEBUG] orderInfo gửi đi:", orderInfo)
       // Chuẩn hóa loại đơn để nhận diện đúng đơn online/offline
@@ -479,7 +649,106 @@ export async function POST(request: NextRequest) {
       console.error("Lỗi gửi thông báo Telegram:", err)
     }
 
-    return NextResponse.json({ ok: true, created: true, id_don_hang: idDonHang }, { status: 201 })
+    /* =================== WARRANTY (Optional) =================== */
+    let warrantySummary: any[] = []
+    let warrantyError: string | null = null
+    let warrantySkipped: any[] = []
+    try {
+      const selectionsRaw: any = warrantySelectionsInput
+      if (Array.isArray(selectionsRaw) && selectionsRaw.length > 0) {
+        // Only keep selections that have imei & packageCode
+        const selections: WarrantySelectionInput[] = selectionsRaw
+          .filter((s: any) => s && s.imei && s.packageCode)
+          .map((s: any) => ({
+            imei: String(s.imei),
+            packageCode: String(s.packageCode).trim(),
+            startDate: s.startDate,
+            phone: customerPhoneEarly || s.phone,
+            employee: body.employeeId || s.employee,
+            note: s.note || ''
+          }))
+        if (selections.length) {
+          const pkgMap = await loadWarrantyPackages().catch(e => { throw new Error("Không đọc được sheet gói bảo hành: " + e.message) })
+          // Filter out inactive / not found packages
+          const validSelections = selections.filter(sel => {
+            const pkg = pkgMap[sel.packageCode]
+            if (!pkg) { console.warn("[WARRANTY] Package không tồn tại:", sel.packageCode); return false }
+            if (!pkg.active) { console.warn("[WARRANTY] Package không active:", sel.packageCode); return false }
+            return true
+          })
+          // Ngăn trùng hợp đồng: loại bỏ selection nếu đã có hợp đồng active cho cùng IMEI + gói
+          if (validSelections.length) {
+            try {
+              const { header: cHeader, rows: cRows } = await readFromGoogleSheets('HOP_DONG_BAO_HANH')
+              const idxMap = {
+                imei: cHeader.indexOf('IMEI'),
+                pkg: cHeader.indexOf('Mã Gói'),
+                overall: cHeader.indexOf('Hạn Tổng'),
+                status: cHeader.indexOf('Trạng Thái')
+              }
+              const now = Date.now()
+              const activeKeys = new Set<string>()
+              for (const r of cRows) {
+                const st = idxMap.status !== -1 ? (r[idxMap.status]||'').toString() : ''
+                const overall = idxMap.overall !== -1 ? r[idxMap.overall] : ''
+                const t = overall ? new Date(overall).getTime() : 0
+                if (st === 'expired') continue
+                if (t && t < now) continue
+                const im = idxMap.imei !== -1 ? r[idxMap.imei] : ''
+                const pk = idxMap.pkg !== -1 ? r[idxMap.pkg] : ''
+                if (im && pk) activeKeys.add(im + '|' + pk)
+              }
+              const filtered: WarrantySelectionInput[] = []
+              for (const sel of validSelections) {
+                const key = sel.imei + '|' + sel.packageCode
+                if (activeKeys.has(key)) {
+                  warrantySkipped.push({ imei: sel.imei, packageCode: sel.packageCode, reason: 'duplicate_active' })
+                } else {
+                  filtered.push(sel)
+                }
+              }
+              if (filtered.length) {
+                const contracts = buildContracts(idDonHang, customerPhoneEarly, filtered, pkgMap, body.employeeId)
+                await saveContracts(contracts)
+                warrantySummary = contracts.map(c => ({
+                  ma_hd: c.contractCode,
+                  imei: c.imei,
+                  ma_goi: c.packageCode,
+                  han_tong: c.overallUntil,
+                  trang_thai: c.status
+                }))
+              }
+            } catch (dupErr) {
+              console.warn('[WARRANTY] Duplicate check failed, fallback tạo tất cả:', dupErr)
+              const contracts = buildContracts(idDonHang, customerPhoneEarly, validSelections, pkgMap, body.employeeId)
+              await saveContracts(contracts)
+              warrantySummary = contracts.map(c => ({
+                ma_hd: c.contractCode,
+                imei: c.imei,
+                ma_goi: c.packageCode,
+                han_tong: c.overallUntil,
+                trang_thai: c.status
+              }))
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      warrantyError = e?.message || String(e)
+      console.error("[WARRANTY] Lỗi xử lý bảo hành:", warrantyError)
+    }
+    const finalTotalServer = finalTotalFromClient || (coreTotalServer + warrantyTotalFee)
+    return NextResponse.json({
+      ok: true,
+      created: true,
+      id_don_hang: idDonHang,
+      warranties: warrantySummary,
+      warrantySkipped,
+      warrantyError,
+      coreTotalServer,
+      warrantyTotalServer: warrantyTotalFee,
+      finalTotalServer
+    }, { status: 201 })
   } catch (error) {
     console.error("Ban_Hang POST error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

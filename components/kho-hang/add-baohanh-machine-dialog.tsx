@@ -9,6 +9,7 @@ declare global {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
@@ -19,6 +20,7 @@ interface AddBaoHanhMachineDialogProps {
 }
 
 export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: AddBaoHanhMachineDialogProps) {
+  const { toast } = useToast()
 
   // Dropdown tên sản phẩm
   const [productNames, setProductNames] = useState<string[]>([])
@@ -87,14 +89,14 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          alert("Thêm máy bảo hành thành công!")
+          toast({ title: "Thành công", description: "Thêm máy bảo hành thành công!", variant: "success" as any })
           onSuccess()
           onClose()
         } else {
-          alert("Lỗi: " + (data.error || ""))
+          toast({ title: "Lỗi", description: data.error || "Không thể thêm máy bảo hành", variant: "destructive" })
         }
       })
-      .catch(e => alert("Lỗi: " + e.message))
+      .catch(e => toast({ title: "Lỗi", description: e.message, variant: "destructive" }))
       .finally(() => setIsLoading(false))
   }
 

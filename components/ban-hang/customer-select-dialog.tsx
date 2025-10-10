@@ -1,10 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
+import { CustomerDialog } from "./customer-dialog"
+import { useToast } from "@/hooks/use-toast"
 
 interface Customer {
   id: string
@@ -22,6 +24,19 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
   const [customers, setCustomers] = useState<Customer[]>([])
   const [search, setSearch] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const { toast } = useToast()
+  const [showCreate, setShowCreate] = useState(false)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const [highlightIndex, setHighlightIndex] = useState<number>(-1)
+
+  // Debounce search
+  const debouncedSearch = useMemo(() => {
+    let t: any
+    return (cb: () => void) => {
+      clearTimeout(t)
+      t = setTimeout(cb, 350)
+    }
+  }, [])
 
   const fetchCustomers = async () => {
     try {
@@ -49,9 +64,9 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
   }
 
   useEffect(() => {
-    if (isOpen) {
-      fetchCustomers()
-    }
+    if (!isOpen) return
+    debouncedSearch(fetchCustomers)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, search])
 
 
@@ -64,9 +79,33 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
   const handleSelect = (customer: Customer) => {
     setSelectedCustomerId(customer.id)
     onSelect(customer)
+    // Save to recent list (localStorage)
+    try {
+      const key = "recent_customers"
+      const raw = localStorage.getItem(key)
+      const list: Customer[] = raw ? JSON.parse(raw) : []
+      const newList = [customer, ...list.filter((c) => c.id !== customer.id)].slice(0, 8)
+      localStorage.setItem(key, JSON.stringify(newList))
+    } catch {}
   }
 
+  // Recent customers
+  const [recents, setRecents] = useState<Customer[]>([])
+  useEffect(() => {
+    if (!isOpen) return
+    try {
+      const raw = localStorage.getItem("recent_customers")
+      setRecents(raw ? JSON.parse(raw) : [])
+    } catch {
+      setRecents([])
+    }
+    setHighlightIndex(-1)
+    // Focus input when opening
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }, [isOpen])
+
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
   <DialogContent className="sm:max-w-[600px] bg-white">
         <DialogHeader>
@@ -80,36 +119,97 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
             <Input
               placeholder="Tìm kiếm theo tên hoặc số điện thoại..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setHighlightIndex(-1)
+              }}
               className="pl-8"
+              ref={inputRef}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault()
+                  setHighlightIndex((i) => Math.min(i + 1, customers.length - 1))
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault()
+                  setHighlightIndex((i) => Math.max(i - 1, 0))
+                } else if (e.key === "Enter") {
+                  if (highlightIndex >= 0 && customers[highlightIndex]) {
+                    handleSelect(customers[highlightIndex])
+                  } else if (!isLoading && customers.length === 0 && search.trim().length >= 6) {
+                    setShowCreate(true)
+                  }
+                }
+              }}
             />
           </div>
 
-          <div className="max-h-60 overflow-y-auto space-y-2">
-            {isLoading ? (
-              <p className="text-center py-4">Đang tải...</p>
-            ) : customers.length === 0 ? (
-              <p className="text-center py-4 text-muted-foreground">Không tìm thấy khách hàng</p>
-            ) : (
-              customers.map((customer) => (
-                <div
-                  key={customer.id}
-                  className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${selectedCustomerId === customer.id ? 'bg-white border-primary' : 'hover:bg-muted/50 border-muted'}`}
-                  onClick={() => handleSelect(customer)}
-                >
-                  <div>
-                    <p className="font-medium">{customer.ho_ten}</p>
-                    <p className="text-sm text-muted-foreground">{customer.so_dien_thoai}</p>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Chọn
+          {/* Recent customers section */}
+          {recents.length > 0 && !search && (
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-muted-foreground">Khách gần đây</div>
+              <div className="grid grid-cols-2 gap-2">
+                {recents.map((c) => (
+                  <button
+                    key={c.id}
+                    className="text-left p-2 border rounded-md hover:bg-muted/50"
+                    onClick={() => handleSelect(c)}
+                  >
+                    <div className="font-medium truncate">{c.ho_ten}</div>
+                    <div className="text-xs text-muted-foreground">{c.so_dien_thoai}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="max-h-60 overflow-y-auto space-y-1">
+            {isLoading && <p className="text-center py-4">Đang tải...</p>}
+            {!isLoading && customers.length === 0 && (
+              <div className="text-center py-4 space-y-2 text-muted-foreground">
+                <p>Không tìm thấy khách hàng</p>
+                {search.trim().length >= 6 && (
+                  <Button variant="default" size="sm" onClick={() => setShowCreate(true)}>
+                    + Tạo khách mới với SĐT "{search.trim()}"
                   </Button>
-                </div>
-              ))
+                )}
+              </div>
             )}
+            {!isLoading && customers.length > 0 && customers.map((customer, idx) => (
+              <div
+                key={customer.id}
+                className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${selectedCustomerId === customer.id ? 'bg-white border-primary' : 'hover:bg-muted/50 border-muted'} ${highlightIndex===idx ? 'ring-2 ring-primary' : ''}`}
+                onClick={() => handleSelect(customer)}
+              >
+                <div>
+                  <p className="font-medium">{customer.ho_ten}</p>
+                  <p className="text-sm text-muted-foreground">{customer.so_dien_thoai}</p>
+                </div>
+                <Button variant="outline" size="sm">
+                  Chọn
+                </Button>
+              </div>
+            ))}
           </div>
         </div>
       </DialogContent>
     </Dialog>
+    {/* Create new customer dialog */}
+    <CustomerDialog
+      isOpen={showCreate}
+      onClose={() => setShowCreate(false)}
+      initial={{ so_dien_thoai: search.trim() }}
+      onSuccess={(c) => {
+        const normalized = {
+          id: (c as any).id || (c as any).sdt,
+          ho_ten: (c as any).ho_ten || (c as any).ten_khach,
+          so_dien_thoai: (c as any).so_dien_thoai || (c as any).sdt,
+        } as Customer
+        toast({ title: "Đã tạo khách hàng", description: `${normalized.ho_ten} (${normalized.so_dien_thoai})` })
+        setShowCreate(false)
+        setCustomers((prev) => [normalized, ...prev])
+        handleSelect(normalized)
+      }}
+    />
+    </>
   )
 }

@@ -4,9 +4,9 @@ import { readFromGoogleSheets } from "@/lib/google-sheets"
 
 const SHEET_NAME = "Ban_Hang"
 
-export async function GET(request: NextRequest, { params }: { params: { orderId: string } }) {
+export async function GET(request: NextRequest, ctx: { params: Promise<{ orderId: string }> }) {
   try {
-    const orderId = params.orderId
+    const { orderId } = await ctx.params
     const { header, rows } = await readFromGoogleSheets(SHEET_NAME)
     // Tìm tất cả các dòng có cùng mã đơn hàng
     const idxIdDon = header.indexOf("ID Đơn Hàng")
@@ -17,6 +17,12 @@ export async function GET(request: NextRequest, { params }: { params: { orderId:
     // Map thông tin chung từ dòng đầu tiên
     const first = orderRows[0]
     const idx = (name: string) => header.indexOf(name)
+    const idxNguon = (() => {
+      const i1 = header.indexOf('Nguồn Hàng')
+      const i2 = header.indexOf('Nguồn')
+      return i1 !== -1 ? i1 : i2
+    })()
+
     const orderDetail = {
       id: orderId,
       ma_don_hang: orderId,
@@ -35,6 +41,7 @@ export async function GET(request: NextRequest, { params }: { params: { orderId:
             so_luong: 1,
             gia_ban: isMay ? parseInt((row[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0 : 0,
             thanh_tien: isMay ? parseInt((row[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0 : 0,
+            nguon_hang: idxNguon !== -1 ? (row[idxNguon] || '') : '',
             san_pham: isMay ? {
               ten_san_pham: row[idx("Tên Sản Phẩm")],
               loai_may: row[idx("Loại Máy")],

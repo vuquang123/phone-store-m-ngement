@@ -4,12 +4,17 @@ import dayjs from "dayjs"
 import customParseFormat from "dayjs/plugin/customParseFormat"
 dayjs.extend(customParseFormat)
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Fragment } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface OrderDetail {
   id: string
@@ -55,9 +60,63 @@ interface OrderDetailDialogProps {
   orderId: string | null
 }
 
+// Kiểu dữ liệu đơn giản cho bản ghi bảo hành hiển thị
+interface WarrantyRow {
+  ma_hd: string
+  imei: string
+  ma_goi: string
+  han_tong: string
+  trang_thai?: string
+  con_lai?: number | null
+  han_1doi1?: string
+  han_phan_cung?: string
+  han_cnc?: string
+  lifetime?: boolean
+}
+
 export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialogProps) {
+  const isMobile = useIsMobile()
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [warranties, setWarranties] = useState<WarrantyRow[]>([])
+  const [warrantyLoading, setWarrantyLoading] = useState(false)
+  const [returnLoading, setReturnLoading] = useState(false)
+  const [returnImei, setReturnImei] = useState("")
+  const [returnReason, setReturnReason] = useState("")
+  const [returnAmount, setReturnAmount] = useState("")
+  const [isPartner, setIsPartner] = useState(false)
+  const [note, setNote] = useState("")
+
+  // Helper: lấy giá bán theo IMEI từ order
+  const getPriceByImei = (imei: string) => {
+    if (!order) return 0
+    const item = (order.chi_tiet || []).find(i => i.san_pham?.imei === imei)
+    if (!item) return 0
+    // Ưu tiên thanh_tien nếu có, fallback gia_ban
+    return Number(item.thanh_tien || item.gia_ban || 0)
+  }
+
+  // Xác định có phải hàng đối tác từ nguồn hàng của dòng
+  const isPartnerSourceByImei = (imei: string) => {
+    if (!order) return false
+    const item = (order.chi_tiet || []).find(i => i.san_pham?.imei === imei)
+    const src = (item as any)?.nguon_hang ? String((item as any).nguon_hang).toLowerCase() : ''
+    return src.includes('đối tác') || src.includes('doi tac') || src.includes('partner')
+  }
+
+  // Prefill khi chỉ có 1 thiết bị trong đơn
+  useEffect(() => {
+    if (!order) return
+    const devices = (order.chi_tiet || []).filter(i => i.san_pham?.imei)
+    if (devices.length === 1) {
+      const imei = devices[0].san_pham!.imei
+      setReturnImei(imei)
+      const price = getPriceByImei(imei)
+      setReturnAmount(price > 0 ? String(price) : "")
+      setIsPartner(isPartnerSourceByImei(imei))
+    }
+  }, [order])
+  const EXPIRING_DAYS = 7
 
   useEffect(() => {
     if (isOpen && orderId) {
@@ -144,11 +203,28 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               }
             ],
       }
-      setOrder(orderDetail)
+    setOrder(orderDetail)
+    // Sau khi có chi tiết đơn hàng mới fetch bảo hành (tránh gọi 2 lần)
+    fetchWarranties(orderDetail.ma_don_hang)
     } catch (error) {
       console.error("Error fetching order detail:", error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchWarranties = async (oid: string) => {
+    try {
+      setWarrantyLoading(true)
+      const res = await fetch(`/api/warranties?orderId=${encodeURIComponent(oid)}`)
+      if (!res.ok) throw new Error('Failed to fetch warranties')
+      const data = await res.json()
+      setWarranties(Array.isArray(data.data) ? data.data : [])
+    } catch (e) {
+      console.error('[WARRANTY][UI] load error:', e)
+      setWarranties([])
+    } finally {
+      setWarrantyLoading(false)
     }
   }
 
@@ -193,7 +269,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
         ) : order ? (
           <div className="space-y-6">
             {/* Thông tin đơn hàng */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <h3 className="text-lg font-semibold mb-2">Thông tin đơn hàng</h3>
                 <div className="space-y-2">
@@ -221,25 +297,29 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               <div>
                 <h3 className="text-lg font-semibold mb-2">Thông tin khách hàng</h3>
                 {order.khach_hang ? (
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-sm font-medium text-muted-foreground">Họ tên:</span>
-                      <p>{order.khach_hang.ho_ten}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-muted-foreground">Số điện thoại:</span>
-                      <p>{order.khach_hang.so_dien_thoai}</p>
-                    </div>
-                    {order.khach_hang.email && (
+                  <div className="p-3 border rounded-lg bg-white">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <span className="text-sm font-medium text-muted-foreground">Email:</span>
-                        <p>{order.khach_hang.email}</p>
+                        <div className="font-medium">{order.khach_hang.ho_ten}</div>
+                        <div className="text-sm text-muted-foreground">{order.khach_hang.so_dien_thoai}</div>
                       </div>
-                    )}
-                    {order.khach_hang.dia_chi && (
-                      <div>
-                        <span className="text-sm font-medium text-muted-foreground">Địa chỉ:</span>
-                        <p>{order.khach_hang.dia_chi}</p>
+                      <div className="flex gap-2">
+                        {order.khach_hang.so_dien_thoai && (
+                          <a className="text-xs px-2 py-1 border rounded hover:bg-slate-50" href={`tel:${order.khach_hang.so_dien_thoai}`}>Gọi</a>
+                        )}
+                        {order.khach_hang.so_dien_thoai && (
+                          <a className="text-xs px-2 py-1 border rounded hover:bg-slate-50" href={`sms:${order.khach_hang.so_dien_thoai}`}>SMS</a>
+                        )}
+                      </div>
+                    </div>
+                    {(order.khach_hang.email || order.khach_hang.dia_chi) && (
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                        {order.khach_hang.email && (
+                          <div className="truncate"><span className="text-muted-foreground">Email:</span> {order.khach_hang.email}</div>
+                        )}
+                        {order.khach_hang.dia_chi && (
+                          <div className="truncate"><span className="text-muted-foreground">Địa chỉ:</span> {order.khach_hang.dia_chi}</div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -251,67 +331,225 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
 
             <Separator />
 
+            {/* Bảo hành */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-semibold">Bảo hành</h3>
+                {warrantyLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              </div>
+              {(!warranties || warranties.length === 0) && !warrantyLoading && (
+                <p className="text-sm text-muted-foreground">Không có gói bảo hành</p>
+              )}
+              {warranties && warranties.length > 0 && (
+                isMobile ? (
+                  <div className="space-y-2">
+                    {warranties.map(w => {
+                      const days = typeof w.con_lai === 'number' ? w.con_lai : null
+                      const status = w.trang_thai || (days && days>0? 'active':'')
+                      const isExpired = status === 'expired' || (days !== null && days <= 0)
+                      const isExpiringSoon = !isExpired && days !== null && days <= EXPIRING_DAYS
+                      const badgeClass = isExpired
+                        ? 'bg-red-100 text-red-700'
+                        : isExpiringSoon
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-emerald-100 text-emerald-700'
+                      return (
+                        <div key={w.ma_hd + w.imei} className="rounded-xl border p-3 bg-white">
+                          <div className="flex items-center justify-between">
+                            <div className="font-mono text-xs">{w.ma_hd}</div>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium inline-block ${badgeClass}`}>
+                              {isExpired ? 'Expired' : isExpiringSoon ? `Sắp hết (${days}d)` : 'Active'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">IMEI: <span className="font-mono">{w.imei}</span></div>
+                          <div className="mt-2 text-sm">Gói: <span className="font-medium">{w.ma_goi}</span></div>
+                          <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
+                            <div>Hạn tổng: <span className="font-mono">{w.han_tong || '—'}</span></div>
+                            <div>Còn: <span className={days !== null && days <= EXPIRING_DAYS ? 'text-amber-600 font-medium' : 'text-emerald-600'}>{isExpired ? 0 : (days ?? '—')}</span></div>
+                            <div>1-1: <span className="font-mono">{w.han_1doi1 || '—'}</span></div>
+                            <div>HW: <span className="font-mono">{w.han_phan_cung || '—'}</span></div>
+                            <div>CNC: <span className="font-mono">{w.han_cnc || '—'}</span></div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-md border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Mã HĐ</TableHead>
+                          <TableHead>IMEI</TableHead>
+                          <TableHead>Gói</TableHead>
+                          <TableHead className="pl-14 text-left">Hạn Tổng</TableHead>
+                          <TableHead>Trạng Thái</TableHead>
+                          <TableHead>Còn (ngày)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {warranties.map(w => {
+                          const days = typeof w.con_lai === 'number' ? w.con_lai : null
+                          const status = w.trang_thai || (days && days>0? 'active':'')
+                          const isExpired = status === 'expired' || (days !== null && days <= 0)
+                          const isExpiringSoon = !isExpired && days !== null && days <= EXPIRING_DAYS
+                          const badgeClass = isExpired
+                            ? 'bg-red-100 text-red-700'
+                            : isExpiringSoon
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                          return (
+                            <TableRow key={w.ma_hd + w.imei}>
+                              <TableCell className="font-mono text-xs">{w.ma_hd}</TableCell>
+                              <TableCell className="font-mono text-xs">{w.imei}</TableCell>
+                              <TableCell>{w.ma_goi}</TableCell>
+                              <TableCell>
+                                <div className="space-y-1 text-left">
+                                  <div className="grid grid-cols-[3.5rem_auto] items-baseline w-full">
+                                    <div />
+                                    <div className="font-mono tabular-nums">{w.han_tong || '—'}</div>
+                                  </div>
+                                  <div className="text-[11px] text-muted-foreground leading-tight space-y-0.5">
+                                    <div className="grid grid-cols-[3.5rem_auto] items-baseline w-full">
+                                      <div className="text-right pr-1">1-1:</div>
+                                      <div className="font-mono tabular-nums">{w.han_1doi1 || '—'}</div>
+                                    </div>
+                                    <div className="grid grid-cols-[3.5rem_auto] items-baseline w-full">
+                                      <div className="text-right pr-1">HW:</div>
+                                      <div className="font-mono tabular-nums">{w.han_phan_cung || '—'}</div>
+                                    </div>
+                                    <div className="grid grid-cols-[3.5rem_auto] items-baseline w-full">
+                                      <div className="text-right pr-1">CNC:</div>
+                                      <div className="font-mono tabular-nums">{w.han_cnc || '—'}</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium inline-block ${badgeClass}`}>
+                                  {isExpired ? 'Expired' : isExpiringSoon ? `Sắp hết (${days}d)` : 'Active'}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {days !== null && !isExpired && (
+                                  <span className={days <= EXPIRING_DAYS ? 'text-amber-600 font-medium' : 'text-emerald-600'}>
+                                    {days}
+                                  </span>
+                                )}
+                                {isExpired && <span className='text-red-600 font-medium'>0</span>}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )
+              )}
+            </div>
+
+            <Separator />
+
             {/* Chi tiết sản phẩm */}
             <div>
               <h3 className="text-lg font-semibold mb-4">Sản phẩm đã mua</h3>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Sản phẩm</TableHead>
-                      <TableHead>Tình Trạng Máy</TableHead>
-                      <TableHead>Số lượng</TableHead>
-                      <TableHead className="text-right">Thành tiền</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(order.chi_tiet ?? []).map((item) => (
-                      <>
-                        {item.san_pham && (
-                          <TableRow key={item.id + "-may"}>
-                            <TableCell>
-                              <div className="font-medium">
-                                {item.san_pham.ten_san_pham} {item.san_pham.loai_may}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {item.san_pham.dung_luong} - {item.san_pham.mau_sac}
-                              </div>
-                              <div className="text-xs text-muted-foreground font-mono">IMEI: {item.san_pham.imei}</div>
-                            </TableCell>
-                            <TableCell>{item.san_pham.tinh_trang_may || item.tinh_trang_may || ""}</TableCell>
-                            <TableCell>{item.so_luong}</TableCell>
-                            <TableCell className="text-right">₫{Number(item.thanh_tien ?? 0).toLocaleString()}</TableCell>
-                          </TableRow>
-                        )}
-                        {item.phu_kien && (
-                          <TableRow key={item.id + "-pk"}>
-                            <TableCell>
-                              <div className="font-medium">{item.phu_kien.ten_phu_kien}</div>
-                              <div className="text-sm text-muted-foreground capitalize">
-                                {item.phu_kien.loai_phu_kien}
-                              </div>
-                            </TableCell>
-                            <TableCell></TableCell>
-                            <TableCell>{item.so_luong}</TableCell>
-                            <TableCell className="text-right"></TableCell>
-                          </TableRow>
-                        )}
-                        {/* Nếu API trả về phụ kiện là chuỗi, render dòng riêng */}
-                        {(item as any)["Phụ Kiện"] && (
-                          <TableRow key={item.id + "-pkstr"}>
-                            <TableCell>
-                              <div className="font-medium">{(item as any)["Phụ Kiện"]}</div>
-                            </TableCell>
-                            <TableCell></TableCell>
-                            <TableCell>1</TableCell>
-                            <TableCell className="text-right"></TableCell>
-                          </TableRow>
-                        )}
-                      </>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              {isMobile ? (
+                <div className="space-y-2">
+                  {(order.chi_tiet ?? []).map((item) => (
+                    <Fragment key={item.id}>
+                      {item.san_pham && (
+                        <div className="rounded-xl border p-3 bg-white">
+                          <div className="font-medium">
+                            {item.san_pham.ten_san_pham} {item.san_pham.loai_may}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {item.san_pham.dung_luong} • {item.san_pham.mau_sac}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-mono mt-1">IMEI: {item.san_pham.imei}</div>
+                          {(item.san_pham.tinh_trang_may || item.tinh_trang_may) && (
+                            <div className="mt-1 text-sm">TT: {item.san_pham.tinh_trang_may || item.tinh_trang_may}</div>
+                          )}
+                          <div className="mt-1 flex items-center justify-between">
+                            <div className="text-sm">SL: {item.so_luong}</div>
+                            <div className="font-semibold">₫{Number(item.thanh_tien ?? 0).toLocaleString()}</div>
+                          </div>
+                        </div>
+                      )}
+                      {item.phu_kien && (
+                        <div className="rounded-xl border p-3 bg-white">
+                          <div className="font-medium">{item.phu_kien.ten_phu_kien}</div>
+                          <div className="text-xs text-muted-foreground capitalize">{item.phu_kien.loai_phu_kien}</div>
+                          <div className="mt-1 text-sm">SL: {item.so_luong}</div>
+                        </div>
+                      )}
+                      {(item as any)["Phụ Kiện"] && (
+                        <div className="rounded-xl border p-3 bg-white">
+                          <div className="font-medium">{(item as any)["Phụ Kiện"]}</div>
+                          <div className="mt-1 text-sm">SL: 1</div>
+                        </div>
+                      )}
+                    </Fragment>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Sản phẩm</TableHead>
+                        <TableHead>Tình Trạng Máy</TableHead>
+                        <TableHead>Số lượng</TableHead>
+                        <TableHead className="text-right">Thành tiền</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(order.chi_tiet ?? []).map((item) => (
+                        <Fragment key={item.id}>
+                          {item.san_pham && (
+                            <TableRow key={item.id + "-may"}>
+                              <TableCell>
+                                <div className="font-medium">
+                                  {item.san_pham.ten_san_pham} {item.san_pham.loai_may}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {item.san_pham.dung_luong} - {item.san_pham.mau_sac}
+                                </div>
+                                <div className="text-xs text-muted-foreground font-mono">IMEI: {item.san_pham.imei}</div>
+                              </TableCell>
+                              <TableCell>{item.san_pham.tinh_trang_may || item.tinh_trang_may || ""}</TableCell>
+                              <TableCell>{item.so_luong}</TableCell>
+                              <TableCell className="text-right">₫{Number(item.thanh_tien ?? 0).toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                          {item.phu_kien && (
+                            <TableRow key={item.id + "-pk"}>
+                              <TableCell>
+                                <div className="font-medium">{item.phu_kien.ten_phu_kien}</div>
+                                <div className="text-sm text-muted-foreground capitalize">
+                                  {item.phu_kien.loai_phu_kien}
+                                </div>
+                              </TableCell>
+                              <TableCell></TableCell>
+                              <TableCell>{item.so_luong}</TableCell>
+                              <TableCell className="text-right"></TableCell>
+                            </TableRow>
+                          )}
+                          {(item as any)["Phụ Kiện"] && (
+                            <TableRow key={item.id + "-pkstr"}>
+                              <TableCell>
+                                <div className="font-medium">{(item as any)["Phụ Kiện"]}</div>
+                              </TableCell>
+                              <TableCell></TableCell>
+                              <TableCell>1</TableCell>
+                              <TableCell className="text-right"></TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </div>
 
             <Separator />
@@ -354,6 +592,141 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                   </div>
                 </div>
               </div>
+            </div>
+
+            <Separator />
+
+            {/* Hoàn trả */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-semibold">Hoàn trả</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm">Chọn IMEI</Label>
+                  <select
+                    className="mt-1 w-full border rounded px-3 py-2 text-sm"
+                    value={returnImei}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setReturnImei(v)
+                      const price = getPriceByImei(v)
+                      setReturnAmount(price > 0 ? String(price) : "")
+                      setIsPartner(isPartnerSourceByImei(v))
+                    }}
+                  >
+                    <option value="">-- Chọn IMEI --</option>
+                    {(order.chi_tiet ?? []).filter(i => i.san_pham?.imei).map(i => (
+                      <option key={i.san_pham!.imei} value={i.san_pham!.imei}>
+                        {i.san_pham!.imei} — {i.san_pham!.ten_san_pham}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-sm">Số tiền hoàn (VND)</Label>
+                  <Input
+                    className="mt-1"
+                    value={returnAmount ? `₫${Number(returnAmount).toLocaleString('vi-VN')}đ` : ''}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/[^\d]/g, '')
+                      setReturnAmount(digits)
+                    }}
+                    placeholder=" "
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Lý do</Label>
+                  <Input className="mt-1" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} placeholder="Khách đổi ý / Lỗi kỹ thuật..." />
+                </div>
+                <div className="flex items-center gap-2 mt-6">
+                  <Checkbox id="partner-item" checked={isPartner} onCheckedChange={(v: any)=> setIsPartner(Boolean(v))} />
+                  <Label htmlFor="partner-item" className="text-sm">Hàng đối tác</Label>
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-sm">Ghi chú</Label>
+                  <Input className="mt-1" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ghi chú bổ sung" />
+                </div>
+              </div>
+
+              <div className="mt-4 hidden md:flex justify-end">
+                <Button
+                  disabled={returnLoading || !returnImei}
+                  onClick={async () => {
+                    if (!order) return
+                    try {
+                      setReturnLoading(true)
+                      const res = await fetch('/api/hoan-tra', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          ma_don_hang: order.ma_don_hang,
+                          khach_hang: order.khach_hang?.ho_ten,
+                          so_dien_thoai: order.khach_hang?.so_dien_thoai,
+                          imei: returnImei,
+                          ly_do: returnReason,
+                          so_tien_hoan: returnAmount ? Number(returnAmount) : undefined,
+                          nguoi_xu_ly: order.nhan_vien?.ho_ten,
+                          restock_inhouse: !isPartner,
+                          partner_return: isPartner,
+                          ghi_chu: note,
+                        })
+                      })
+                      if (!res.ok) throw new Error('Hoàn trả thất bại')
+                      // Có thể fetch lại bảo hành sau hoàn trả
+                      fetchWarranties(order.ma_don_hang)
+                      onClose()
+                    } catch (e) {
+                      console.error('[RETURN][UI] error:', e)
+                      alert('Hoàn trả thất bại, vui lòng thử lại.')
+                    } finally {
+                      setReturnLoading(false)
+                    }
+                  }}
+                >
+                  {returnLoading ? (<span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Đang hoàn trả...</span>) : 'Xác nhận hoàn trả'}
+                </Button>
+              </div>
+              {/* Sticky action bar for mobile */}
+              {isMobile && (
+                <div className="md:hidden sticky bottom-0 left-0 right-0 bg-white border-t mt-2 py-3 flex justify-end">
+                  <Button
+                    disabled={returnLoading || !returnImei}
+                    onClick={async () => {
+                      if (!order) return
+                      try {
+                        setReturnLoading(true)
+                        const res = await fetch('/api/hoan-tra', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            ma_don_hang: order.ma_don_hang,
+                            khach_hang: order.khach_hang?.ho_ten,
+                            so_dien_thoai: order.khach_hang?.so_dien_thoai,
+                            imei: returnImei,
+                            ly_do: returnReason,
+                            so_tien_hoan: returnAmount ? Number(returnAmount) : undefined,
+                            nguoi_xu_ly: order.nhan_vien?.ho_ten,
+                            restock_inhouse: !isPartner,
+                            partner_return: isPartner,
+                            ghi_chu: note,
+                          })
+                        })
+                        if (!res.ok) throw new Error('Hoàn trả thất bại')
+                        fetchWarranties(order.ma_don_hang)
+                        onClose()
+                      } catch (e) {
+                        console.error('[RETURN][UI] error:', e)
+                        alert('Hoàn trả thất bại, vui lòng thử lại.')
+                      } finally {
+                        setReturnLoading(false)
+                      }
+                    }}
+                  >
+                    {returnLoading ? (<span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Đang hoàn trả...</span>) : 'Xác nhận hoàn trả'}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         ) : null}

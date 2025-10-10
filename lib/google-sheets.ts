@@ -74,6 +74,17 @@ function normalizePrivateKey(raw: string) {
 
 const GOOGLE_SHEETS_PRIVATE_KEY = normalizePrivateKey(RAW_PRIVATE_KEY)
 
+// Ghi thông tin debug (an toàn, không in toàn bộ key) để endpoint khác lấy
+try {
+  ;(globalThis as any).__GS_KEY_DEBUG = {
+    hasBegin: GOOGLE_SHEETS_PRIVATE_KEY.includes('BEGIN PRIVATE KEY'),
+    firstLine: GOOGLE_SHEETS_PRIVATE_KEY.split('\n')[0],
+    lastLine: GOOGLE_SHEETS_PRIVATE_KEY.split('\n').slice(-1)[0],
+    lineCount: GOOGLE_SHEETS_PRIVATE_KEY ? GOOGLE_SHEETS_PRIVATE_KEY.split('\n').length : 0,
+    length: GOOGLE_SHEETS_PRIVATE_KEY.length,
+  }
+} catch {}
+
 const GOOGLE_SHEETS_SPREADSHEET_ID =
   (process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEETS_ID || "") as string
 
@@ -105,30 +116,146 @@ const auth = buildAuth()
 
 const sheets = google.sheets({ version: "v4", auth })
 
-// Đọc dữ liệu, trả về { header, rows }
-export async function readFromGoogleSheets(sheetName: string, range: string = "A:Z") {
-  try {
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
-      range: `${sheetName}!${range}`,
-    })
-    const values = response.data.values || []
-    const header = values[0] || []
-    const rows = values.slice(1)
-    return { header, rows }
-  } catch (error: any) {
-    console.error("[Sheets] Read error:", {
-      sheet: sheetName,
-      range,
-      message: error?.message,
-      code: error?.code,
-      errors: error?.errors,
-      hasBegin: GOOGLE_SHEETS_PRIVATE_KEY.includes('BEGIN'),
-      keyFirstLine: GOOGLE_SHEETS_PRIVATE_KEY.split('\n')[0],
-      email: GOOGLE_SHEETS_CLIENT_EMAIL,
-    })
-    throw new Error(error.message || "Lỗi đọc Google Sheets")
+type SheetData = { header: string[]; rows: string[][] }
+
+type SheetCacheEntry = {
+  data?: SheetData
+  expiresAt: number
+  pending?: Promise<SheetData>
+  lastErrorAt?: number
+}
+
+// Reuse a global cache in dev to avoid HMR re-allocations
+const SHEETS_CACHE: Map<string, SheetCacheEntry> = (globalThis as any).__GS_SHEETS_CACHE || new Map()
+;(globalThis as any).__GS_SHEETS_CACHE = SHEETS_CACHE
+
+const READ_MIN_INTERVAL_MS = 250
+const CACHE_TTL_MS = 15_000
+const MAX_CACHE_ENTRIES = 8
+let lastReadAt = 0
+
+async function throttleReads() {
+  const now = Date.now()
+  const elapsed = now - lastReadAt
+  if (elapsed < READ_MIN_INTERVAL_MS) {
+    await new Promise(resolve => setTimeout(resolve, READ_MIN_INTERVAL_MS - elapsed))
   }
+  lastReadAt = Date.now()
+}
+
+function escapeSheetName(name: string) {
+  // Always wrap in single quotes and escape internal quotes by doubling them
+  const sanitized = (name || "").replace(/'/g, "''")
+  return `'${sanitized}'`
+}
+
+function invalidateSheetCache(sheetName: string) {
+  try {
+    const prefix = `${sheetName}::`
+    for (const key of Array.from(SHEETS_CACHE.keys())) {
+      if (key.startsWith(prefix)) {
+        SHEETS_CACHE.delete(key)
+      }
+    }
+  } catch {}
+}
+
+// Đọc dữ liệu, trả về { header, rows }
+export async function readFromGoogleSheets(sheetName: string, range: string = "A:Z", options?: { silent?: boolean }) {
+  const cacheKey = `${sheetName}::${range}`
+  const cacheEntry = SHEETS_CACHE.get(cacheKey)
+  const now = Date.now()
+
+  if (cacheEntry?.data && cacheEntry.expiresAt > now) {
+    return cacheEntry.data
+  }
+
+  if (cacheEntry?.pending) {
+    return cacheEntry.pending
+  }
+
+  // prune expired entries and enforce max size
+  for (const [k, v] of SHEETS_CACHE) {
+    if (!v.data || v.expiresAt <= now) SHEETS_CACHE.delete(k)
+  }
+  if (SHEETS_CACHE.size > MAX_CACHE_ENTRIES) {
+    const keys = Array.from(SHEETS_CACHE.keys())
+    for (const k of keys) {
+      if (SHEETS_CACHE.size <= MAX_CACHE_ENTRIES) break
+      SHEETS_CACHE.delete(k)
+    }
+  }
+
+  const fetchPromise = (async (): Promise<SheetData> => {
+    try {
+      await throttleReads()
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+        range: `${escapeSheetName(sheetName)}!${range}`,
+      })
+      const values = response.data.values || []
+      const data: SheetData = {
+        header: values[0] || [],
+        rows: values.slice(1),
+      }
+      // Avoid caching extremely large payloads (>10k cells) to reduce memory footprint
+      const approxCells = (data.header.length + data.rows.length * (data.header.length || 10))
+      const shouldCache = approxCells < 10_000
+      SHEETS_CACHE.set(cacheKey, {
+        data: shouldCache ? data : undefined,
+        expiresAt: shouldCache ? (Date.now() + CACHE_TTL_MS) : 0,
+      })
+      return data
+    } catch (error: any) {
+      const logPayload = {
+        sheet: sheetName,
+        range,
+        message: error?.message,
+        code: error?.code,
+        errors: error?.errors,
+        hasBegin: GOOGLE_SHEETS_PRIVATE_KEY.includes('BEGIN'),
+        keyFirstLine: GOOGLE_SHEETS_PRIVATE_KEY.split('\n')[0],
+        email: GOOGLE_SHEETS_CLIENT_EMAIL,
+      }
+
+      if (!options?.silent) {
+        console.error("[Sheets] Read error:", logPayload)
+      }
+
+      if (error?.code === 429 && cacheEntry?.data) {
+        const cachedAge = now - (cacheEntry.expiresAt - CACHE_TTL_MS)
+        console.warn(`[Sheets] Serving cached data for ${sheetName} due to quota (age ${cachedAge}ms).`)
+        SHEETS_CACHE.set(cacheKey, {
+          data: cacheEntry.data,
+          expiresAt: Date.now() + Math.min(CACHE_TTL_MS, 5_000),
+          lastErrorAt: Date.now(),
+        })
+        return cacheEntry.data
+      }
+
+      SHEETS_CACHE.set(cacheKey, {
+        data: cacheEntry?.data,
+        expiresAt: cacheEntry?.data ? Date.now() + 2_000 : 0,
+        lastErrorAt: Date.now(),
+      })
+
+      throw new Error(error?.message || "Lỗi đọc Google Sheets")
+    } finally {
+      const entry = SHEETS_CACHE.get(cacheKey)
+      if (entry) {
+        delete entry.pending
+      }
+    }
+  })()
+
+  SHEETS_CACHE.set(cacheKey, {
+    ...(cacheEntry || { expiresAt: 0 }),
+    pending: fetchPromise,
+    data: cacheEntry?.data,
+    expiresAt: cacheEntry?.data ? cacheEntry.expiresAt : 0,
+  })
+
+  return fetchPromise
 }
 
 // Ghi đè toàn bộ dữ liệu (bỏ qua header)
@@ -137,17 +264,18 @@ export async function syncToGoogleSheets(sheetName: string, data: any[], range: 
     // Xóa dữ liệu cũ
     await sheets.spreadsheets.values.clear({
       spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
-      range: `${sheetName}!A2:Z`,
+      range: `${escapeSheetName(sheetName)}!A2:Z`,
     })
     // Thêm dữ liệu mới
     await sheets.spreadsheets.values.update({
       spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
-      range: `${sheetName}!${range}`,
+      range: `${escapeSheetName(sheetName)}!${range}`,
       valueInputOption: "RAW",
       requestBody: {
         values: data,
       },
     })
+    invalidateSheetCache(sheetName)
     return { success: true }
   } catch (error: any) {
     console.error("Lỗi đồng bộ Google Sheets:", error)
@@ -160,12 +288,13 @@ export async function appendToGoogleSheets(sheetName: string, data: any[]) {
   try {
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
-      range: sheetName,
+      range: escapeSheetName(sheetName),
       valueInputOption: "RAW",
       requestBody: {
         values: [data],
       },
     })
+    invalidateSheetCache(sheetName)
     return { success: true }
   } catch (error: any) {
     console.error("Lỗi thêm vào Google Sheets:", error)
@@ -196,6 +325,10 @@ export async function updateRangeValues(range: string, values: any[][]) {
     valueInputOption: "RAW",
     requestBody: { values },
   })
+  try {
+    const m = range.match(/^'?(.*?)'?!/)
+    if (m && m[1]) invalidateSheetCache(m[1].replace(/''/g, "'"))
+  } catch {}
   return { success: true }
 }
 

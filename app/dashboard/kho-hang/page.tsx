@@ -7,7 +7,7 @@ type ViewCustomer = {
   pos?: { x: number; y: number };
 };
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -24,6 +24,7 @@ import { ProductDialog } from "@/components/kho-hang/product-dialog"
 import AddCNCMachineDialog from "@/components/kho-hang/add-cnc-machine-dialog"
 // Dialog thêm máy bảo hành ngoài kho
 import AddBaoHanhMachineDialog from "../../../components/kho-hang/add-baohanh-machine-dialog"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface CNCProduct {
   id: string;
@@ -58,6 +59,10 @@ interface Product {
   dia_chi_bao_hanh?: string;
   loai_may?: string;
   nguon?: string;
+  ten_doi_tac?: string;
+  sdt_doi_tac?: string;
+  partner_sheet?: string;
+  partner_row_index?: number;
   ngay_gui?: string;
   ngay_nhan_lai?: string;
   ten_khach_hang?: string;
@@ -65,6 +70,7 @@ interface Product {
 }
 
 export default function KhoHangPage() {
+  const isMobile = useIsMobile()
   // State lưu IMEI sản phẩm đang mở dialog
   const [dialogInfo, setDialogInfo] = useState<{data: ViewCustomer, pos: {x: number, y: number}} | null>(null)
   // State địa chỉ bảo hành chung cho dialog
@@ -104,7 +110,7 @@ export default function KhoHangPage() {
     setselectedCNCImeis(prev => prev.includes(imei) ? prev.filter(pid => pid !== imei) : [...prev, imei])
   }
   function handleSelectAllCNCProducts() {
-    const imeis = cncProducts.map(p => p.imei)
+    const imeis = filteredCNC.map(p => p.imei)
     if (selectedCNCImeis.length === imeis.length) {
       setselectedCNCImeis([])
     } else {
@@ -284,8 +290,8 @@ export default function KhoHangPage() {
   }
 
   function handleSelectAllBaoHanh() {
-    // Nếu đang ở tab Bảo hành dùng baoHanhHistory, lấy IMEI làm key
-    const baoHanhIds = baoHanhHistory.map((p: any) => p["IMEI"] || p.imei)
+    // Nếu đang ở tab Bảo hành, chọn theo danh sách đang hiển thị, lấy IMEI làm key
+    const baoHanhIds = filteredBaoHanh.map((p: any) => p["IMEI"] || p.imei)
     if (selectedBaoHanhIds.length === baoHanhIds.length) {
       setSelectedBaoHanhIds([])
     } else {
@@ -295,6 +301,7 @@ export default function KhoHangPage() {
 
   // Filter
   const [trangThai, setTrangThai] = useState("all")
+  const [sourceFilter, setSourceFilter] = useState<"all" | "kho" | "doi_tac">("all")
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
 
   // Bảo hành - Xác nhận hoàn thành bảo hành
@@ -328,9 +335,39 @@ export default function KhoHangPage() {
   // Fetch products & accessories
   async function fetchProducts() {
     try {
-      const res = await fetch("/api/kho-hang")
-      const json = await res.json()
-      setProducts(json.data || [])
+      const [resKho, resPartner] = await Promise.all([
+        fetch("/api/kho-hang", { cache: "no-store" }),
+        fetch("/api/doi-tac/hang-order", { cache: "no-store" }),
+      ])
+      const kho = await resKho.json()
+      let base: Product[] = kho.data || []
+      let partner: Product[] = []
+      if (resPartner.ok) {
+        const pj = await resPartner.json()
+        const items = Array.isArray(pj.items) ? pj.items : []
+        partner = items.map((it: any): Product => ({
+          id: `DT-${it.row_index}-${it.imei || it.model || Math.random().toString(36).slice(2,8)}`,
+          ten_san_pham: it.model || "Máy đối tác",
+          loai_phu_kien: "",
+          dung_luong: it.bo_nho || "",
+          mau_sac: it.mau || "",
+          pin: it.pin_pct ? `${it.pin_pct}` : "",
+          imei: it.imei || "",
+          tinh_trang: it.tinh_trang || "",
+          gia_nhap: typeof it.gia_chuyen === "number" ? it.gia_chuyen : Number(String(it.gia_chuyen||"").replace(/[^0-9.-]/g,"")) || 0,
+          gia_ban: typeof it.gia_goi_y_ban === "number" ? it.gia_goi_y_ban : Number(String(it.gia_goi_y_ban||"").replace(/[^0-9.-]/g,"")) || 0,
+          trang_thai: "Còn hàng", // Hiển thị trong kho như hàng sẵn có, nhưng sẽ có badge Đối tác
+          ngay_nhap: it.ngay_nhap || "",
+          ghi_chu: it.ghi_chu || "",
+          loai_may: it.loai_may || "",
+          nguon: "Đối tác",
+          ten_doi_tac: it.ten_doi_tac || "",
+          sdt_doi_tac: it.sdt_doi_tac || "",
+          partner_sheet: it.sheet,
+          partner_row_index: it.row_index,
+        }))
+      }
+      setProducts([...(base || []), ...partner])
     } catch (e) {
       console.error("Error fetching products:", e)
     } finally {
@@ -341,7 +378,7 @@ export default function KhoHangPage() {
   async function fetchCNCProducts() {
     setIsCNCLoading(true)
     try {
-      const res = await fetch("/api/kho-hang/cnc")
+      const res = await fetch("/api/kho-hang/cnc", { cache: "no-store" })
       const json = await res.json()
       setCNCProducts(json.data || [])
     } catch (e) {
@@ -354,7 +391,7 @@ export default function KhoHangPage() {
   async function fetchAccessories() {
     setIsLoadingAccessories(true)
     try {
-      const res = await fetch("/api/phu-kien")
+      const res = await fetch("/api/phu-kien", { cache: "no-store" })
       const json = await res.json()
       setAccessories(json.data || [])
     } catch (e) {
@@ -387,7 +424,7 @@ export default function KhoHangPage() {
 
   async function fetchBaoHanhHistory() {
     try {
-      const res = await fetch("/api/kho-hang/baohanh-history")
+      const res = await fetch("/api/kho-hang/baohanh-history", { cache: "no-store" })
       const json = await res.json()
       setBaoHanhHistory(json.data || [])
     } catch (e) {
@@ -398,17 +435,38 @@ export default function KhoHangPage() {
   // Filter products
   // Tab Sản phẩm chỉ hiển thị sản phẩm còn hàng
   useEffect(() => {
+    // Helper: chuẩn hóa chuỗi (bỏ dấu, viết thường, bỏ khoảng trắng thừa)
+    const norm = (s: string | undefined) =>
+      (s || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim()
+
     let filtered = products.filter(p => p.trang_thai === "Còn hàng")
-    if (trangThai === "all") {
-      setFilteredProducts(filtered)
-    } else if (trangThai === "Lock") {
-      setFilteredProducts(filtered.filter(p => (p.loai_phu_kien || "").toLowerCase().includes("lock")))
-    } else if (trangThai === "Qte") {
-      setFilteredProducts(filtered.filter(p => (p.loai_phu_kien || "").toLowerCase().includes("qte") || (p.loai_phu_kien || "").toLowerCase().includes("quoc te") || (p.loai_phu_kien || "").toLowerCase().includes("qt")))
-    } else {
-      setFilteredProducts(filtered)
+
+    // Loại máy: Lock / Quốc tế (dựa trên loai_may hoặc 'Loại Máy', không dùng loai_phu_kien)
+    if (trangThai === "Lock" || trangThai === "Qte") {
+      filtered = filtered.filter(p => {
+        const loaiMayRaw = (p as any).loai_may || (p as any)["Loại Máy"] || ""
+        const v = norm(loaiMayRaw)
+        if (!v) return false
+        if (trangThai === "Lock") return v.includes("lock")
+        // Quốc tế: nhiều cách ghi: "qte", "qt", "quoc te", "quốc tế"
+        return v.includes("qte") || v.includes("qt") || v.includes("quoc te") || v.includes("quocte") || v.includes("quoc-te")
+      })
     }
-  }, [products, trangThai])
+
+    // Nguồn hàng: Kho / Đối tác
+    if (sourceFilter === "kho") {
+      filtered = filtered.filter(p => p.nguon !== "Đối tác")
+    } else if (sourceFilter === "doi_tac") {
+      filtered = filtered.filter(p => p.nguon === "Đối tác")
+    }
+
+    setFilteredProducts(filtered)
+  }, [products, trangThai, sourceFilter])
 
   // Stats
   const tongSanPham = products.length
@@ -447,6 +505,16 @@ export default function KhoHangPage() {
   const soPhuKienDaHet = accessories.filter(a => Number(a.so_luong_ton) === 0).length
   // Phụ kiện sắp hết: 1 <= số lượng tồn <= 5
   const soPhuKienSapHet = accessories.filter(a => Number(a.so_luong_ton) >= 1 && Number(a.so_luong_ton) <= 5).length
+
+  // Danh sách hiển thị cho CNC và Bảo hành (áp điều kiện lọc như đếm số lượng)
+  const filteredCNC = useMemo(() =>
+    cncProducts.filter(p => (p.trang_thai === "Đang CNC") || (p.trang_thai === "Hoàn thành CNC" && p.nguon === "Khách ngoài")),
+    [cncProducts]
+  )
+  const filteredBaoHanh = useMemo(() =>
+    baoHanhHistory.filter((p: any) => p["Trạng Thái"] === "Bảo hành" || (p["Trạng Thái"] === "Hoàn thành bảo hành" && p["Nguồn"] === "Khách ngoài")),
+    [baoHanhHistory]
+  )
 
   return (
     <div className="space-y-8 px-4 pb-8">
@@ -490,26 +558,69 @@ export default function KhoHangPage() {
         <TabsContent value="san-pham" className="space-y-6">
           <Card className="shadow-lg border-0">
             <CardContent className="p-6">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center gap-3">
                 <div style={{ width: '10rem' }}>
-                  <Select value={trangThai} onValueChange={setTrangThai}>
-                    <SelectTrigger className="w-40 bg-white rounded-lg shadow border focus:ring-2 focus:ring-blue-200 transition-all">
-                      <SelectValue placeholder="Trạng thái" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white rounded-lg shadow-lg">
-                      <SelectItem value="all" className="hover:bg-blue-50">Tất cả</SelectItem>
-                      <SelectItem value="Lock" className="hover:bg-blue-50">Máy Lock</SelectItem>
-                      <SelectItem value="Qte" className="hover:bg-blue-50">Máy Quốc tế</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="hidden md:block">
+                    <Select value={trangThai} onValueChange={setTrangThai}>
+                      <SelectTrigger className="w-40 bg-white rounded-lg shadow border focus:ring-2 focus:ring-blue-200 transition-all">
+                        <SelectValue placeholder="Trạng thái" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white rounded-lg shadow-lg">
+                        <SelectItem value="all" className="hover:bg-blue-50">Tất cả</SelectItem>
+                        <SelectItem value="Lock" className="hover:bg-blue-50">Máy Lock</SelectItem>
+                        <SelectItem value="Qte" className="hover:bg-blue-50">Máy Quốc tế</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <button
-                  className="p-2 rounded-full hover:bg-blue-100 transition-all"
-                  title="Chỉnh sửa danh sách"
-                  onClick={() => setIsEditMode((v) => !v)}
-                >
-                  <Edit2 className="w-5 h-5 text-blue-600" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <Button onClick={() => { setSelectedProduct(null); setIsDialogOpen(true) }} className="bg-blue-600 text-white font-semibold rounded-lg shadow hover:bg-blue-700">
+                    <Plus className="w-4 h-4 mr-1" /> Nhập hàng
+                  </Button>
+                  <button
+                    className="p-2 rounded-full hover:bg-blue-100 transition-all"
+                    title="Chỉnh sửa danh sách"
+                    onClick={() => setIsEditMode((v) => !v)}
+                  >
+                    <Edit2 className="w-5 h-5 text-blue-600" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile quick filters */}
+              <div className="md:hidden mt-3 space-y-2">
+                <div className="text-xs text-slate-500">Nguồn hàng</div>
+                <div className="flex gap-2 overflow-x-auto">
+                  {[
+                    { key: "all", label: "Tất cả" },
+                    { key: "kho", label: "Trong kho" },
+                    { key: "doi_tac", label: "Đối tác" },
+                  ].map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setSourceFilter(opt.key as any)}
+                      className={`px-3 py-1 rounded-full text-sm border ${sourceFilter === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-xs text-slate-500 mt-2">Loại máy</div>
+                <div className="flex gap-2 overflow-x-auto">
+                  {[
+                    { key: "all", label: "Tất cả" },
+                    { key: "Lock", label: "Lock" },
+                    { key: "Qte", label: "Quốc tế" },
+                  ].map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setTrangThai(opt.key)}
+                      className={`px-3 py-1 rounded-full text-sm border ${trangThai === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Hiển thị thao tác khi có sản phẩm được chọn và đang ở chế độ chỉnh sửa */}
@@ -764,52 +875,114 @@ export default function KhoHangPage() {
                   <h3 className="font-semibold">Danh sách sản phẩm</h3>
                   <p className="text-sm">Hiển thị {filteredProducts.length} sản phẩm</p>
                 </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-blue-50/50 text-blue-700">
-                      {isEditMode && (
-                        <TableHead className="font-semibold">
-                          <input type="checkbox" checked={selectedProductIds.length === filteredProducts.length && filteredProducts.length > 0} onChange={handleSelectAllProducts} />
-                        </TableHead>
-                      )}
-                      <TableHead className="font-semibold">Sản phẩm</TableHead>
-                      <TableHead className="font-semibold">IMEI</TableHead>
-                      <TableHead className="font-semibold">Pin</TableHead>
-                      <TableHead className="font-semibold">Tình trạng</TableHead>
-                      <TableHead className="font-semibold">Trạng thái</TableHead>
-                      {isManager && <TableHead className="font-semibold">Giá nhập</TableHead>}
-                      <TableHead className="font-semibold">Giá bán</TableHead>
-                      <TableHead className="font-semibold">Ngày nhập</TableHead>
-                      <TableHead className="font-semibold">Ghi chú</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                {isMobile ? (
+                  <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {isLoading ? (
-                      <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 10 : 9) : (isEditMode ? 9 : 8))} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
+                      <div className="text-center text-slate-400 col-span-full py-6">Đang tải...</div>
                     ) : filteredProducts.length === 0 ? (
-                      <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 10 : 9) : (isEditMode ? 9 : 8))} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào</TableCell></TableRow>
+                      <div className="text-center text-slate-400 col-span-full py-6">Chưa có sản phẩm nào</div>
                     ) : (
-                      filteredProducts.map((p, idx) => (
-                        <TableRow key={p.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                      filteredProducts.map((p) => (
+                        <div
+                          key={p.id}
+                          className={`relative rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:scale-[0.99] transition ${isEditMode ? "cursor-pointer" : ""}`}
+                          onClick={() => { if (isEditMode) handleSelectProduct(p.id) }}
+                        >
                           {isEditMode && (
-                            <TableCell>
-                              <input type="checkbox" checked={selectedProductIds.includes(p.id)} onChange={() => handleSelectProduct(p.id)} />
-                            </TableCell>
+                            <div className="absolute top-3 left-3">
+                              <input type="checkbox" checked={selectedProductIds.includes(p.id)} readOnly />
+                            </div>
                           )}
-                          <TableCell className="font-medium text-slate-800">{p.ten_san_pham} <span className="text-xs text-slate-400">{p.mau_sac} - {p.dung_luong}</span></TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.imei}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.pin || "-"}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.tinh_trang}</TableCell>
-                          <TableCell><Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-3 py-1 text-xs font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge></TableCell>
-                          {isManager && <TableCell className="text-sm text-blue-700 font-semibold">{p.gia_nhap?.toLocaleString("vi-VN")} VNĐ</TableCell>}
-                          <TableCell className="text-sm text-green-700 font-semibold">{p.gia_ban?.toLocaleString("vi-VN")} VNĐ</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.ngay_nhap}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.ghi_chu || "-"}</TableCell>
-                        </TableRow>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="font-semibold text-slate-800">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span>{p.ten_san_pham}</span>
+                                {p.nguon === "Đối tác" && (
+                                  <span className="inline-flex px-2 py-0.5 text-[10px] rounded-full bg-purple-100 text-purple-700 border border-purple-200" title={p.ten_doi_tac ? `Đối tác: ${p.ten_doi_tac}${p.sdt_doi_tac ? ` (${p.sdt_doi_tac})` : ''}` : 'Hàng đối tác'}>
+                                    Đối tác{p.ten_doi_tac ? `: ${p.ten_doi_tac}` : ''}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">{p.mau_sac} • {p.dung_luong}</div>
+                            </div>
+                            <Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-2 py-0.5 text-[10px] font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge>
+                          </div>
+                          <div className="mt-2 text-sm text-slate-700">
+                            <div>IMEI: <span className="font-medium">{p.imei}</span></div>
+                            <div className="text-xs text-slate-500">Pin: {p.pin || "-"} • {p.tinh_trang}</div>
+                          </div>
+                          <div className="mt-3 flex items-baseline gap-3">
+                            <div className="text-green-700 font-semibold">{p.gia_ban?.toLocaleString("vi-VN")} VNĐ</div>
+                            {isManager && (
+                              <div className="text-blue-700 text-xs">Nhập: {p.gia_nhap?.toLocaleString("vi-VN")} VNĐ</div>
+                            )}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">Ngày nhập: {p.ngay_nhap || "-"}</div>
+                          {p.ghi_chu && (
+                            <div className="mt-1 text-xs text-slate-500 line-clamp-2">Ghi chú: {p.ghi_chu}</div>
+                          )}
+                        </div>
                       ))
                     )}
-                  </TableBody>
-                </Table>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-blue-50/50 text-blue-700">
+                        {isEditMode && (
+                          <TableHead className="font-semibold">
+                            <input type="checkbox" checked={selectedProductIds.length === filteredProducts.length && filteredProducts.length > 0} onChange={handleSelectAllProducts} />
+                          </TableHead>
+                        )}
+                        <TableHead className="font-semibold">Sản phẩm</TableHead>
+                        <TableHead className="font-semibold">IMEI</TableHead>
+                        <TableHead className="font-semibold">Pin</TableHead>
+                        <TableHead className="font-semibold">Tình trạng</TableHead>
+                        <TableHead className="font-semibold">Trạng thái</TableHead>
+                        {isManager && <TableHead className="font-semibold">Giá nhập</TableHead>}
+                        <TableHead className="font-semibold">Giá bán</TableHead>
+                        <TableHead className="font-semibold">Ngày nhập</TableHead>
+                        <TableHead className="font-semibold">Ghi chú</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isLoading ? (
+                        <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 10 : 9) : (isEditMode ? 9 : 8))} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
+                      ) : filteredProducts.length === 0 ? (
+                        <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 10 : 9) : (isEditMode ? 9 : 8))} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào</TableCell></TableRow>
+                      ) : (
+                        filteredProducts.map((p, idx) => (
+                          <TableRow key={p.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                            {isEditMode && (
+                              <TableCell>
+                                <input type="checkbox" checked={selectedProductIds.includes(p.id)} onChange={() => handleSelectProduct(p.id)} />
+                              </TableCell>
+                            )}
+                            <TableCell className="font-medium text-slate-800">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span>{p.ten_san_pham}</span>
+                                {p.nguon === "Đối tác" && (
+                                  <span className="inline-flex px-2 py-0.5 text-[10px] rounded-full bg-purple-100 text-purple-700 border border-purple-200" title={p.ten_doi_tac ? `Đối tác: ${p.ten_doi_tac}${p.sdt_doi_tac ? ` (${p.sdt_doi_tac})` : ''}` : 'Hàng đối tác'}>
+                                    Đối tác{p.ten_doi_tac ? `: ${p.ten_doi_tac}` : ''}
+                                  </span>
+                                )}
+                                <span className="text-xs text-slate-400">{p.mau_sac} - {p.dung_luong}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.imei}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.pin || "-"}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.tinh_trang}</TableCell>
+                            <TableCell><Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-3 py-1 text-xs font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge></TableCell>
+                            {isManager && <TableCell className="text-sm text-blue-700 font-semibold">{p.gia_nhap?.toLocaleString("vi-VN")} VNĐ</TableCell>}
+                            <TableCell className="text-sm text-green-700 font-semibold">{p.gia_ban?.toLocaleString("vi-VN")} VNĐ</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.ngay_nhap}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.ghi_chu || "-"}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -883,9 +1056,9 @@ export default function KhoHangPage() {
                 <div className="mb-4">
                   <div className="text-sm mb-2">Các sản phẩm sẽ được chuyển về trạng thái <b>Hoàn thành CNC</b>:</div>
                   <ul className="list-disc pl-5 text-slate-700">
-                    {products.filter(p => selectedCNCImeis.includes(p.id)).map(p => (
-                      <li key={p.id}>
-                        <span className="font-semibold">{p.ten_san_pham}</span> <span className="text-xs text-slate-400">{p.mau_sac} - {p.dung_luong}</span> (IMEI: {p.imei})
+                    {cncProducts.filter(p => selectedCNCImeis.includes(p.imei)).map(p => (
+                      <li key={p.imei}>
+                        <span className="font-semibold">{p.ten_san_pham}</span> {p.loai_may ? <span className="text-xs text-slate-400">{p.loai_may}</span> : null} (IMEI: {p.imei})
                       </li>
                     ))}
                   </ul>
@@ -902,14 +1075,20 @@ export default function KhoHangPage() {
               <div className="border rounded-lg overflow-hidden shadow-sm">
                 <div className="bg-blue-50 px-6 py-4 border-b">
                   <h3 className="font-semibold text-blue-700">Danh sách sản phẩm Đang CNC</h3>
-                  <p className="text-sm">Hiển thị {cncProducts.length} sản phẩm</p>
+                  <p className="text-sm">Hiển thị {filteredCNC.length} sản phẩm</p>
                 </div>
+                {isMobile && filteredCNC.length === 0 ? (
+                  <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">
+                    <div className="text-3xl mb-2">🛠️</div>
+                    <div className="font-medium">Chưa có sản phẩm nào Đang CNC</div>
+                  </div>
+                ) : (
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-blue-50/50 text-blue-700">
                       {isEditCNCMode && (
                         <TableHead className="font-semibold">
-                          <input type="checkbox" checked={selectedCNCImeis.length === cncProducts.length && cncProducts.length > 0} onChange={handleSelectAllCNCProducts} />
+                          <input type="checkbox" checked={selectedCNCImeis.length === filteredCNC.length && filteredCNC.length > 0} onChange={handleSelectAllCNCProducts} />
                         </TableHead>
                       )}
                       <TableHead className="font-semibold">Tên Sản phẩm</TableHead>
@@ -924,15 +1103,10 @@ export default function KhoHangPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(() => {
-                      const filteredCNC = cncProducts.filter(p =>
-                        (p.trang_thai === "Đang CNC") ||
-                        (p.trang_thai === "Hoàn thành CNC" && p.nguon === "Khách ngoài")
-                      );
-                      if (filteredCNC.length === 0) {
-                        return <TableRow><TableCell colSpan={isEditCNCMode ? 10 : 9} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào Đang CNC</TableCell></TableRow>;
-                      }
-                      return filteredCNC.map((p, idx) => (
+                    {filteredCNC.length === 0 ? (
+                      <TableRow><TableCell colSpan={isEditCNCMode ? 10 : 9} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào Đang CNC</TableCell></TableRow>
+                    ) : (
+                      filteredCNC.map((p, idx) => (
                         <TableRow key={`${p.id}-${p.imei}`} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
                           {isEditCNCMode && (
                             <TableCell>
@@ -973,8 +1147,8 @@ export default function KhoHangPage() {
                             </TableCell>
                           )}
                         </TableRow>
-                      ));
-                    })()}
+                      ))
+                    )}
 
 
       {/* Dialog thông tin CNC dạng box nhỏ, fixed trên màn hình, chỉ hiển thị 1 lần */}
@@ -1003,7 +1177,8 @@ export default function KhoHangPage() {
         </div>
       )}
                 </TableBody>
-              </Table>
+                </Table>
+                )}
             </div>
           </CardContent>
         </Card>
@@ -1031,8 +1206,11 @@ export default function KhoHangPage() {
               <div className="mb-4">
                 <div className="text-sm mb-2">Các sản phẩm sẽ được chuyển về trạng thái <b>Hoàn thành bảo hành</b>:</div>
                 <ul className="list-disc pl-5 text-slate-700">
-                  {baoHanhHistory.filter(p => selectedBaoHanhIds.includes(p.id)).map(p => (
-                    <li key={p.id}>{p.ten_san_pham} (IMEI: {p.imei})</li>
+                  {filteredBaoHanh.filter((p: any) => {
+                    const key = p["IMEI"] || p.imei;
+                    return selectedBaoHanhIds.includes(key);
+                  }).map((p: any) => (
+                    <li key={p["IMEI"] || p.imei}>{p["Tên Sản Phẩm"] || p.ten_san_pham || '-'} (IMEI: {p["IMEI"] || p.imei || '-'})</li>
                   ))}
                 </ul>
               </div>
@@ -1056,8 +1234,14 @@ export default function KhoHangPage() {
             <div className="border rounded-lg overflow-hidden shadow-sm">
               <div className="bg-blue-50 px-6 py-4 border-b">
                 <h3 className="font-semibold text-blue-700">Danh sách sản phẩm Bảo hành</h3>
-                <p className="text-sm">Hiển thị {baoHanhHistory.length} sản phẩm</p>
+                <p className="text-sm">Hiển thị {filteredBaoHanh.length} sản phẩm</p>
               </div>
+              {isMobile && filteredBaoHanh.length === 0 ? (
+                <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">
+                  <div className="text-3xl mb-2">🧰</div>
+                  <div className="font-medium">Không có sản phẩm bảo hành nào</div>
+                </div>
+              ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="bg-blue-50/50 text-blue-700">
@@ -1065,7 +1249,7 @@ export default function KhoHangPage() {
                       <TableHead>
                         <input
                           type="checkbox"
-                          checked={selectedBaoHanhIds.length === baoHanhHistory.length && baoHanhHistory.length > 0}
+                          checked={selectedBaoHanhIds.length === filteredBaoHanh.length && filteredBaoHanh.length > 0}
                           onChange={handleSelectAllBaoHanh}
                         />
                       </TableHead>
@@ -1083,12 +1267,12 @@ export default function KhoHangPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {baoHanhHistory.length === 0 ? (
+                  {filteredBaoHanh.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={12} className="text-center py-8 text-slate-400">Không có sản phẩm bảo hành nào</TableCell>
+                      <TableCell colSpan={isEditBaoHanhMode ? 12 : 11} className="text-center py-8 text-slate-400">Không có sản phẩm bảo hành nào</TableCell>
                     </TableRow>
                   ) : (
-                    baoHanhHistory.map((p: any, idx: number) => {
+                    filteredBaoHanh.map((p: any, idx: number) => {
                       const key = p["IMEI"] || p.imei || idx;
                       return (
                         <TableRow key={key} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
@@ -1164,11 +1348,39 @@ export default function KhoHangPage() {
                   )}
                 </TableBody>
               </Table>
+              )}
             </div>
           </CardContent>
         </Card>
       </TabsContent>
     </Tabs>
+    {/* Sticky bulk actions on mobile */}
+    {isMobile && isEditMode && selectedProductIds.length > 0 && (
+      <div className="fixed bottom-4 left-4 right-4 z-40">
+        <div className="rounded-2xl shadow-xl border border-slate-200 bg-white p-3 flex items-center justify-between gap-2">
+          <div className="text-sm text-slate-600">Đã chọn: <span className="font-semibold">{selectedProductIds.length}</span></div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleSendSelectedCNC} className="bg-yellow-500 text-white font-semibold rounded-lg hover:bg-yellow-600">Gửi CNC</Button>
+            <Button size="sm" onClick={handleSendSelectedBaoHanh} className="bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">Bảo Hành</Button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* Dialog nhập/sửa sản phẩm kho */}
+    <ProductDialog
+      isOpen={isDialogOpen}
+      onClose={() => setIsDialogOpen(false)}
+      product={selectedProduct}
+      onSuccess={() => {
+        setIsLoading(true)
+        fetchProducts().finally(() => setIsLoading(false))
+        // Re-fetch again shortly after to ensure Sheets has committed
+        setTimeout(() => {
+          setIsLoading(true)
+          fetchProducts().finally(() => setIsLoading(false))
+        }, 800)
+      }}
+    />
     {/* Dialog thêm máy bảo hành ngoài kho */}
     <AddBaoHanhMachineDialog
       isOpen={isAddBaoHanhMachineOpen}

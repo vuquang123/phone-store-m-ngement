@@ -70,6 +70,34 @@ function getAuthHeaders(): Record<string, string> {
   }
 }
 
+// Cache thông tin /api/auth/me để tránh gọi lại mỗi lần mở Drawer
+const ME_CACHE_KEY = "auth_me_cache_v1"
+const ME_CACHE_TTL = 5 * 60 * 1000 // 5 phút
+
+type MeCache = { role: Role; name?: string; ts: number }
+
+function readMeCache(): MeCache | null {
+  try {
+    const raw = localStorage.getItem(ME_CACHE_KEY)
+    if (!raw) return null
+    const obj = JSON.parse(raw) as MeCache
+    if (!obj || typeof obj.ts !== "number") return null
+    if (Date.now() - obj.ts > ME_CACHE_TTL) return null
+    return obj
+  } catch {
+    return null
+  }
+}
+
+function writeMeCache(data: { role: Role; name?: string }) {
+  try {
+    const payload: MeCache = { role: data.role, name: data.name, ts: Date.now() }
+    localStorage.setItem(ME_CACHE_KEY, JSON.stringify(payload))
+  } catch {
+    // ignore
+  }
+}
+
 interface SidebarProps {
   className?: string
 }
@@ -83,40 +111,91 @@ export function Sidebar({ className }: SidebarProps) {
   const [roleLoading, setRoleLoading] = useState(true)
   const [navLoading, setNavLoading] = useState(false)
   const [storeName, setStoreName] = useState("iPhone Lock Store")
+  const [logoUrl, setLogoUrl] = useState<string>("")
 
   // lấy role từ API /api/auth/me
   useEffect(() => {
     let mounted = true
-    ;(async () => {
-      try {
-        const res = await fetch("/api/auth/me", { headers: getAuthHeaders(), cache: "no-store" })
-        if (!res.ok) {
-          router.replace("/auth/login")
-          return
+    // 1) Dùng cache nếu còn hạn để hiển thị ngay
+    const cached = readMeCache()
+    if (cached && mounted) {
+      setRole(cached.role)
+      if (cached.name) setUserName(cached.name)
+      setRoleLoading(false)
+      // 2) Làm mới cache nền (không chặn UI) nếu gần hết hạn
+      ;(async () => {
+        try {
+          const res = await fetch("/api/auth/me", { headers: getAuthHeaders(), cache: "no-store" })
+          if (!res.ok) return
+          const me = await res.json()
+          if (!mounted) return
+          // Cập nhật cache nếu role hoặc name thay đổi
+          writeMeCache({ role: (me?.role as Role) || "nhan_vien", name: typeof me?.name === "string" ? me.name : undefined })
+          // Không cần set state lần nữa để tránh nháy UI; chỉ cập nhật nếu khác biệt lớn
+        } catch {
+          // ignore trong nền
         }
-        const me = await res.json()
-        if (mounted) {
-          setRole((me?.role as Role) || "nhan_vien")
-          if (typeof me?.name === "string" && me.name.trim()) setUserName(me.name.trim())
+      })()
+    } else {
+      // 3) Không có cache: gọi API rồi lưu cache
+      ;(async () => {
+        try {
+          const res = await fetch("/api/auth/me", { headers: getAuthHeaders(), cache: "no-store" })
+          if (!res.ok) {
+            router.replace("/auth/login")
+            return
+          }
+          const me = await res.json()
+          if (mounted) {
+            const nextRole = (me?.role as Role) || "nhan_vien"
+            const nextName = typeof me?.name === "string" && me.name.trim() ? me.name.trim() : undefined
+            setRole(nextRole)
+            if (nextName) setUserName(nextName)
+            writeMeCache({ role: nextRole, name: nextName })
+          }
+        } catch {
+          router.replace("/auth/login")
+        } finally {
+          if (mounted) setRoleLoading(false)
+        }
+      })()
+    }
+
+    const loadStore = () => {
+      try {
+        const saved = localStorage.getItem("store_settings")
+        if (saved) {
+          const s = JSON.parse(saved)
+          if (s?.ten_cua_hang) setStoreName(s.ten_cua_hang)
+          if (s && typeof s.logo_url === "string") {
+            let url = s.logo_url as string
+            if (url.startsWith("/public/")) url = url.replace(/^\/public/, "")
+            setLogoUrl(url)
+          } else {
+            setLogoUrl("")
+          }
+        } else {
+          setLogoUrl("")
         }
       } catch {
-        router.replace("/auth/login")
-      } finally {
-        if (mounted) setRoleLoading(false)
+        setLogoUrl("")
       }
-    })()
+    }
 
-    // load tên cửa hàng từ localStorage (nếu có)
-    try {
-      const saved = localStorage.getItem("store_settings")
-      if (saved) {
-        const s = JSON.parse(saved)
-        if (s?.ten_cua_hang) setStoreName(s.ten_cua_hang)
-      }
-    } catch {}
+    // load lần đầu
+    loadStore()
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "store_settings") loadStore()
+    }
+    const onCustom = () => loadStore()
+    window.addEventListener("storage", onStorage)
+    window.addEventListener("store_settings_changed", onCustom as EventListener)
 
     return () => {
       mounted = false
+      window.removeEventListener("storage", onStorage)
+      window.removeEventListener("store_settings_changed", onCustom as EventListener)
     }
   }, [router])
 
@@ -132,6 +211,7 @@ export function Sidebar({ className }: SidebarProps) {
 
   const handleLogout = () => {
     localStorage.removeItem("auth_user")
+    localStorage.removeItem(ME_CACHE_KEY)
     router.push("/auth/login")
   }
 
@@ -141,7 +221,11 @@ export function Sidebar({ className }: SidebarProps) {
         <div className="px-3 py-2">
           <div className="flex items-center gap-3 mb-8 p-3 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-xl shadow-lg">
             <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
-              <Smartphone className="h-7 w-7 text-white" />
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="h-7 w-7 rounded object-contain bg-white/80" />
+              ) : (
+                <Smartphone className="h-7 w-7 text-white" />
+              )}
             </div>
             <div>
               <h2 className="text-lg font-bold text-white">{storeName}</h2>
@@ -152,8 +236,11 @@ export function Sidebar({ className }: SidebarProps) {
             </div>
           </div>
 
-          <ScrollArea className="h-[calc(100vh-220px)]">
-            <div className="space-y-6">
+          <ScrollArea className="h-[calc(100dvh-180px)]">
+            <div
+              className="space-y-6 pb-28"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+            >
               {navigation.map((section) => (
                 <div key={section.title}>
                   <h3 className="mb-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -190,19 +277,19 @@ export function Sidebar({ className }: SidebarProps) {
                   </div>
                 </div>
               ))}
+
+              <Separator className="my-4 bg-slate-300" />
+
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-3 h-11 text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200 font-medium"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-5 w-5" />
+                Đăng xuất
+              </Button>
             </div>
           </ScrollArea>
-
-          <Separator className="my-4 bg-slate-300" />
-
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-3 h-11 text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200 font-medium"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-5 w-5" />
-            Đăng xuất
-          </Button>
         </div>
       </div>
     </div>

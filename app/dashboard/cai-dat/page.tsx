@@ -27,14 +27,26 @@ export default function CaiDatPage() {
     let mounted = true
     try {
       const saved = localStorage.getItem("store_settings")
-      if (saved) setStoreSettings(JSON.parse(saved))
+      if (saved) {
+        const obj = JSON.parse(saved)
+        // Tự động sửa URL logo cũ có tiền tố /public -> Next.js phục vụ từ root
+        if (obj && typeof obj.logo_url === 'string' && obj.logo_url.startsWith('/public/')) {
+          obj.logo_url = obj.logo_url.replace(/^\/public/, '')
+          localStorage.setItem("store_settings", JSON.stringify(obj))
+        }
+        setStoreSettings(obj)
+      }
     } catch (e) {
       console.error("Error loading settings:", e)
     }
     // Kiểm tra role người dùng
     ;(async () => {
       try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" })
+        // Gửi kèm header x-user-email giống các trang khác để qua được /api/auth/me
+        const authRaw = localStorage.getItem("auth_user")
+        let email = ""
+        try { email = authRaw ? (JSON.parse(authRaw)?.email || "") : "" } catch {}
+        const res = await fetch("/api/auth/me", { cache: "no-store", headers: email ? { "x-user-email": email } : {} })
         if (!res.ok) return router.replace("/auth/login")
         const me = await res.json()
         if (mounted && me?.role !== "quan_ly") {
@@ -51,6 +63,8 @@ export default function CaiDatPage() {
     setLoading(true)
     try {
       let logoUrl = storeSettings.logo_url
+      // Giữ lại preview data URL (nếu có) để fallback khi URL upload không tải được
+      const previewDataUrl = storeSettings.logo_url?.startsWith("data:") ? storeSettings.logo_url : ""
 
       // Upload logo (nếu có)
       if (logoFile) {
@@ -65,11 +79,24 @@ export default function CaiDatPage() {
         if (!res.ok) throw new Error("Upload thất bại")
         const data = await res.json()
         logoUrl = data.url as string
+
+        // Thử kiểm tra URL vừa upload có truy cập được không (tránh case môi trường không phục vụ file runtime)
+        try {
+          const head = await fetch(logoUrl, { method: "HEAD", cache: "no-store" })
+          if (!head.ok) {
+            // Nếu không truy cập được, fallback tạm thời về preview (data URL)
+            if (previewDataUrl) logoUrl = previewDataUrl
+          }
+        } catch {
+          if (previewDataUrl) logoUrl = previewDataUrl
+        }
       }
 
       const next = { ...storeSettings, logo_url: logoUrl }
       setStoreSettings(next)
-      localStorage.setItem("store_settings", JSON.stringify(next))
+  localStorage.setItem("store_settings", JSON.stringify(next))
+  // Phát sự kiện tùy chỉnh để Header/Sidebar cập nhật ngay lập tức trong cùng tab
+  window.dispatchEvent(new Event("store_settings_changed"))
 
       toast({ title: "Thành công", description: "Đã lưu cài đặt cửa hàng" })
     } catch (err: any) {
@@ -170,7 +197,7 @@ export default function CaiDatPage() {
               <div className="space-y-2">
                 <Label htmlFor="logo">Chọn logo</Label>
                 <Input id="logo" type="file" accept="image/*" onChange={handleLogoChange} />
-                <p className="text-sm text-muted-foreground">Định dạng: JPG, PNG. Tối đa: 2MB</p>
+                <p className="text-sm text-muted-foreground">Định dạng: JPG, PNG, WEBP, SVG. Tối đa: 5MB</p>
               </div>
             </div>
           </CardContent>

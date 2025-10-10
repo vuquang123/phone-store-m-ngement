@@ -1,290 +1,241 @@
 "use client"
 
+import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { BookOpen, Users, ShoppingCart, Package, Bell, UserCheck, Smartphone, Database, Shield } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  BookOpen,
+  Users,
+  ShoppingCart,
+  Package,
+  Bell,
+  UserCheck,
+  Smartphone,
+  Shield,
+  RotateCcw,
+  RefreshCcw,
+  Repeat,
+} from "lucide-react"
+
+type Role = "quan_ly" | "nhan_vien" | undefined
+
+function getAuthHeaders(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem("auth_user")
+    const data = raw ? JSON.parse(raw) : {}
+    if (typeof data?.email === "string") return { "x-user-email": data.email }
+  } catch {}
+  return {}
+}
 
 export default function HuongDanPage() {
+  const [role, setRole] = useState<Role>()
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await fetch("/api/auth/me", { headers: getAuthHeaders(), cache: "no-store" })
+        if (res.ok) {
+          const me = await res.json()
+          if (mounted) setRole(me?.role as Role)
+        }
+      } catch {}
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const VisibleIf = ({ allow, children }: { allow?: Role[]; children: React.ReactNode }) => {
+    if (!allow || allow.includes(role as Role)) return <>{children}</>
+    return null
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Hướng dẫn sử dụng</h1>
-        <p className="text-muted-foreground">Hướng dẫn chi tiết cách sử dụng hệ thống quản lý cửa hàng iPhone Lock</p>
+        <p className="text-muted-foreground">Hướng dẫn phù hợp với vai trò: {role === "quan_ly" ? "Quản lý" : role === "nhan_vien" ? "Nhân viên" : "—"}</p>
       </div>
 
       <div className="grid gap-6">
-        {/* Giới thiệu hệ thống */}
+        {/* Giới thiệu hệ thống (cập nhật theo kiến trúc hiện tại) */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Smartphone className="h-5 w-5" />
               Giới thiệu hệ thống
             </CardTitle>
-            <CardDescription>
-              Hệ thống quản lý cửa hàng iPhone Lock được thiết kế để quản lý toàn bộ hoạt động kinh doanh
-            </CardDescription>
+            <CardDescription>Quản lý bán hàng iPhone/Phụ kiện dựa trên Google Sheets, đồng bộ theo thời gian thực</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <h4 className="font-medium">Tính năng chính:</h4>
+                <h4 className="font-medium">Tính năng chính</h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Quản lý kho hàng iPhone Lock với IMEI</li>
-                  <li>• Hệ thống bán hàng POS hiện đại</li>
-                  <li>• Quản lý khách hàng và đơn hàng</li>
-                  <li>• Thống kê doanh thu theo thời gian thực</li>
-                  <li>• Phân quyền quản lý và nhân viên</li>
-                  <li>• Thông báo tự động khi có giao dịch</li>
+                  <li>• POS bán hàng hợp nhất: hàng trong kho + hàng đối tác</li>
+                  <li>• Quản lý kho theo IMEI, nhập hàng, trả hàng</li>
+                  <li>• Hợp đồng bảo hành, tính ngày còn lại</li>
+                  <li>• Hoàn trả: nhập lại kho, hủy bảo hành, thông báo Telegram</li>
+                  <li>• Quản lý khách hàng, tổng mua tự động</li>
+                  <li>• Tải logo cửa hàng và hiển thị toàn hệ thống</li>
                 </ul>
               </div>
               <div className="space-y-2">
-                <h4 className="font-medium">Công nghệ sử dụng:</h4>
+                <h4 className="font-medium">Công nghệ</h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Next.js 14 với App Router</li>
-                  <li>• Supabase Database & Authentication</li>
-                  <li>• Tailwind CSS & shadcn/ui</li>
-                  <li>• TypeScript cho type safety</li>
-                  <li>• Row Level Security (RLS)</li>
+                  <li>• Next.js App Router, TypeScript, Tailwind + shadcn/ui</li>
+                  <li>• Google Sheets: đọc/ghi có cache TTL, fallback khi quota</li>
+                  <li>• Telegram Bot: thông báo đơn mới và hoàn trả</li>
                 </ul>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Thiết lập ban đầu */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="h-5 w-5" />
-              Thiết lập ban đầu
-            </CardTitle>
-            <CardDescription>Các bước cần thiết để khởi động hệ thống</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <Badge variant="outline" className="mt-0.5">
-                  1
-                </Badge>
-                <div>
-                  <h4 className="font-medium">Chạy các script database</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Chạy tất cả các script từ 001 đến 006 để tạo bảng và dữ liệu mẫu
-                  </p>
+        {/* Dành cho Nhân viên */}
+        <VisibleIf allow={["nhan_vien", "quan_ly"]}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserCheck className="h-5 w-5" />
+                Hướng dẫn cho Nhân viên
+              </CardTitle>
+              <CardDescription>Quy trình công việc hằng ngày</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4">
+                <div className="border rounded-lg p-4">
+                  <h4 className="font-medium mb-2 flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4" /> Bán hàng (POS)
+                  </h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Tìm sản phẩm theo IMEI hoặc tên phụ kiện, chọn khách hàng</li>
+                    <li>• Hàng đối tác sẽ tự xác định nguồn, xóa khỏi sheet đối tác sau khi bán</li>
+                    <li>• Phí bảo hành (nếu có) tự cộng vào tổng, hợp đồng được tạo sau khi thanh toán</li>
+                  </ul>
+                  <div className="mt-2 flex gap-2">
+                    <Link href="/dashboard/ban-hang"><Button size="sm">Mở POS</Button></Link>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Badge variant="outline" className="mt-0.5">
-                  2
-                </Badge>
-                <div>
-                  <h4 className="font-medium">Tạo tài khoản quản lý</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Tạo tài khoản quản lý đầu tiên qua Supabase Auth với email: admin@iphonelock.com
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Badge variant="outline" className="mt-0.5">
-                  3
-                </Badge>
-                <div>
-                  <h4 className="font-medium">Cập nhật thông tin cửa hàng</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Vào trang Cài đặt để cập nhật logo, tên cửa hàng và thông tin liên hệ
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Hướng dẫn cho Quản lý */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserCheck className="h-5 w-5" />
-              Hướng dẫn cho Quản lý
-            </CardTitle>
-            <CardDescription>Các chức năng dành riêng cho quản lý cửa hàng</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4">
-              <div className="border rounded-lg p-4">
-                <h4 className="font-medium mb-2 flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Quản lý nhân viên
-                </h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Tạo tài khoản nhân viên mới với email và mật khẩu</li>
-                  <li>• Phân quyền: Quản lý hoặc Nhân viên</li>
-                  <li>• Cập nhật thông tin và trạng thái hoạt động</li>
-                  <li>• Xóa tài khoản nhân viên (không thể xóa chính mình)</li>
-                </ul>
-              </div>
-              <div className="border rounded-lg p-4">
-                <h4 className="font-medium mb-2 flex items-center gap-2">
-                  <Bell className="h-4 w-4" />
-                  Theo dõi thông báo
-                </h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Nhận thông báo khi nhân viên tạo đơn hàng mới</li>
-                  <li>• Cảnh báo khi sản phẩm sắp hết hàng</li>
-                  <li>• Thông báo về các hoạt động quan trọng</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                <div className="border rounded-lg p-4">
+                  <h4 className="font-medium mb-2 flex items-center gap-2">
+                    <Package className="h-4 w-4" /> Nhập hàng vào kho
+                  </h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Điền đủ thông tin máy và IMEI, hệ thống tự tính ID Máy</li>
+                    <li>• Sau khi thêm, danh sách tự refresh</li>
+                  </ul>
+                  <div className="mt-2 flex gap-2">
+                    <Link href="/dashboard/kho-hang"><Button size="sm" variant="outline">Tới Kho hàng</Button></Link>
+                  </div>
+                </div>
 
-        {/* Hướng dẫn bán hàng */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5" />
-              Hướng dẫn bán hàng
-            </CardTitle>
-            <CardDescription>Quy trình bán hàng từ A đến Z</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <Badge variant="outline" className="mt-0.5">
-                  1
-                </Badge>
-                <div>
-                  <h4 className="font-medium">Tìm kiếm sản phẩm</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Sử dụng thanh tìm kiếm để tìm iPhone theo loai_phu_kien, IMEI hoặc phụ kiện theo tên
-                  </p>
+                <div className="border rounded-lg p-4">
+                  <h4 className="font-medium mb-2 flex items-center gap-2">
+                    <Repeat className="h-4 w-4" /> Hoàn trả
+                  </h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Thực hiện ngay trong chi tiết đơn: chọn IMEI, số tiền hoàn, hệ thống tự nhập kho lại</li>
+                    <li>• Bảo hành sẽ được hủy theo IMEI; hàng đối tác không nhập lại kho shop</li>
+                    <li>• Có thể tạo nhanh tại Dashboard → Hoàn trả</li>
+                  </ul>
+                  <div className="mt-2 flex gap-2">
+                    <Link href="/dashboard/hoan-tra"><Button size="sm" variant="outline">Xem danh sách hoàn trả</Button></Link>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <Badge variant="outline" className="mt-0.5">
-                  2
-                </Badge>
-                <div>
-                  <h4 className="font-medium">Thêm vào giỏ hàng</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Click vào sản phẩm để thêm vào giỏ hàng, điều chỉnh số lượng nếu cần
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Badge variant="outline" className="mt-0.5">
-                  3
-                </Badge>
-                <div>
-                  <h4 className="font-medium">Chọn khách hàng</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Tìm khách hàng cũ hoặc tạo mới, có thể bỏ qua nếu khách vãng lai
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Badge variant="outline" className="mt-0.5">
-                  4
-                </Badge>
-                <div>
-                  <h4 className="font-medium">Thanh toán</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Áp dụng giảm giá nếu có, chọn phương thức thanh toán và hoàn tất đơn hàng
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </VisibleIf>
 
-        {/* Quản lý kho hàng */}
+        {/* Dành cho Quản lý */}
+        <VisibleIf allow={["quan_ly"]}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Hướng dẫn cho Quản lý
+              </CardTitle>
+              <CardDescription>Thiết lập hệ thống và giám sát hoạt động</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4">
+                <div className="border rounded-lg p-4">
+                  <h4 className="font-medium mb-2">Cài đặt hệ thống</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Tải logo cửa hàng, hiển thị tức thì ở Header</li>
+                    <li>• Đồng bộ Google Sheets: chú ý hạn mức quota; hệ thống có cache TTL và fallback</li>
+                    <li>• Kiểm tra kết nối đối tác (sheet tên có dấu/không dấu đều được hỗ trợ)</li>
+                  </ul>
+                  <div className="mt-2 flex gap-2">
+                    <Link href="/dashboard/cai-dat"><Button size="sm">Mở Cài đặt</Button></Link>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-4">
+                  <h4 className="font-medium mb-2">Quản lý nhân viên</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Cấp quyền nhan_vien/quan_ly, ẩn các mục nhạy cảm với nhân viên</li>
+                    <li>• Theo dõi lịch sử bán hàng/hoàn trả qua Telegram và Dashboard</li>
+                  </ul>
+                </div>
+
+                <div className="border rounded-lg p-4">
+                  <h4 className="font-medium mb-2">Hoàn trả và bảo hành</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Mỗi hoàn trả chỉ áp dụng cho đúng IMEI; tự động nhập kho lại và ghi trạng thái “Còn hàng”</li>
+                    <li>• Tổng Mua của khách sẽ trừ đi số tiền hoàn</li>
+                    <li>• Hủy hợp đồng bảo hành theo IMEI</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </VisibleIf>
+
+        {/* Bảo mật & Thông báo chung */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Quản lý kho hàng
+              <Shield className="h-5 w-5" /> Bảo mật và thông báo
             </CardTitle>
-            <CardDescription>Hướng dẫn quản lý iPhone Lock và phụ kiện</CardDescription>
+            <CardDescription>Nguyên tắc hoạt động và kênh cảnh báo</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <h4 className="font-medium">iPhone Lock:</h4>
+                <h4 className="font-medium">Bảo mật</h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Mỗi máy có IMEI duy nhất</li>
-                  <li>• Phân loại theo tình trạng: Mới, Cũ, Refurbished</li>
-                  <li>• Trạng thái: Còn hàng, Đã bán, Lỗi</li>
-                  <li>• Validation IMEI tự động</li>
+                  <li>• Mọi thao tác ghi/đọc đều qua API nội bộ; không public token</li>
+                  <li>• Header x-user-email từ LocalStorage để xác định người dùng hiện tại</li>
                 </ul>
               </div>
               <div className="space-y-2">
-                <h4 className="font-medium">Phụ kiện:</h4>
+                <h4 className="font-medium">Thông báo</h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Quản lý theo số lượng tồn kho</li>
-                  <li>• Tự động trừ khi bán</li>
-                  <li>• Cảnh báo khi sắp hết hàng</li>
-                  <li>• Phân loại theo danh mục</li>
+                  <li>• Gửi Telegram cho đơn mới và hoàn trả (theo thread)</li>
+                  <li>• Nên kiểm tra bot khi thay đổi nhóm/ID</li>
                 </ul>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Bảo mật */}
+        {/* Hỗ trợ */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Bảo mật và phân quyền
-            </CardTitle>
-            <CardDescription>Hệ thống bảo mật và phân quyền người dùng</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <h4 className="font-medium">Quản lý:</h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Truy cập tất cả chức năng</li>
-                  <li>• Quản lý nhân viên</li>
-                  <li>• Xem thống kê chi tiết</li>
-                  <li>• Cài đặt hệ thống</li>
-                </ul>
-              </div>
-              <div className="space-y-2">
-                <h4 className="font-medium">Nhân viên:</h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Bán hàng và quản lý kho</li>
-                  <li>• Xem khách hàng và đơn hàng</li>
-                  <li>• Không thể quản lý nhân viên</li>
-                  <li>• Hạn chế một số thống kê</li>
-                </ul>
-              </div>
-            </div>
-            <Separator />
-            <div className="bg-muted/50 p-4 rounded-lg">
-              <h4 className="font-medium mb-2">Row Level Security (RLS):</h4>
-              <p className="text-sm text-muted-foreground">
-                Tất cả dữ liệu được bảo vệ bằng RLS policies, đảm bảo người dùng chỉ truy cập được dữ liệu được phép.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Liên hệ hỗ trợ */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              Hỗ trợ kỹ thuật
-            </CardTitle>
-            <CardDescription>Thông tin liên hệ khi cần hỗ trợ</CardDescription>
+            <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" />Hỗ trợ kỹ thuật</CardTitle>
+            <CardDescription>Liên hệ khi cần trợ giúp hoặc báo lỗi</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="bg-muted/50 p-4 rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                Hệ thống được xây dựng bằng Next.js và Supabase. Để được hỗ trợ kỹ thuật hoặc báo lỗi, vui lòng liên hệ
-                với đội ngũ phát triển.
-              </p>
+              <p className="text-sm text-muted-foreground">Hệ thống dùng Next.js + Google Sheets. Khi gặp sự cố quota hoặc lỗi sheet, vui lòng thử lại sau vài phút hoặc liên hệ bộ phận kỹ thuật.</p>
             </div>
           </CardContent>
         </Card>

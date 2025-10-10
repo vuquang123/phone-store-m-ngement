@@ -9,6 +9,7 @@ declare global {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
@@ -64,6 +65,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
       })
   }, [])
   const [isLoading, setIsLoading] = useState(false)
+  const { toast } = useToast()
 
   function handleChange(e: any) {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -79,13 +81,13 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
     const data = await res.json()
     setIsLoading(false)
     if (data.success) {
-      alert(data.message)
+      toast({ title: "Thành công", description: data.message || "Đã thêm máy CNC", variant: "success" as any })
       if (typeof onSuccess === "function") {
         onSuccess(); // reload danh sách sản phẩm CNC
       }
       onClose();
     } else {
-      alert("Lỗi: " + (data.error || ""))
+      toast({ title: "Lỗi", description: data.error || "Không thể thêm máy CNC", variant: "destructive" })
     }
   }
 

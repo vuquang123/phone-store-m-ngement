@@ -242,10 +242,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     {/* Row 1: Tên sản phẩm & Màu sắc */}
     <div className="grid grid-cols-2 gap-4">
       <div className="space-y-2">
-  <Label htmlFor="ten_san_pham" className="text-sm font-medium">
-          Tên sản phẩm <span className="text-red-500">*</span>
-        </Label>
-    <Label htmlFor="ten_san_pham_select" className="text-sm font-medium">
+          <Label htmlFor="ten_san_pham_select" className="text-sm font-medium">
             Tên sản phẩm <span className="text-red-500">*</span>
           </Label>
           <Select
@@ -271,9 +268,8 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         </Select>
       </div>
       <div className="space-y-2">
-  <Label htmlFor="mau_sac">Màu sắc *</Label>
-  <Label htmlFor="mau_sac_select">Màu sắc *</Label>
-  <Select value={formData.mau_sac} onValueChange={(value) => setFormData({ ...formData, mau_sac: value })}>
+          <Label htmlFor="mau_sac_select">Màu sắc <span className="text-red-500">*</span></Label>
+          <Select value={formData.mau_sac} onValueChange={(value) => setFormData({ ...formData, mau_sac: value })}>
             <SelectTrigger id="mau_sac_select">
               <SelectValue placeholder="Chọn màu sắc" />
             </SelectTrigger>
@@ -289,15 +285,12 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     {/* Row 2: loai_phu_kien, Dung lượng, Pin */}
     <div className="grid grid-cols-3 gap-4">
       <div className="space-y-2">
-  <Label htmlFor="loai_phu_kien" className="text-sm font-medium">
-          loai_phu_kien <span className="text-red-500">*</span>
-        </Label>
-  <Label htmlFor="model_select" className="text-sm font-medium">
-            loai_phu_kien <span className="text-red-500">*</span>
+          <Label htmlFor="model_select" className="text-sm font-medium">
+            Loại máy <span className="text-red-500">*</span>
           </Label>
-  <Select value={formData.loai_phu_kien} onValueChange={(value) => setFormData({ ...formData, loai_phu_kien: value })}>
+          <Select value={formData.loai_phu_kien} onValueChange={(value) => setFormData({ ...formData, loai_phu_kien: value })}>
             <SelectTrigger id="model_select" className="w-full">
-              <SelectValue placeholder="Chọn loai_phu_kien" />
+              <SelectValue placeholder="Chọn loại máy" />
             </SelectTrigger>
           <SelectContent className="bg-gray-50">
             <SelectItem value="Lock">Lock</SelectItem>
@@ -306,8 +299,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         </Select>
       </div>
       <div className="space-y-2">
-  <Label htmlFor="dung_luong">Dung lượng *</Label>
-    <Label htmlFor="dung_luong_select">Dung lượng *</Label>
+          <Label htmlFor="dung_luong_select">Dung lượng <span className="text-red-500">*</span></Label>
           <Select
             value={formData.dung_luong}
             onValueChange={(value) => setFormData({ ...formData, dung_luong: value })}
@@ -338,7 +330,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     {/* Row 3: IMEI & Tình trạng */}
     <div className="grid grid-cols-2 gap-4">
       <div className="space-y-2">
-        <Label htmlFor="imei">IMEI *</Label>
+  <Label htmlFor="imei">IMEI <span className="text-red-500">*</span></Label>
         <Input
           id="imei"
           value={formData.imei}
@@ -354,7 +346,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         <p className="text-xs text-muted-foreground">{formData.imei.length}/15 ký tự</p>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="tinh_trang">Tình trạng *</Label>
+  <Label htmlFor="tinh_trang">Tình trạng <span className="text-red-500">*</span></Label>
         <Input
           id="tinh_trang"
           value={formData.tinh_trang}
@@ -368,7 +360,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     {/* Row 4: Giá nhập & Giá bán (VNĐ trong ô) */}
     <div className="grid grid-cols-2 gap-4">
       <div className="space-y-2">
-        <Label htmlFor="gia_nhap">Giá nhập (VNĐ) *</Label>
+  <Label htmlFor="gia_nhap">Giá nhập (VNĐ) <span className="text-red-500">*</span></Label>
         <div className="relative">
           <Input
             id="gia_nhap"
@@ -386,7 +378,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         </div>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="gia_ban">Giá bán (VNĐ) *</Label>
+  <Label htmlFor="gia_ban">Giá bán (VNĐ) <span className="text-red-500">*</span></Label>
         <div className="relative">
           <Input
             id="gia_ban"
@@ -408,7 +400,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     {/* Row 5: Trạng thái & Ngày nhập */}
     <div className="grid grid-cols-2 gap-4">
       <div className="space-y-2">
-        <Label htmlFor="trang_thai">Trạng thái *</Label>
+  <Label htmlFor="trang_thai">Trạng thái <span className="text-red-500">*</span></Label>
         <Select
           value={formData.trang_thai}
           onValueChange={(value) => setFormData({ ...formData, trang_thai: value })}
@@ -438,7 +430,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         </Select>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="ngay_nhap">Ngày nhập *</Label>
+  <Label htmlFor="ngay_nhap">Ngày nhập <span className="text-red-500">*</span></Label>
         <Input
           id="ngay_nhap"
           type="date"

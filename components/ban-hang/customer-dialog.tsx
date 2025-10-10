@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -27,15 +27,28 @@ interface CustomerDialogProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: (customer: Customer) => void
+  initial?: Partial<Pick<Customer, "ho_ten" | "so_dien_thoai">> & { ghi_chu?: string }
 }
 
-export function CustomerDialog({ isOpen, onClose, onSuccess }: CustomerDialogProps) {
+export function CustomerDialog({ isOpen, onClose, onSuccess, initial }: CustomerDialogProps) {
   const [formData, setFormData] = useState({
     ho_ten: "",
     so_dien_thoai: "",
     ghi_chu: "",
   })
   const [isLoading, setIsLoading] = useState(false)
+
+  // Prefill values when opening
+  useEffect(() => {
+    if (isOpen) {
+      setFormData((prev) => ({
+        ho_ten: initial?.ho_ten ?? "",
+        so_dien_thoai: initial?.so_dien_thoai ?? "",
+        ghi_chu: (initial as any)?.ghi_chu ?? "",
+      }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -63,6 +76,7 @@ export function CustomerDialog({ isOpen, onClose, onSuccess }: CustomerDialogPro
 
   const res = await response.json()
   onSuccess(res.customer)
+  onClose()
 
       // Reset form
       setFormData({

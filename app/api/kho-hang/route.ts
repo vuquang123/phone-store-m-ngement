@@ -173,18 +173,83 @@ export async function POST(request: NextRequest) {
       // Trả về dữ liệu mới để frontend có thể cập nhật lại
       return NextResponse.json({ ok: true, updated: true, id_may: body.id, newRow }, { status: 200 })
     } else {
-      // Tạo mới sản phẩm (1 sản phẩm)
-      let idMay = ""
-      if (body.imei) {
-        const imeiStr = String(body.imei)
-        idMay = imeiStr.slice(-5)
-      }
-      const { header } = await readFromGoogleSheets(SHEET)
-      const newRow = header.map((k) => {
-        if (k === "ID Máy") return idMay
-        return body[k] || ""
+      // Tạo mới 1 sản phẩm (mapping linh hoạt giữa key FE và tiêu đề cột VN)
+      // 1) Chuẩn hoá key từ body: bỏ dấu, thường hoá, bỏ ký tự không chữ-số
+      const normalizeKey = (s: string) =>
+        (s || "")
+          .normalize("NFD")
+          // @ts-ignore
+          .replace(/\p{Diacritic}/gu, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "")
+
+      const bodyNormMap: Record<string, any> = {}
+      Object.keys(body || {}).forEach((k) => {
+        bodyNormMap[normalizeKey(k)] = body[k]
       })
-      const result = await import("@/lib/google-sheets").then(mod => mod.appendToGoogleSheets(SHEET, newRow))
+
+      // 2) Tạo ID Máy từ IMEI (nếu có)
+      const imeiVal = body.imei || bodyNormMap["imei"] || ""
+      const imeiStr = String(imeiVal)
+      const idMay = imeiStr ? imeiStr.slice(-5) : Math.floor(10000 + Math.random() * 90000).toString()
+
+      // 3) Đặt một số mapping đặc biệt theo tên cột phổ biến
+      const getValForHeader = (k: string) => {
+        const nk = normalizeKey(k)
+        // Ưu tiên các cột đặc biệt
+        if (k === "ID Máy") return idMay
+        if (k === "IMEI") return imeiStr
+        if (k === "Trạng Thái") return body.trang_thai || bodyNormMap["trangthai"] || "Còn hàng"
+        if (k === "Ngày Nhập") {
+          const input = body.ngay_nhap || bodyNormMap["ngaynhap"]
+          if (input) {
+            const t = Date.parse(String(input))
+            if (!Number.isNaN(t)) return new Date(t).toLocaleDateString("vi-VN")
+          }
+          return new Date().toLocaleDateString("vi-VN")
+        }
+        if (k === "Loại Máy") {
+          // FE đang dùng loai_phu_kien để chọn Lock/Quốc tế → map về Loại Máy
+          return body.loai_phu_kien || body.loai_may || bodyNormMap["loaiphukien"] || bodyNormMap["loaimay"] || ""
+        }
+        if (k === "Tên Sản Phẩm") {
+          return body.ten_san_pham || bodyNormMap["tensanpham"] || ""
+        }
+        if (k === "Dung Lượng") {
+          return body.dung_luong || bodyNormMap["dungluong"] || ""
+        }
+        if (k === "Màu Sắc") {
+          return body.mau_sac || bodyNormMap["mausac"] || ""
+        }
+        if (k === "Pin (%)") {
+          return body.pin || bodyNormMap["pin"] || ""
+        }
+        if (k === "Tình Trạng Máy") {
+          return body.tinh_trang || bodyNormMap["tinhtrang"] || ""
+        }
+        if (k === "Giá Nhập") {
+          const v = body.gia_nhap ?? bodyNormMap["gianhap"]
+          return v !== undefined ? v : ""
+        }
+        if (k === "Giá Bán") {
+          const v = body.gia_ban ?? bodyNormMap["giaban"]
+          return v !== undefined ? v : ""
+        }
+        if (k === "Ghi Chú") {
+          return body.ghi_chu || bodyNormMap["ghichu"] || ""
+        }
+        // 4) fallback: thử lấy trực tiếp theo các biến thể
+        return (
+          body[k] ??
+          body[k.replace(/\s/g, "_").toLowerCase()] ??
+          body[k.replace(/\s/g, "").toLowerCase()] ??
+          bodyNormMap[nk] ??
+          ""
+        )
+      }
+
+  const newRow = header.map((k) => getValForHeader(k))
+      const result = await import("@/lib/google-sheets").then((mod) => mod.appendToGoogleSheets(SHEET, newRow))
       if (!result.success) {
         return NextResponse.json({ error: result.error || "Lỗi ghi Google Sheets" }, { status: 500 })
       }

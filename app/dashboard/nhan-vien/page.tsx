@@ -214,14 +214,14 @@ export default function NhanVienPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Quản lý Nhân viên</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Quản lý Nhân viên</h1>
           <p className="text-muted-foreground">Quản lý tài khoản và phân quyền nhân viên</p>
         </div>
         {userRole === "quan_ly" && (
-          <Button onClick={() => setIsDialogOpen(true)}>
+          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
             <Plus className="w-4 h-4 mr-2" />
             Thêm nhân viên
           </Button>
@@ -234,24 +234,24 @@ export default function NhanVienPage() {
           <CardDescription>Tổng cộng {employees.length} nhân viên</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-2 mb-4">
-            <Search className="w-4 h-4 text-muted-foreground" />
+          <div className="flex items-center gap-2 mb-4">
+            <Search className="w-4 h-4 text-muted-foreground shrink-0" />
             <Input
               placeholder="Tìm kiếm theo tên, email hoặc số điện thoại..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
+              className="w-full sm:max-w-sm"
             />
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {filteredEmployees.map((employee) => (
               <div
                 key={employee.id}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
+                className="relative p-4 border rounded-lg hover:bg-muted/50 flex flex-col gap-3 sm:flex-row sm:items-center"
               >
-                <div className="flex items-center space-x-4">
-                  <Avatar>
+                <div className="flex items-start gap-3 pr-16 sm:pr-0 w-full">
+                  <Avatar className="h-10 w-10">
                     <AvatarFallback>
                       {(employee.ho_ten || "NV")
                         .split(" ")
@@ -261,34 +261,36 @@ export default function NhanVienPage() {
                         .toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <h3 className="font-medium">{employee.ho_ten}</h3>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                      <h3 className="font-medium truncate max-w-[200px] sm:max-w-none">{employee.ho_ten}</h3>
                       {getRoleBadge(employee.vai_tro)}
                       {getStatusBadge(employee.trang_thai)}
                     </div>
-                    <p className="text-sm text-muted-foreground">{employee.email}</p>
+                    <p className="text-sm text-muted-foreground break-words">{employee.email}</p>
                     <p className="text-sm text-muted-foreground">{employee.so_dien_thoai}</p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2 sm:self-auto sm:ml-auto absolute right-4 top-4 sm:static">
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
                     onClick={() => {
                       setSelectedEmployee(employee)
                       setIsDialogOpen(true)
                     }}
                   >
                     <Edit className="w-4 h-4" />
+                    <span className="sr-only">Sửa nhân viên</span>
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
                     onClick={() => handleDeleteEmployee(employee)}
                     className="text-destructive hover:text-destructive"
                   >
                     <Trash2 className="w-4 h-4" />
+                    <span className="sr-only">Xóa nhân viên</span>
                   </Button>
                 </div>
               </div>
