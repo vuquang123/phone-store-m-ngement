@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { updateProductsStatus, logProductHistory } from "@/lib/google-sheets"
+import { addNotification } from "@/lib/notifications"
 
 export async function POST(req: Request) {
   try {
@@ -38,6 +39,15 @@ export async function POST(req: Request) {
       await appendToGoogleSheets("Bao_Hanh", row)
     }
 
+    try {
+      await addNotification({
+        tieu_de: "Chuyển sản phẩm đi bảo hành",
+        noi_dung: `Số lượng: ${productIds.length}`,
+        loai: "kho_hang",
+        nguoi_gui_id: employeeId || "system",
+        nguoi_nhan_id: "all",
+      })
+    } catch (e) { console.warn('[NOTIFY] return-baohanh fail:', e) }
     return NextResponse.json({ success: true, message: `Đã trả bảo hành cho ${productIds.length} sản phẩm!` })
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message || "Lỗi không xác định" }, { status: 500 })

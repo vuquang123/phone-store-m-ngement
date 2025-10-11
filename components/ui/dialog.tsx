@@ -6,7 +6,23 @@ import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const Dialog = DialogPrimitive.Root
+// Wrap Root to blur the currently focused element before Radix applies aria-hidden to the page,
+// preventing the a11y warning: "Blocked aria-hidden on an element because its descendant retained focus".
+const Dialog = ({
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root>) => (
+  <DialogPrimitive.Root
+    onOpenChange={(next) => {
+      if (next) {
+        try { (document.activeElement as HTMLElement | null)?.blur() } catch {}
+      }
+      onOpenChange?.(next)
+    }}
+    {...props}
+  />
+)
+Dialog.displayName = "Dialog"
 
 const DialogTrigger = DialogPrimitive.Trigger
 

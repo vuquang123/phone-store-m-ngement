@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { moveProductsToCNC, logProductHistory } from "@/lib/google-sheets"
+import { addNotification } from "@/lib/notifications"
 
 export async function POST(req: Request) {
   try {
@@ -40,6 +41,15 @@ export async function POST(req: Request) {
     if (!logResult.success) {
       return NextResponse.json({ error: "Chuyển sản phẩm thành công nhưng ghi lịch sử thất bại." }, { status: 500 })
     }
+    try {
+      await addNotification({
+        tieu_de: "Chuyển sản phẩm sang CNC",
+        noi_dung: `Số lượng: ${idsToMove.length} • Địa chỉ: ${cncAddress}`,
+        loai: "kho_hang",
+        nguoi_gui_id: employeeId || "system",
+        nguoi_nhan_id: "all",
+      })
+    } catch (e) { console.warn('[NOTIFY] send-cnc fail:', e) }
     return NextResponse.json({ success: true, message: `Đã gửi CNC thành công cho ${productIds.length} sản phẩm!` })
   } catch (e: any) {
     return NextResponse.json({ error: e.message ? `Lỗi hệ thống: ${e.message}` : "Lỗi gửi CNC, vui lòng thử lại." }, { status: 500 })

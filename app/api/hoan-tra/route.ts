@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets } from "@/lib/google-sheets"
+import { addNotification } from "@/lib/notifications"
 import { cancelContractsByIMEIs } from "@/lib/warranty"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
 
@@ -170,6 +171,15 @@ export async function POST(req: NextRequest) {
     if (H.ghiChu !== -1) line[H.ghiChu] = noteStr
 
     const result = await appendToGoogleSheets(sheet, line)
+    try {
+      await addNotification({
+        tieu_de: "Tạo yêu cầu hoàn trả",
+        noi_dung: `${khach_hang || 'Khách lẻ'} • ${imei || san_pham || newId}`,
+        loai: "hoan_tra",
+        nguoi_gui_id: nguoi_xu_ly || "system",
+        nguoi_nhan_id: "all",
+      })
+    } catch (e) { console.warn('[NOTIFY] hoan-tra POST fail:', e) }
 
     // Nếu có số tiền hoàn, cập nhật Khach_Hang (Tổng Mua -= so_tien_hoan)
     let customerAdjust: any = { adjusted: false }
@@ -322,21 +332,7 @@ export async function POST(req: NextRequest) {
       console.warn('[RETURN] Partner mark failed:', err)
     }
 
-  // 4) Telegram notification
-    try {
-      const orderInfo = {
-        ma_don_hang: ma_don_hang || newId,
-        nhan_vien_ban: nguoi_xu_ly || 'N/A',
-        khach_hang: { ten: khach_hang || 'Khách lẻ', so_dien_thoai: so_dien_thoai || 'N/A' },
-        tong_tien: Number(so_tien_hoan || 0) * -1, // negative to indicate refund
-        phuong_thuc_thanh_toan: 'Hoàn trả',
-        ngay_tao: Date.now(),
-        products: san_pham || imei ? [{ ten_san_pham: san_pham || '', imei: imei || '' }] : [],
-      }
-      await sendTelegramMessage(formatOrderMessage(orderInfo, 'return'), 'offline')
-    } catch (err) {
-      console.warn('[RETURN] Telegram notify failed:', err)
-    }
+    // Telegram: CHUYỂN sang chỉ gửi khi quản lý xác nhận (PATCH)
 
     return NextResponse.json({ ok: true, id: newId, sheet, appended: result?.success !== false, customerAdjust })
   } catch (e: any) {
@@ -397,6 +393,63 @@ export async function PATCH(req: NextRequest) {
       await updateRangeValues(u.range, u.values)
     }
 
+    // Sau khi cập nhật trạng thái, chỉ gửi Telegram khi hoàn thành do quản lý xác nhận
+    try {
+      const shouldNotify = (newStatus && String(newStatus).toLowerCase().includes('hoàn thành')) || action === 'complete'
+      if (shouldNotify) {
+        // Lấy dữ liệu dòng để build message
+        const colKhach = idx('Khách Hàng')
+        const colSdt = idx('Số Điện Thoại')
+        const colSp = idx('Sản Phẩm')
+        const colImei = idx('IMEI')
+        const colLyDo = idx('Lý Do')
+        const colGhiChu = idx('Ghi Chú')
+        const r = rows[rowIndex]
+
+        // Cố gắng lấy mã đơn từ ghi chú nếu có định dạng "Mã đơn: XYZ"
+        let maDon = String(r[idCol] || '')
+        const note = colGhiChu !== -1 ? String(r[colGhiChu] || '') : ''
+        const maMatch = note.match(/Mã\s*đơn\s*:\s*([^|]+)/i)
+        if (maMatch) maDon = maMatch[1].trim()
+
+        // Cố gắng lấy số tiền hoàn từ ghi chú: "Hoàn: 1.000.000đ"
+        let soTienHoan = 0
+        const hoanMatch = note.match(/Hoàn\s*:\s*([^|]+)/i)
+        if (hoanMatch) soTienHoan = parseNumber(hoanMatch[1]) * -1 // âm để thể hiện hoàn
+
+        const orderInfo = {
+          ma_don_hang: maDon || String(r[idCol] || ''),
+          nhan_vien_ban: nguoi_xu_ly || r[idx('Người Xử Lý')] || 'N/A',
+          khach_hang: {
+            ten: colKhach !== -1 ? (r[colKhach] || 'Khách lẻ') : 'Khách lẻ',
+            so_dien_thoai: colSdt !== -1 ? (r[colSdt] || 'N/A') : 'N/A',
+          },
+          tong_tien: soTienHoan,
+          phuong_thuc_thanh_toan: 'Hoàn trả',
+          ngay_tao: Date.now(),
+          reason: colLyDo !== -1 ? r[colLyDo] : undefined,
+          products: [
+            {
+              ten_san_pham: colSp !== -1 ? (r[colSp] || '') : '',
+              imei: colImei !== -1 ? (r[colImei] || '') : '',
+            }
+          ],
+        }
+        await sendTelegramMessage(formatOrderMessage(orderInfo, 'return'), 'return')
+      }
+    } catch (err) {
+      console.warn('[RETURN] Telegram notify (PATCH) failed:', err)
+    }
+
+    try {
+      await addNotification({
+        tieu_de: "Cập nhật hoàn trả",
+        noi_dung: `${id} → ${newStatus || 'cập nhật'}`,
+        loai: "hoan_tra",
+        nguoi_gui_id: nguoi_xu_ly || "system",
+        nguoi_nhan_id: "all",
+      })
+    } catch (e) { console.warn('[NOTIFY] hoan-tra PATCH fail:', e) }
     return NextResponse.json({ ok: true, id, updated: updates.length })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Internal error' }, { status: 500 })

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { updateProductsStatus, logProductHistory, readFromGoogleSheets, updateRowInGoogleSheets } from "@/lib/google-sheets";
+import { addNotification } from "@/lib/notifications";
 
 export async function POST(req: Request) {
   try {
@@ -75,6 +76,15 @@ export async function POST(req: Request) {
 
     // Ghi lịch sử trạng thái
   await logProductHistory(productIds5, "Hoàn thành CNC", employeeId, trangThaiCuArr);
+  try {
+    await addNotification({
+      tieu_de: "Hoàn thành CNC",
+      noi_dung: `Số lượng: ${imeisToProcess.length}`,
+      loai: "kho_hang",
+      nguoi_gui_id: employeeId || "system",
+      nguoi_nhan_id: "all",
+    })
+  } catch (e) { console.warn('[NOTIFY] complete-cnc fail:', e) }
   return NextResponse.json({ success: true, message: `Đã hoàn thành CNC cho ${imeisToProcess.length} sản phẩm!` });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message || "Lỗi xử lý hoàn thành CNC" }, { status: 500 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readFromGoogleSheets, updateRowInGoogleSheets, logProductHistory } from "@/lib/google-sheets";
+import { addNotification } from "@/lib/notifications";
 
 export async function POST(req: Request) {
   try {
@@ -24,6 +25,15 @@ export async function POST(req: Request) {
     await updateRowInGoogleSheets("Bao_Hanh", "IMEI", "", updatedRows);
     // Ghi lịch sử trạng thái
     await logProductHistory([imei.slice(-5)], "Khách đã nhận", employeeId || "", ["Đã trả khách"]);
+    try {
+      await addNotification({
+        tieu_de: "Khách đã nhận (Bảo hành)",
+        noi_dung: `IMEI: ${imei}`,
+        loai: "kho_hang",
+        nguoi_gui_id: employeeId || "system",
+        nguoi_nhan_id: "all",
+      })
+    } catch (e) { console.warn('[NOTIFY] customer-received-baohanh fail:', e) }
     return NextResponse.json({ success: true, message: "Đã cập nhật trạng thái Khách đã nhận!" });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message || "Lỗi cập nhật trạng thái" }, { status: 500 });

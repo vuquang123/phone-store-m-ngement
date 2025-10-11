@@ -1,9 +1,15 @@
-export async function sendTelegramMessage(message: string, orderType?: "online" | "offline") {
+type OrderType = "online" | "offline" | "return"
+interface TelegramOptions { message_thread_id?: number }
+
+export async function sendTelegramMessage(message: string, orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
     const chatId = -1002895849744 // id nhóm lớn
-    let messageThreadId = 9 // mặc định đơn off
-    if (typeof orderType !== "undefined" && orderType === "online") messageThreadId = 7
+  // Chọn topic theo loại đơn hàng, có thể override bằng options.message_thread_id
+  let messageThreadId = 9 // mặc định đơn off
+  if (orderType === "online") messageThreadId = 7
+  if (orderType === "return") messageThreadId = 5334
+  if (options?.message_thread_id) messageThreadId = options.message_thread_id
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
       return { success: false, error: "Thiếu cấu hình Telegram" }
@@ -75,10 +81,20 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     warrantyLine = `\n <b>Gói bảo hành:</b> ${warrantyCodes}`
   }
 
+  // Lý do hoàn (nếu có)
+  const reason = order.reason || order.ly_do || order.lyDo || order["Lý Do"]
+
   // Lưu ý: giới hạn hiển thị 10 dòng sản phẩm để tránh message quá dài
   const productSection = productLines.length
     ? `\n📦 <b>Sản phẩm:</b>\n${productLines.join("\n")}${enrichedProducts.length > 10 ? "\n…" : ""}`
     : ""
+
+  const reasonLine = reason ? `\n <b>Lý do hoàn:</b> ${reason}` : ""
+
+  const totalLine = (() => {
+    if (typeof order.tong_tien === 'number') return `\n\n <b>Tổng tiền:</b> ${order.tong_tien.toLocaleString("vi-VN")} VNĐ`
+    return `\n\n <b>Tổng tiền:</b> N/A`
+  })()
 
   return `
 ${emoji} <b>${action}</b>
@@ -89,8 +105,8 @@ ${emoji} <b>${action}</b>
  <b>SĐT:</b> ${order.khach_hang?.so_dien_thoai || order.khach_hang?.sdt || order.customerPhone || "N/A"}
 ${productSection}
 ${warrantyLine}
-
- <b>Tổng tiền:</b> ${order.tong_tien?.toLocaleString("vi-VN")} VNĐ
+${reasonLine}
+${totalLine}
  <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || "N/A"}
 
  <b>Thời gian:</b> ${new Date(order.ngay_tao).toLocaleString("vi-VN")}

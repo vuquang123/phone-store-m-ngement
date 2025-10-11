@@ -732,7 +732,7 @@ export default function KhoHangPage() {
                               <div key={p.id} className="bg-slate-50 rounded-xl p-4 shadow flex flex-col gap-2 border border-slate-100">
                                 <div className="font-semibold text-blue-700 mb-1 flex items-center gap-2">
                                   <span>{p.ten_san_pham}</span>
-                                  <span className="text-xs text-slate-400">{p.mau_sac} - {p.dung_luong}</span>
+                                  <span className="text-slate-900 font-semibold">{p.mau_sac}{p.mau_sac && p.dung_luong ? ' - ' : ''}{p.dung_luong}</span>
                                   <span className="text-xs text-slate-500">IMEI: {p.imei}</span>
                                 </div>
                               </div>
@@ -844,7 +844,7 @@ export default function KhoHangPage() {
                               <div key={p.id} className="bg-slate-50 rounded-xl p-4 shadow flex flex-col gap-2 border border-slate-100">
                                 <div className="font-semibold text-blue-700 mb-1 flex items-center gap-2">
                                   <span>{p.ten_san_pham}</span>
-                                  <span className="text-xs text-slate-400">{p.mau_sac} - {p.dung_luong}</span>
+                                  <span className="text-slate-900 font-semibold">{p.mau_sac}{p.mau_sac && p.dung_luong ? ' - ' : ''}{p.dung_luong}</span>
                                   <span className="text-xs text-slate-500">IMEI: {p.imei}</span>
                                 </div>
                                 <input type="text" placeholder="Nhập lỗi sản phẩm" value={p.loi || ""} onChange={e => {
@@ -987,7 +987,7 @@ export default function KhoHangPage() {
                                   </span>
                                 )}
                               </div>
-                              <div className="text-xs text-slate-500 mt-0.5">{p.mau_sac} • {p.dung_luong}</div>
+                              <div className="mt-0.5 text-slate-900 font-semibold">{p.mau_sac}{p.mau_sac && p.dung_luong ? ' - ' : ''}{p.dung_luong}</div>
                             </div>
                             <Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-2 py-0.5 text-[10px] font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge>
                           </div>
@@ -1050,7 +1050,9 @@ export default function KhoHangPage() {
                                     Đối tác{p.ten_doi_tac ? `: ${p.ten_doi_tac}` : ''}
                                   </span>
                                 )}
-                                <span className="text-xs text-slate-400">{p.mau_sac} - {p.dung_luong}</span>
+                              </div>
+                              <div className="mt-0.5 text-slate-900 font-semibold">
+                                {p.mau_sac}{p.mau_sac && p.dung_luong ? ' - ' : ''}{p.dung_luong}
                               </div>
                             </TableCell>
                             <TableCell className="text-sm text-slate-700">{p.imei}</TableCell>

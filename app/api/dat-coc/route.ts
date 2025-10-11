@@ -2,29 +2,35 @@
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    const { productIds } = body;
+    const { productIds, newStatus, orderId } = body;
     if (!Array.isArray(productIds) || productIds.length === 0) {
-      return NextResponse.json({ error: "Thiếu danh sách sản phẩm" }, { status: 400 });
+      if (!orderId) {
+        return NextResponse.json({ error: "Thiếu danh sách sản phẩm hoặc orderId" }, { status: 400 });
+      }
     }
     // Đọc dữ liệu hiện tại
     const { header, rows } = await readFromGoogleSheets("Dat_Coc");
     const idxIMEI = header.findIndex(h => h.trim().toLowerCase() === "imei");
     const idxTrangThai = header.findIndex(h => h.trim().toLowerCase() === "trạng thái");
+    const idxMaDon = header.findIndex(h => h.trim().toLowerCase() === "mã đơn hàng" || h.trim().toLowerCase() === "id đơn hàng");
     if (idxIMEI === -1 || idxTrangThai === -1) {
       return NextResponse.json({ error: "Không tìm thấy cột IMEI hoặc Trạng Thái" }, { status: 400 });
     }
     // Đổi trạng thái thành 'Đã hoàn thành' cho các dòng có IMEI nằm trong productIds
-    const imeiSet = new Set(productIds.map(i => String(i).trim()));
+    const desired = String(newStatus || 'Đã hoàn thành');
+    const imeiSet = new Set((productIds || []).map((i: any) => String(i).trim()));
     const updatedRows = rows.map(row => {
-      if (imeiSet.has(String(row[idxIMEI]).trim())) {
-        row[idxTrangThai] = "Đã hoàn thành";
+      const matchImei = imeiSet.size > 0 && imeiSet.has(String(row[idxIMEI]).trim());
+      const matchOrder = !!orderId && (idxMaDon !== -1) && (String(row[idxMaDon] || '').trim() === String(orderId).trim());
+      if (matchImei || matchOrder) {
+        row[idxTrangThai] = desired;
       }
       return row;
     });
     // Ghi lại sheet: giữ header, ghi lại header + updatedRows
     const allRows = [header, ...updatedRows];
     await updateRangeValues("Dat_Coc!A1", allRows);
-    return NextResponse.json({ ok: true, updated: productIds.length }, { status: 200 });
+    return NextResponse.json({ ok: true, updated: productIds?.length || 0 }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

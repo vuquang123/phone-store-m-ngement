@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { updateBaoHanhStatus } from "@/lib/google-sheets"
+import { addNotification } from "@/lib/notifications"
 
 export async function POST(req: Request) {
   try {
@@ -12,6 +13,15 @@ export async function POST(req: Request) {
     // Sau khi hoàn thành bảo hành, chuyển trạng thái sản phẩm trong sheet Kho_Hang về "Còn hàng"
     const updateKhoResult = await import("@/lib/google-sheets").then(mod => mod.updateProductsStatus(ids, "Còn hàng"))
     if (result.success && updateKhoResult.success) {
+      try {
+        await addNotification({
+          tieu_de: "Hoàn thành bảo hành",
+          noi_dung: `Số lượng: ${ids.length}`,
+          loai: "kho_hang",
+          nguoi_gui_id: employeeId || "system",
+          nguoi_nhan_id: "all",
+        })
+      } catch (e) { console.warn('[NOTIFY] complete-baohanh fail:', e) }
       return NextResponse.json({ success: true, message: `Đã hoàn thành bảo hành cho ${ids.length} sản phẩm!` })
     } else {
       return NextResponse.json({ success: false, error: result.error || updateKhoResult.error || "Lỗi cập nhật!" }, { status: 500 })

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { CustomerDialog } from "@/components/ban-hang/customer-dialog"
 import { CustomerSelectDialog } from "@/components/ban-hang/customer-select-dialog"
@@ -10,8 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Search, Plus, Minus, Trash2, User, ShoppingCart, Loader2, Pencil, Check, X } from "lucide-react"
+import { Search, Plus, Minus, Trash2, User, ShoppingCart, Loader2, Pencil, Check, X, Lock, Globe, Battery, Copy, CheckCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import dayjs from "dayjs"
 import customParseFormat from "dayjs/plugin/customParseFormat"
@@ -85,22 +86,31 @@ export default function BanHangPage() {
         const res = await fetch("/api/dat-coc")
         if (res.ok) {
           const data = await res.json()
-          // Chuyển đổi dữ liệu từ header + rows thành mảng object
-          const header = data?.data?.header || [];
-          const rows = data?.data?.rows || [];
-          const orders = rows.map((row: any[]) => {
-            const obj: Record<string, any> = {};
-            header.forEach((key: string, idx: number) => {
-              obj[key] = row[idx];
-            });
-            return obj;
-          });
-          setDepositOrders(orders);
+          // Hỗ trợ cả 2 dạng payload: { data: [header, ...rows] } hoặc { data: { header, rows } }
+          let orders: any[] = []
+          const payload = data?.data
+          if (Array.isArray(payload) && Array.isArray(payload[0])) {
+            const [header, ...rows] = payload as any[]
+            orders = rows.map((row: any[]) => {
+              const obj: Record<string, any> = {}
+              ;(header as string[]).forEach((key: string, idx: number) => { obj[key] = row[idx] })
+              return obj
+            })
+          } else if (payload?.header && payload?.rows) {
+            const header = payload.header
+            const rows = payload.rows
+            orders = rows.map((row: any[]) => {
+              const obj: Record<string, any> = {}
+              ;(header as string[]).forEach((key: string, idx: number) => { obj[key] = row[idx] })
+              return obj
+            })
+          }
+          setDepositOrders(orders)
         } else {
-          setDepositOrders([]);
+          setDepositOrders([])
         }
       } catch {
-        setDepositOrders([]);
+        setDepositOrders([])
       } finally {
         setDepositLoading(false)
       }
@@ -118,6 +128,8 @@ export default function BanHangPage() {
   const [loaiDon, setLoaiDon] = useState("")
   const [hinhThucVanChuyen, setHinhThucVanChuyen] = useState("")
   const [ghiChu, setGhiChu] = useState("")
+  const [copiedImei, setCopiedImei] = useState<string | null>(null)
+  const [justAddedKey, setJustAddedKey] = useState<string | null>(null)
   // Discount input string (5.2)
   const [giamGiaInput, setGiamGiaInput] = useState("")
   const [discountParseMsg, setDiscountParseMsg] = useState<string>("")
@@ -125,12 +137,38 @@ export default function BanHangPage() {
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
   const [isCustomerSelectOpen, setIsCustomerSelectOpen] = useState(false)
   const [orders, setOrders] = useState<any[]>([])
+  const [currentDepositOrderId, setCurrentDepositOrderId] = useState<string | null>(null)
   const [customerSearch, setCustomerSearch] = useState("")
   const [customerResults, setCustomerResults] = useState<any[]>([])
   // Máy đối tác cache để lọc nhanh trong tìm kiếm
   const [partnerProducts, setPartnerProducts] = useState<any[]>([])
   // Cache phụ kiện để tránh gọi API lặp khi query ngắn
   const [accessoryProducts, setAccessoryProducts] = useState<any[]>([])
+  // Desktop search table UX enhancements
+  type SortKey = 'san_pham' | 'imei_loai' | 'nguon' | 'trang_thai' | 'gia'
+  const [sortKey, setSortKey] = useState<SortKey>('san_pham')
+  const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc')
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1)
+  const tableContainerRef = useRef<HTMLDivElement|null>(null)
+  const [isSearching, setIsSearching] = useState(false)
+  // Persist search & filters
+  useEffect(() => {
+    try {
+      const savedQ = localStorage.getItem('bh_search_query')
+      const savedSrc = localStorage.getItem('bh_filter_source') as any
+      const savedType = localStorage.getItem('bh_filter_type') as any
+      if (savedQ !== null) setSearchQuery(savedQ)
+      if (savedSrc === 'all' || savedSrc === 'inhouse' || savedSrc === 'partner') setFilterSource(savedSrc)
+      if (savedType === 'all' || savedType === 'iphone' || savedType === 'accessory') setFilterType(savedType)
+    } catch {}
+    // run once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => { try { localStorage.setItem('bh_search_query', searchQuery) } catch{} }, [searchQuery])
+  useEffect(() => { try { localStorage.setItem('bh_filter_source', filterSource) } catch{} }, [filterSource])
+  useEffect(() => { try { localStorage.setItem('bh_filter_type', filterType) } catch{} }, [filterType])
+  // Reset row selection when query changes
+  useEffect(() => { setSelectedIndex(-1) }, [searchQuery])
   // Hàm reload danh sách khách hàng
   const reloadCustomers = () => {
     if (!customerSearch) { setCustomerResults([]); return }
@@ -237,6 +275,7 @@ export default function BanHangPage() {
       const q = searchQuery.trim()
       if (q.length < 2) {
         // Không gọi API khi query ngắn – dùng dữ liệu cache
+        setIsSearching(false)
         setSearchResults([
           ...khoHangProducts,
           ...partnerProducts,
@@ -245,6 +284,7 @@ export default function BanHangPage() {
         return
       }
       try {
+        setIsSearching(true)
         // Huỷ request trước đó nếu còn đang chạy
         if (searchAbortRef.current) searchAbortRef.current.abort()
         const controller = new AbortController()
@@ -285,6 +325,8 @@ export default function BanHangPage() {
         if (error?.name !== 'AbortError') {
           console.error('Error searching products:', error)
         }
+      } finally {
+        setIsSearching(false)
       }
     }
     const debounce = setTimeout(run, 300)
@@ -394,47 +436,57 @@ export default function BanHangPage() {
 
   // === CART ===
   const addToCart = (product: any) => {
-  console.log('Thêm vào giỏ:', product)
+    const prevCart = cart
+    let nextCart = prevCart
+    let didChange = false
     if (product.type === "accessory") {
-      let accessoryId = product.id || `${product.ten_san_pham}_${product.loai_may || ""}`
-      const existingItem = cart.find((item) => item.type === "accessory" && item.id === accessoryId)
-      // Lấy giá nhập từ product (ưu tiên product.gia_nhap, nếu không có thì product['Giá Nhập'], nếu không có thì 0)
-      let giaNhap = 0;
-      if (typeof product.gia_nhap === "number") giaNhap = product.gia_nhap;
-      else if (typeof product["Giá Nhập"] === "number") giaNhap = product["Giá Nhập"];
-      else if (typeof product.gia_nhap === "string") giaNhap = parseInt(product.gia_nhap.replace(/[^\d]/g, "")) || 0;
-      else if (typeof product["Giá Nhập"] === "string") giaNhap = parseInt(product["Giá Nhập"].replace(/[^\d]/g, "")) || 0;
+      const accessoryId = product.id || `${product.ten_san_pham}_${product.loai_may || ""}`
+      const existingItem = prevCart.find((item) => item.type === "accessory" && item.id === accessoryId)
+      let giaNhap = 0
+      if (typeof product.gia_nhap === "number") giaNhap = product.gia_nhap
+      else if (typeof product["Giá Nhập"] === "number") giaNhap = product["Giá Nhập"]
+      else if (typeof product.gia_nhap === "string") giaNhap = parseInt(product.gia_nhap.replace(/[^\d]/g, "")) || 0
+      else if (typeof product["Giá Nhập"] === "string") giaNhap = parseInt(product["Giá Nhập"].replace(/[^\d]/g, "")) || 0
       if (existingItem) {
         const maxQty = product.so_luong_ton || 1
         if (existingItem.so_luong < maxQty) {
-          setCart(cart.map((item) =>
-            item.id === accessoryId ? { ...item, so_luong: item.so_luong + 1 } : item
-          ))
+          nextCart = prevCart.map((item) => item.id === accessoryId ? { ...item, so_luong: item.so_luong + 1 } : item)
+          didChange = true
         }
       } else {
-        setCart([...cart, {
-          id: accessoryId,
-          type: "accessory",
-          ten_san_pham: product.ten_san_pham,
-          gia_ban: product.gia_ban,
-          gia_nhap: giaNhap,
-          so_luong: 1,
-          max_quantity: product.so_luong_ton || 1,
-          imei: product.imei || "",
-          trang_thai: product.trang_thai || ""
-        }])
+        nextCart = [
+          ...prevCart,
+          {
+            id: accessoryId,
+            type: "accessory",
+            ten_san_pham: product.ten_san_pham,
+            gia_ban: product.gia_ban,
+            gia_nhap: giaNhap,
+            so_luong: 1,
+            max_quantity: product.so_luong_ton || 1,
+            imei: product.imei || "",
+            trang_thai: product.trang_thai || "",
+            // preserve accessory descriptors for cart display
+            loai_phu_kien: product.loai_phu_kien || product.loai || "",
+            mau_sac: product.mau_sac || product.mau || ""
+          }
+        ]
+        didChange = true
       }
     } else {
-      const exists = cart.find((item) => item.id === product.id && item.type === "product")
+      const exists = prevCart.find((item) => item.id === product.id && item.type === "product")
       if (!exists) {
-        setCart([
-          ...cart,
+        const isPartner = String(product.nguon || product.source || '').toLowerCase().includes('đối tác')
+        nextCart = [
+          ...prevCart,
           {
             ...product,
-            type: "product", // luôn gán type
+            type: "product",
             so_luong: 1,
             max_quantity: 1,
-            // Mapping đúng tên cột sheet:
+            // Track initial IMEI state for partner items to skip extra confirmation if it already existed
+            imei_initial: product.imei || '',
+            imei_confirmed: isPartner && product.imei ? true : (product as any).imei_confirmed,
             "Tên Sản Phẩm": product.ten_san_pham,
             "Loại Máy": product.loai_may,
             "Dung Lượng": product.dung_luong,
@@ -443,8 +495,26 @@ export default function BanHangPage() {
             "Pin (%)": product.pin,
             "Tình Trạng Máy": product.tinh_trang
           }
-        ])
+        ]
+        didChange = true
       }
+    }
+    if (didChange) {
+      setCart(nextCart)
+      try {
+        toast({
+          title: "Đã thêm vào giỏ",
+          description: product.ten_san_pham || product.imei || "Sản phẩm",
+          action: (
+            <button
+              onClick={() => setCart(prevCart)}
+              className="inline-flex h-8 items-center justify-center rounded-md border px-3 text-sm font-medium hover:bg-secondary"
+            >
+              Hoàn tác
+            </button>
+          ) as any,
+        })
+      } catch {}
     }
     setSearchQuery("")
   }
@@ -463,6 +533,8 @@ export default function BanHangPage() {
       so_luong: 1,
       max_quantity: 1,
       imei: p.imei || '',
+      imei_initial: p.imei || '',
+      imei_confirmed: (p.imei ? true : false) as any,
       trang_thai: 'Còn hàng',
       loai_may: p.loai_may || '',
       dung_luong: p.bo_nho || p.dung_luong || '',
@@ -509,6 +581,81 @@ export default function BanHangPage() {
   // Cơ sở tính giảm giá: tổng tiền hàng + phí bảo hành trước giảm
   const discountBase = Math.max(tongTien + warrantyTotal, 0)
   const finalThanhToan = Math.max(tongTien + warrantyTotal - giamGia, 0)
+
+  // Kết quả tìm kiếm sau khi áp bộ lọc Nguồn/Loại, dùng chung cho mobile cards + desktop table
+  const filteredSearchResults = useMemo(() => {
+    return searchResults.filter((p: any) => {
+      const src = String(p.nguon || p.source || '').toLowerCase()
+      if (filterSource==='inhouse' && src.includes('đối tác')) return false
+      if (filterSource==='partner' && !src.includes('đối tác')) return false
+      const isAccessory = (p.type === 'accessory') || (!!p.loai_phu_kien && !p.imei)
+      if (filterType==='iphone' && isAccessory) return false
+      if (filterType==='accessory' && !isAccessory) return false
+      return true
+    })
+  }, [searchResults, filterSource, filterType])
+
+  // Sort results based on column and order
+  const sortedSearchResults = useMemo(() => {
+    const arr = [...filteredSearchResults]
+  const isProductItem = (p: any) => (p.type === 'product') || (!!p.imei)
+  const typeRank = (p: any) => isProductItem(p) ? 0 : 1
+    const getSource = (p: any) => String(p.nguon || p.source || '').toLowerCase().includes('đối tác') ? 'Đối tác' : 'Trong kho'
+    const getGia = (p: any) => (typeof p.gia_ban === 'number' ? p.gia_ban : 0)
+    const getTrangThai = (p: any) => p.trang_thai || 'Còn hàng'
+    const getImeiLoai = (p: any) => p.imei ? String(p.imei) : String(p.loai_phu_kien || '-')
+    const getTen = (p: any) => String(p.ten_san_pham || '')
+    const cmp = (a: any, b: any) => {
+  const typeDiff = typeRank(a) - typeRank(b)
+      if (typeDiff !== 0) return typeDiff
+      let va: any = ''
+      let vb: any = ''
+      switch (sortKey) {
+        case 'san_pham': va = getTen(a); vb = getTen(b); break
+        case 'imei_loai': va = getImeiLoai(a); vb = getImeiLoai(b); break
+        case 'nguon': va = getSource(a); vb = getSource(b); break
+        case 'trang_thai': va = getTrangThai(a); vb = getTrangThai(b); break
+        case 'gia': va = getGia(a); vb = getGia(b); break
+      }
+      if (typeof va === 'string' && typeof vb === 'string') {
+        va = va.toLowerCase(); vb = vb.toLowerCase()
+        if (va < vb) return -1
+        if (va > vb) return 1
+        return 0
+      }
+      return (va as number) - (vb as number)
+    }
+    arr.sort((a,b) => sortOrder==='asc' ? cmp(a,b) : cmp(b,a))
+    return arr
+  }, [filteredSearchResults, sortKey, sortOrder])
+
+  function toggleSort(k: SortKey){
+    if (sortKey === k) setSortOrder(prev => prev==='asc' ? 'desc' : 'asc')
+    else { setSortKey(k); setSortOrder('asc') }
+  }
+
+  // Ensure selected row is visible on keyboard navigation
+  useEffect(() => {
+    if (selectedIndex < 0) return
+    const el = tableContainerRef.current?.querySelector(`[data-index="${selectedIndex}"]`) as HTMLElement | null
+    if (el) el.scrollIntoView({ block: 'nearest' })
+  }, [selectedIndex])
+
+  // highlight helper for search terms
+  function escapeRegExp(str: string){
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  }
+  function highlight(text: string, q: string){
+    const s = (q || '').trim()
+    if (!s) return text
+    try {
+      const re = new RegExp(`(${escapeRegExp(s)})`, 'ig')
+      const parts = text.split(re)
+      return parts.map((p, i) => re.test(p) ? <mark key={i} className="bg-yellow-100 rounded px-0.5">{p}</mark> : <span key={i}>{p}</span>)
+    } catch {
+      return text
+    }
+  }
 
   // ===== Confirm rời trang khi giỏ chưa thanh toán =====
   const hasPendingCart = cart.length > 0
@@ -561,21 +708,112 @@ export default function BanHangPage() {
       toast({ title: 'Giảm giá không hợp lệ', variant: 'destructive' as any })
       return
     }
+    // YÊU CẦU IMEI CHO MÁY ĐỐI TÁC CHỈ KHI THANH TOÁN ĐỦ (không áp cho Đặt cọc)
+    if (loaiThanhToan !== 'Đặt cọc') {
+      const partnerMissingImei = cart.some(
+        (i) => i.type === 'product' && !i.imei && String(i.nguon || i.source || '').toLowerCase().includes('đối tác')
+      )
+      if (partnerMissingImei) {
+        toast({
+          title: 'Thiếu IMEI cho máy đối tác',
+          description: 'Vui lòng nhập IMEI cho máy nguồn Đối tác trước khi xuất đơn.',
+          variant: 'destructive' as any,
+        })
+        try { setMobileView('gio-hang') } catch {}
+        return
+      }
+    }
     setIsLoading(true)
     try {
       const products = cart.filter((i) => i.type === "product")
       const accessories = cart.filter((i) => i.type === "accessory")
-      const giaNhapMay = products[0]?.gia_nhap ? Number(products[0].gia_nhap) : 0;
       const giaNhapPhuKien = accessories.reduce((s, i) => s + (i.gia_nhap || 0) * i.so_luong, 0);
       let employeeId = "";
       if (typeof window !== "undefined") {
         employeeId = localStorage.getItem("employeeId") || "";
       }
 
-      if (loaiThanhToan === "Đặt cọc" || loaiThanhToan === "Thanh toán đủ") {
+      if (loaiThanhToan === "Đặt cọc") {
+        // Flow Đặt cọc: chỉ đổi trạng thái → 'Đã đặt cọc' (hàng nội bộ), KHÔNG xóa khỏi kho, ghi vào sheet Đặt Cọc
+        try {
+          const internalImeis = products.filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác')).map(p => p.imei)
+          if (internalImeis.length > 0) {
+            const resStatus = await fetch("/api/update-product-status", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ productIds: internalImeis, newStatus: "Đã đặt cọc" })
+            });
+            if (!resStatus.ok) throw new Error("API update-product-status lỗi: " + (await resStatus.text()));
+          }
+        } catch (err) {
+          toast({ title: 'Lỗi cập nhật trạng thái', description: String(err), variant: 'destructive' as any })
+          setIsLoading(false); return;
+        }
+        // Ghi vào sheet Đặt Cọc
+        try {
+          const soTienCocNum = Math.max(0, Number(soTienCoc) || 0)
+          const tongThanhToan = finalThanhToan
+          const conLai = Math.max(0, tongThanhToan - soTienCocNum)
+          const body = {
+            ten_khach_hang: selectedCustomer?.ho_ten || "Khách lẻ",
+            so_dien_thoai: selectedCustomer?.so_dien_thoai || "",
+            products: products.map(p => ({
+              ten_san_pham: p.ten_san_pham,
+              loai_may: p.loai_may,
+              dung_luong: p.dung_luong,
+              pin: p.pin,
+              mau_sac: p.mau_sac,
+              imei: p.imei,
+              tinh_trang_may: p.tinh_trang || p.tinh_trang_may,
+              gia_ban: p.gia_ban,
+              gia_nhap: p.gia_nhap,
+            })),
+            phu_kien: accessories.length ? accessories.map(pk => pk.ten_san_pham).join(", ") : "",
+            hinh_thuc_thanh_toan: phuongThucThanhToan,
+            so_tien_coc: soTienCocNum,
+            so_tien_con_lai: conLai,
+            han_thanh_toan: ngayHenTraDu || "",
+            nguoi_ban: employeeId,
+            loai_don: "Đặt cọc",
+            ngay_dat_coc: new Date().toLocaleDateString("vi-VN"),
+            ghi_chu: ghiChu,
+          }
+          const res = await fetch("/api/dat-coc", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          })
+          if (!res.ok) throw new Error("API dat-coc lỗi: " + (await res.text()))
+          const dc = await res.json()
+          // Xóa sản phẩm khỏi kho cho hàng nội bộ ngay khi đặt cọc
+          const internalImeisForDelete = products.filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác')).map(p => p.imei).filter(Boolean)
+          if (internalImeisForDelete.length > 0) {
+            try {
+              const resDel = await fetch("/api/delete-product-from-kho", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ productIds: internalImeisForDelete })
+              });
+              if (!resDel.ok) throw new Error("API delete-product-from-kho lỗi: " + (await resDel.text()));
+            } catch (err) {
+              toast({ title: 'Lỗi xóa sản phẩm khỏi kho (đặt cọc)', description: String(err), variant: 'destructive' as any })
+            }
+          }
+          setCart([])
+          setGiamGia(0)
+          setGhiChu("")
+          setCurrentDepositOrderId(dc.id_don_hang || dc.id || null)
+          try { localStorage.removeItem('cart_draft_v1'); localStorage.removeItem('cart_warranty_sel_v1') } catch{}
+          toast({ title: 'Đặt cọc thành công', description: `Mã: ${dc.id_don_hang || dc.id || ''}` })
+          setActiveTab('don-dat-coc')
+          setReloadFlag(f => f + 1)
+        } catch (err) {
+          toast({ title: 'Lỗi tạo đơn đặt cọc', description: String(err), variant: 'destructive' as any })
+        }
+      } else {
+        // Flow Thanh toán đủ: như cũ → đổi trạng thái 'Đã bán', xoá khỏi kho, ghi vào Ban_Hang
         // Cập nhật trạng thái sản phẩm thành 'Đã bán'
         try {
-          // Chỉ cập nhật trạng thái & xóa khỏi kho cho hàng nội bộ (không phải đối tác)
           const internalImeis = products.filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác')).map(p => p.imei)
           if (internalImeis.length > 0) {
             const resStatus = await fetch("/api/update-product-status", {
@@ -589,7 +827,7 @@ export default function BanHangPage() {
           toast({ title: 'Lỗi cập nhật trạng thái', description: String(err), variant: 'destructive' as any })
           setIsLoading(false); return;
         }
-        // Chỉ xóa sản phẩm khỏi kho nếu có sản phẩm có imei
+        // Xóa sản phẩm khỏi kho cho hàng nội bộ
         const internalImeisForDelete = products.filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác')).map(p => p.imei).filter(Boolean)
         if (internalImeisForDelete.length > 0) {
           try {
@@ -605,7 +843,7 @@ export default function BanHangPage() {
           }
         }
         // Ghi thông tin vào sheet Ban_Hang
-        let orderData: any = {
+        const orderData: any = {
           "Ngày Xuất": new Date().toLocaleDateString("vi-VN"),
           "Tên Khách Hàng": selectedCustomer?.ho_ten || "Khách lẻ",
           "Số Điện Thoại": selectedCustomer?.so_dien_thoai || "",
@@ -618,7 +856,7 @@ export default function BanHangPage() {
           "Người Bán": employeeId,
           "Loại Đơn": loaiDon,
           "Hình Thức Vận Chuyển": loaiDon === "Đơn onl" ? hinhThucVanChuyen : "",
-          "Lãi": "", // Để trống, không ghi đè công thức
+          "Lãi": "",
           "Ghi Chú": ghiChu,
           "Giảm Giá": giamGia,
           products: products.map(p => ({
@@ -633,7 +871,6 @@ export default function BanHangPage() {
             gia_ban: p.gia_ban,
             gia_nhap: p.gia_nhap,
             so_luong: p.so_luong,
-            // Truyền metadata đối tác để API xử lý xoá dòng bên sheet đối tác
             source: p.source || p.nguon || '',
             nguon: p.nguon || p.source || '',
             partner_sheet: p.partner_sheet || p.sheet || '',
@@ -648,14 +885,13 @@ export default function BanHangPage() {
             gia_nhap: i.gia_nhap,
             so_luong: i.so_luong
           }))
-        };
+        }
         try {
           const res = await fetch("/api/ban-hang", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               ...orderData,
-              // Truyền cả nguồn hàng tổng quát nếu có máy đối tác trong giỏ
               nguon_hang: products.some(p => String(p.nguon || p.source || '').toLowerCase().includes('đối tác')) ? 'Đối tác' : '',
               coreTotal: thanhToan,
               warrantyTotal: warrantyTotal,
@@ -672,9 +908,20 @@ export default function BanHangPage() {
           setGiamGia(0);
           setGhiChu("");
           setPhuongThucThanhToan("Tiền mặt");
+          // Nếu là tiếp tục thanh toán từ đơn đặt cọc, cập nhật trạng thái đơn đặt cọc
+          try {
+            if (currentDepositOrderId) {
+              await fetch('/api/dat-coc', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId: currentDepositOrderId, newStatus: 'Đã thanh toán' })
+              })
+            }
+          } catch {}
+          setCurrentDepositOrderId(null)
           toast({ title: 'Tạo đơn thành công', description: `Mã: ${order.id_don_hang || order.ma_don_hang || ''}` })
           try { localStorage.removeItem('cart_draft_v1'); localStorage.removeItem('cart_warranty_sel_v1') } catch{}
-          setReloadFlag(f => f + 1); // <--- thêm dòng này
+          setReloadFlag(f => f + 1);
         } catch (err) {
           toast({ title: 'Lỗi tạo đơn hàng', description: String(err), variant: 'destructive' as any })
         }
@@ -766,31 +1013,40 @@ export default function BanHangPage() {
       <Button size="sm" variant={mobileView==='thanh-toan'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('thanh-toan')}>Thanh toán</Button>
     </div>
   )}
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.25fr)_minmax(0,0.75fr)] gap-6 items-start">
     {/* Tìm kiếm và thêm sản phẩm */}
-    <div className="lg:col-span-2 flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6">
       {(!isMobile || mobileView==='san-pham') && (
-  <Card className="min-h-[220px] h-full flex flex-col overflow-hidden" >
+  <Card className="min-h-[220px] h-full flex flex-col overflow-hidden lg:h-[600px]" >
         <CardHeader>
           <CardTitle>Tìm kiếm sản phẩm</CardTitle>
           <CardDescription>Tìm kiếm iPhone và phụ kiện để thêm vào đơn hàng</CardDescription>
         </CardHeader>
-        <CardContent>
+  <CardContent className="flex flex-col h-full min-h-0">
           <div className="relative mb-4">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Tìm kiếm theo tên, loai_phu_kien, IMEI..."
+              placeholder="Tìm theo Tên, Loại phụ kiện, IMEI..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8"
               inputMode="search"
               enterKeyHint="search"
-              onKeyDown={(e)=>{ if(e.key==='Enter' && searchResults.length===1){ addToCart(searchResults[0]) } }}
+              onKeyDown={(e)=>{
+                const n = sortedSearchResults.length
+                if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex(prev => Math.min(prev < 0 ? 0 : prev + 1, n - 1)) }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIndex(prev => Math.max(prev - 1, -1)) }
+                else if (e.key === 'Enter') {
+                  if (selectedIndex >= 0 && sortedSearchResults[selectedIndex]) {
+                    addToCart(sortedSearchResults[selectedIndex]); setSelectedIndex(-1)
+                  } else if (n === 1) { addToCart(sortedSearchResults[0]) }
+                }
+              }}
             />
           </div>
 
             {/* Bộ lọc nhanh: Nguồn & Loại */}
-            <div className="flex flex-wrap gap-2 mb-3">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
               <div className="flex items-center gap-1">
                 <span className="text-xs text-slate-500 mr-1">Nguồn:</span>
                 <Button size="sm" variant={filterSource==='all'?'default':'outline'} onClick={()=> setFilterSource('all')}>Tất cả</Button>
@@ -805,106 +1061,234 @@ export default function BanHangPage() {
               </div>
             </div>
 
-          {searchResults.length > 0 && (
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto overflow-x-hidden rounded-lg border mb-4 p-3">
-              {searchResults
-                .filter((p: any) => {
-                  // Lọc theo Nguồn
-                  const src = String(p.nguon || p.source || '').toLowerCase()
-                  if (filterSource==='inhouse' && src.includes('đối tác')) return false
-                  if (filterSource==='partner' && !src.includes('đối tác')) return false
-                  // Lọc theo loại
-                  const isAccessory = (p.type === 'accessory') || (!!p.loai_phu_kien && !p.imei)
-                  if (filterType==='iphone' && isAccessory) return false
-                  if (filterType==='accessory' && !isAccessory) return false
-                  return true
-                })
-                .map((product: any) => {
-                const isDisabled = product.trang_thai === "Đã đặt cọc" || product.trang_thai === "Đã bán";
-                return (
-                  <div
-                    key={`${product.id || product.imei || product.ten_san_pham}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-disabled={isDisabled}
-                    onClick={() => { if (!isDisabled) { addToCart(product); try { (navigator as any).vibrate && navigator.vibrate(10) } catch {} } }}
-                    onKeyDown={(e) => { if (!isDisabled && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); addToCart(product) } }}
-                    className={`group relative border rounded-xl p-3 pb-10 bg-white shadow-sm hover:shadow-md transition select-none ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-blue-300'}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-medium leading-snug">
-                          {product.ten_san_pham || "[Chưa có tên sản phẩm]"}
-                          {product.dung_luong ? ` - ${product.dung_luong}` : ""}
-                          {product.mau_sac ? ` - ${product.mau_sac}` : ""}
-                        </p>
-                        <div className="mt-1 flex items-center gap-1 flex-wrap">
-                          <Badge variant="outline">{product.imei ? 'iPhone' : 'Phụ kiện'}</Badge>
-                          {String(product.nguon || product.source || '').toLowerCase().includes('đối tác') && (
-                            <Badge variant="outline" className="border-teal-600 text-teal-700">Đối tác</Badge>
-                          )}
+          <div className="flex-1 overflow-y-hidden min-h-0">
+          {(isSearching || searchResults.length > 0) && (
+            <>
+              {/* Mobile: Card grid */}
+              <div className="md:hidden mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto overflow-x-hidden rounded-lg border mb-4 p-3 pb-20 min-h-0">
+                {sortedSearchResults.map((product: any) => {
+                  const isDisabled = product.trang_thai === "Đã đặt cọc" || product.trang_thai === "Đã bán";
+                  const rawPin = product.pin ?? product['Pin (%)']
+                  const hasPin = rawPin !== undefined && rawPin !== null && String(rawPin).trim() !== ''
+                  const formattedPin = !hasPin ? '' : typeof rawPin === 'number' ? `${rawPin}%` : String(rawPin)
+                  const tinhTrang = product.tinh_trang || product['Tình Trạng Máy'] || ''
+                  const isAccessoryItem = (product.type === 'accessory') || (!!product.loai_phu_kien && !product.imei)
+                  return (
+                    <div
+                      key={`${product.id || product.imei || product.ten_san_pham}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-disabled={isDisabled}
+                      onClick={() => { if (!isDisabled) { addToCart(product); try { (navigator as any).vibrate && navigator.vibrate(10) } catch {} } }}
+                      onKeyDown={(e) => { if (!isDisabled && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); addToCart(product) } }}
+                      className={`group relative border rounded-xl p-3 pb-10 bg-white shadow-sm hover:shadow-md transition select-none ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-blue-300'}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium leading-snug">
+                            {product.ten_san_pham || "[Chưa có tên sản phẩm]"}
+                            {product.dung_luong ? ` - ${product.dung_luong}` : ""}
+                            {product.mau_sac ? ` - ${product.mau_sac}` : ""}
+                          </p>
+                          <div className="mt-1 flex items-center gap-1 flex-wrap">
+                            <Badge variant="outline">{isAccessoryItem ? 'Phụ kiện' : 'iPhone'}</Badge>
+                            {String(product.nguon || product.source || '').toLowerCase().includes('đối tác') && (
+                              <Badge variant="outline" className="border-teal-600 text-teal-700">Đối tác</Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      {/* Giá được dời xuống góc dưới bên phải */}
-                    </div>
 
-                    <div className="mt-2 text-sm text-muted-foreground">
-                      {product.imei ? (
-                        <>
-                          {product.loai_may && <div>Loại máy: <span className="text-slate-800">{product.loai_may}</span></div>}
-                          <div>IMEI: <span className="font-mono text-slate-800">{product.imei}</span></div>
-                        </>
-                      ) : (
-                        <>
-                          {product.loai_phu_kien && <div>Loại: <span className="text-slate-800">{product.loai_phu_kien}</span></div>}
-                          <div>
-                            {Number(product.so_luong_ton) === 0
-                              ? <span className="text-red-600 font-medium">Hết hàng</span>
-                              : <>Tồn kho: <span className="text-slate-800">{product.so_luong_ton ?? product.so_luong ?? 0}</span></>}
-                          </div>
-                        </>
+                      <div className="mt-2 text-sm text-muted-foreground">
+                        {!isAccessoryItem ? (
+                          <>
+                            {product.loai_may && <div>Loại máy: <span className="text-slate-800">{product.loai_may}</span></div>}
+                            {hasPin && <div>Pin: <span className="text-slate-800">{formattedPin}</span></div>}
+                            {tinhTrang && <div>Tình trạng: <span className="text-slate-800">{tinhTrang}</span></div>}
+                            {product.imei && (<div>IMEI: <span className="font-mono text-slate-800">{product.imei}</span></div>)}
+                          </>
+                        ) : (
+                          <>
+                            {product.loai_phu_kien && <div>Loại: <span className="text-slate-800">{product.loai_phu_kien}</span></div>}
+                            <div>
+                              {Number(product.so_luong_ton) === 0
+                                ? <span className="text-red-600 font-medium">Hết hàng</span>
+                                : <>Tồn kho: <span className="text-slate-800">{product.so_luong_ton ?? product.so_luong ?? 0}</span></>}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {product.trang_thai && product.trang_thai !== 'Còn hàng' && (
+                        <div className="mt-2 text-xs font-semibold text-orange-600">{product.trang_thai}</div>
                       )}
+                      {!isDisabled && (
+                        <div className="mt-2 text-[11px] text-slate-400">Chạm để thêm vào giỏ</div>
+                      )}
+                      <div className="absolute bottom-3 right-3 text-right font-semibold">
+                        {typeof product.gia_ban === 'number' && product.gia_ban > 0
+                          ? `₫${product.gia_ban.toLocaleString()}`
+                          : <span className="text-slate-500 italic">Liên hệ</span>}
+                      </div>
                     </div>
+                  );
+                })}
+                <div className="h-1" />
+              </div>
 
-                    {product.trang_thai && product.trang_thai !== 'Còn hàng' && (
-                      <div className="mt-2 text-xs font-semibold text-orange-600">{product.trang_thai}</div>
+              {/* Desktop: Table list */}
+              <div
+                className="hidden md:block mt-4 rounded-lg border h-full overflow-y-auto pr-2 pb-3"
+                ref={tableContainerRef}
+                style={{ scrollbarGutter: "stable" }}
+              >
+                <Table>
+                  <TableHeader>
+                    <TableRow className="sticky top-0 z-10 bg-white">
+                      <TableHead className="w-[30%]">
+                        <button className="flex items-center gap-1" onClick={()=> toggleSort('san_pham')}>
+                          Sản phẩm {sortKey==='san_pham' && <span>{sortOrder==='asc'?'▲':'▼'}</span>}
+                        </button>
+                      </TableHead>
+                      <TableHead className="w-[20%]">
+                        <button className="flex items-center gap-1" onClick={()=> toggleSort('imei_loai')}>
+                          IMEI / Loại {sortKey==='imei_loai' && <span>{sortOrder==='asc'?'▲':'▼'}</span>}
+                        </button>
+                      </TableHead>
+                      <TableHead className="w-[34%] text-center">Chi tiết</TableHead>
+                      <TableHead className="w-[12%]">
+                        <button className="flex items-center gap-1" onClick={()=> toggleSort('trang_thai')}>
+                          Trạng thái {sortKey==='trang_thai' && <span>{sortOrder==='asc'?'▲':'▼'}</span>}
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-right">
+                        <button className="flex items-center gap-1 ml-auto" onClick={()=> toggleSort('gia')}>
+                          Giá {sortKey==='gia' && <span>{sortOrder==='asc'?'▲':'▼'}</span>}
+                        </button>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* Skeleton loading rows */}
+                    {isSearching && sortedSearchResults.length === 0 && (
+                      Array.from({ length: 8 }).map((_, i) => (
+                        <TableRow key={`skeleton-${i}`}>
+                          <TableCell className="w-[30%]"><div className="h-4 w-3/4 bg-slate-200 rounded animate-pulse"/></TableCell>
+                          <TableCell className="w-[20%]"><div className="h-4 w-28 bg-slate-200 rounded animate-pulse"/></TableCell>
+                          <TableCell className="w-[34%]"><div className="h-4 w-48 bg-slate-200 rounded animate-pulse"/></TableCell>
+                          <TableCell className="w-[12%]"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"/></TableCell>
+                          <TableCell className="text-right"><div className="h-4 w-24 bg-slate-200 rounded ml-auto animate-pulse"/></TableCell>
+                        </TableRow>
+                      ))
                     )}
-                    {!isDisabled && (
-                      <div className="mt-2 text-[11px] text-slate-400">Chạm để thêm vào giỏ</div>
-                    )}
-                    {/* Giá ở góc dưới bên phải */}
-                    <div className="absolute bottom-3 right-3 text-right font-semibold">
-                      {typeof product.gia_ban === 'number' && product.gia_ban > 0
-                        ? `₫${product.gia_ban.toLocaleString()}`
-                        : <span className="text-red-600">Liên hệ</span>}
-                    </div>
-                  </div>
-                );
-              })}
-              {/* div trống để tạo khoảng cách cuối cùng, tránh chữ bị đè lên viền */}
-              <div className="h-1" />
-            </div>
+                    {sortedSearchResults.map((product: any, idx: number) => {
+                      const isDisabled = product.trang_thai === 'Đã đặt cọc' || product.trang_thai === 'Đã bán'
+                      const isAccessory = (product.type==='accessory') || (!!product.loai_phu_kien && !product.imei)
+                      const source = String(product.nguon || product.source || '').toLowerCase().includes('đối tác') ? 'Đối tác' : 'Trong kho'
+                      const loaiMay = product.loai_may || product['Loại Máy'] || ''
+                      const rawPin = product.pin ?? product['Pin (%)']
+                      const hasPin = rawPin !== undefined && rawPin !== null && String(rawPin).trim() !== ''
+                      const formattedPin = !hasPin ? '' : typeof rawPin === 'number' ? `${rawPin}%` : String(rawPin)
+                      const tinhTrang = product.tinh_trang || product['Tình Trạng Máy'] || product.trang_thai || ''
+                      return (
+                        <TableRow
+                          key={`${product.id || product.imei || product.ten_san_pham}`}
+                          data-index={idx}
+                          className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-blue-50/50'} ${idx===selectedIndex ? 'bg-blue-50' : ''} ${justAddedKey === (product.id || product.imei) ? 'animate-pulse bg-green-50' : ''} odd:bg-slate-50/30`}
+                          onClick={() => { if (!isDisabled) { addToCart(product); setJustAddedKey(product.id || product.imei || null); setTimeout(()=> setJustAddedKey(null), 500); } }}
+                        >
+                          <TableCell className="px-3 py-2">
+                            <div className="font-medium line-clamp-2">
+                              {highlight(product.ten_san_pham || '[Chưa có tên sản phẩm]', searchQuery)}
+                              {product.dung_luong ? ` - ${product.dung_luong}` : ''}
+                              {product.mau_sac ? ` - ${product.mau_sac}` : ''}
+                            </div>
+                            <div className="mt-1 flex items-center gap-2 text-xs">
+                              <Badge variant="outline">{isAccessory ? 'Phụ kiện' : 'iPhone'}</Badge>
+                              {source === 'Đối tác' && <Badge variant="outline" className="border-teal-600 text-teal-700" title={`${product.ten_doi_tac || ''}${product.ten_doi_tac && product.sdt_doi_tac ? ' • ' : ''}${product.sdt_doi_tac || ''}`.trim() || 'Đối tác'}>Đối tác</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs px-3 py-2">
+                            {product.imei ? (
+                              <button
+                                type="button"
+                                onClick={async (e) => { e.stopPropagation(); try { await navigator.clipboard.writeText(product.imei) } catch {}; setCopiedImei(product.imei); toast({ title: 'Đã sao chép IMEI', description: product.imei }); setTimeout(()=> setCopiedImei(null), 1000) }}
+                                className="inline-flex items-center gap-1 underline decoration-dotted hover:text-blue-700"
+                                title="Click để sao chép IMEI"
+                              >
+                                <Copy className="h-3 w-3"/>
+                                {copiedImei === product.imei ? 'Đã sao chép' : highlight(String(product.imei), searchQuery)}
+                              </button>
+                            ) : (
+                              <span>{highlight(String(product.loai_phu_kien || '-'), searchQuery)}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-xs md:text-center">
+                            {isAccessory ? (
+                              <div className="flex items-center gap-3 justify-start md:justify-center">
+                                {typeof product.so_luong_ton !== 'undefined' && (
+                                  <span className="text-slate-500">Tồn: <span className="text-slate-700 font-medium">{product.so_luong_ton}</span></span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="grid items-center gap-2 text-slate-700 overflow-hidden md:text-center" style={{gridTemplateColumns: '84px 110px minmax(0,1fr)'}}>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 whitespace-nowrap md:justify-self-center">
+                                  {String(loaiMay || '').toLowerCase().includes('lock') ? <Lock className="h-3 w-3"/> : <Globe className="h-3 w-3"/>}
+                                  {highlight(String(loaiMay || '-'), searchQuery)}
+                                </span>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 whitespace-nowrap md:justify-self-center">
+                                  <Battery className="h-3 w-3"/>
+                                  {hasPin ? formattedPin : '-'}
+                                </span>
+                                {tinhTrang && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 min-w-0" title={String(tinhTrang)}>
+                                    <span className="truncate block">{highlight(String(tinhTrang), searchQuery)}</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-sm whitespace-nowrap">
+                            <Badge className={
+                              product.trang_thai === 'Đã đặt cọc' ? 'bg-orange-100 text-orange-800' :
+                              product.trang_thai === 'Đã bán' ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-800'
+                            }>
+                              {product.trang_thai || 'Còn hàng'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-right text-sm font-semibold">
+                            {typeof product.gia_ban === 'number' && product.gia_ban > 0 ? `₫${product.gia_ban.toLocaleString()}` : <span className="text-slate-500 italic">Liên hệ</span>}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
+          </div>
         </CardContent>
       </Card>
       )}
 
       {/* Giỏ hàng */}
   {(!isMobile || mobileView==='gio-hang') && (
-  <Card className="min-h-[220px] h-full flex flex-col" >
+  <Card className="min-h-[220px] h-full w-full flex flex-col lg:min-h-[360px] lg:self-stretch" >
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5" />
             Giỏ hàng ({cart.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col h-full">
           {cart.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              Giỏ hàng trống
-            </p>
+            <div className="flex-1 flex flex-col items-center justify-center gap-1 text-muted-foreground text-sm">
+              <span>Giỏ hàng đang trống</span>
+              <span className="text-xs text-slate-500">Chọn sản phẩm và bấm "Thêm" để đưa vào giỏ</span>
+            </div>
           ) : (
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
               {/* Apply all warranty (4.1) */}
               {cart.filter(i=> i.type==='product' && i.imei).length > 1 && warrantyPackages.length>0 && (
                 <div className="flex items-center gap-2 border rounded p-2 bg-slate-50">
@@ -930,17 +1314,11 @@ export default function BanHangPage() {
                 </div>
               )}
               {/* Header cho desktop/tablet, ẩn trên mobile */}
-              <div className="hidden sm:grid grid-cols-5 gap-2 font-semibold text-slate-700 mb-2">
-                <span>Tên SP</span>
-                <span>IMEI</span>
-                <span>Giá</span>
-                <span>Trạng thái</span>
-                <span></span>
-              </div>
+              {/* (Đã bỏ tiêu đề: Tên SP, Thông tin, Giá, Trạng thái theo yêu cầu) */}
               {cart.map((item: CartItem) => (
                 <div
                   key={`${item.type}-${item.id}`}
-                  className="grid grid-cols-1 sm:grid-cols-5 gap-3 sm:gap-2 items-start sm:items-center border rounded-lg p-3 sm:p-2"
+                  className="grid grid-cols-1 sm:grid-cols-[1.4fr_1fr_0.9fr_0.9fr_auto] gap-2 items-start sm:items-center border rounded-lg p-3 sm:p-2.5"
                 >
                   <div>
                     <p className="font-medium">{item.ten_san_pham}</p>
@@ -957,7 +1335,106 @@ export default function BanHangPage() {
                         )}
                       </div>
                     )}
-                    {item.imei && (
+                    {item.type === 'accessory' && (
+                      <div className="mt-1 sm:hidden text-[11px] text-muted-foreground space-y-1">
+                        {item.loai_phu_kien && (
+                          <div>
+                            Loại: <span className="text-slate-700">{item.loai_phu_kien}</span>
+                          </div>
+                        )}
+                        {item.mau_sac && (
+                          <div>
+                            Màu: <span className="text-slate-700">{item.mau_sac}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {String(item.nguon || item.source || '').toLowerCase().includes('đối tác') && item.type==='product' && (
+                      <div className="mt-1 flex items-center gap-3 flex-wrap">
+                        <input
+                          placeholder="Nhập IMEI..."
+                          className="h-7 w-48 border rounded px-2 text-[12px] font-mono"
+                          defaultValue={item.imei || ''}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          onBlur={(e)=>{
+                            const val = (e.target.value || '').replace(/\D/g,'')
+                            setCart(prev=> prev.map(p=> {
+                              if (p.id===item.id && p.type===item.type) {
+                                const prevImei = (p.imei || '')
+                                const changed = prevImei !== (val || '')
+                                return { ...p, imei: val || '', imei_confirmed: changed ? false : (p as any).imei_confirmed }
+                              }
+                              return p
+                            }))
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className={`inline-flex items-center gap-1 text-[12px] ${item.imei ? 'text-slate-700' : 'text-slate-400 cursor-not-allowed'}`}
+                          onClick={async ()=>{
+                            if(!item.imei) return
+                            // Nếu là hàng Đối tác và có metadata sheet/row_index thì ghi IMEI vào sheet ngay khi xác nhận
+                            const isPartner = String(item.nguon || item.source || '').toLowerCase().includes('đối tác')
+                            const sheet = (item as any).partner_sheet || (item as any).sheet
+                            const rowIndex = (item as any).partner_row_index || (item as any).row_index
+                            if (isPartner && sheet && rowIndex) {
+                              try {
+                                const res = await fetch('/api/doi-tac/confirm-imei', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ sheet, row_index: Number(rowIndex), imei: item.imei, createIdMay: true })
+                                })
+                                if (res.ok) {
+                                  const data = await res.json()
+                                  // Force refresh partner list so next time we search it's up-to-date
+                                  try {
+                                    await fetch('/api/doi-tac/hang-order?refresh=1', { cache: 'no-store' })
+                                  } catch {}
+                                  setCart(prev=> prev.map(p=> {
+                                    if (p.id===item.id && p.type===item.type) {
+                                      const next: any = { ...p, imei_confirmed: !(p as any).imei_confirmed }
+                                      if (data?.id_may) next.id_may = data.id_may
+                                      return next
+                                    }
+                                    return p
+                                  }))
+                                  // Cập nhật lại kết quả tìm kiếm hiện tại để phản ánh IMEI đã có
+                                  try {
+                                    setSearchResults(prev => prev.map((prod: any) => {
+                                      if ((prod.partner_row_index || prod.row_index) === rowIndex && (prod.partner_sheet || prod.sheet) === sheet) {
+                                        return { ...prod, imei: item.imei }
+                                      }
+                                      return prod
+                                    }))
+                                  } catch {}
+                                } else {
+                                  const msg = await res.text()
+                                  toast({ title: 'Lỗi ghi IMEI vào sheet', description: msg, variant: 'destructive' as any })
+                                }
+                              } catch (e: any) {
+                                toast({ title: 'Lỗi ghi IMEI vào sheet', description: e?.message || String(e), variant: 'destructive' as any })
+                              }
+                            } else {
+                              setCart(prev=> prev.map(p=> (p.id===item.id && p.type===item.type) ? { ...p, imei_confirmed: !(p as any).imei_confirmed } : p))
+                            }
+                          }}
+                          title={item.imei ? 'Xác nhận IMEI' : 'Nhập IMEI trước'}
+                        >
+                          <CheckCircle className={`h-4 w-4 ${ (item as any).imei_confirmed ? 'text-green-600' : 'text-slate-400' }`} />
+                          <span></span>
+                        </button>
+                      </div>
+                    )}
+                    {(
+                      // Hiển thị chọn gói bảo hành:
+                      // - Máy nội bộ: khi có IMEI
+                      // - Máy đối tác: khi có IMEI và (đã xác nhận hoặc IMEI đã tồn tại sẵn từ trước)
+                      (item.type==='product') && (
+                        (!String(item.nguon || item.source || '').toLowerCase().includes('đối tác') && !!item.imei)
+                        || (String(item.nguon || item.source || '').toLowerCase().includes('đối tác') && !!item.imei && (((item as any).imei_confirmed) || ((item as any).imei_initial)))
+                      )
+                    ) && (
                       <div className="mt-1">
                         <select
                           className="text-[11px] border rounded px-1 py-0.5 bg-white"
@@ -1001,9 +1478,32 @@ export default function BanHangPage() {
                       </div>
                     )}
                   </div>
-                  <div className="sm:font-mono sm:text-xs hidden sm:block">{item.imei || "-"}</div>
+                  <div className="text-[11px] text-muted-foreground space-y-1 hidden sm:block">
+                    {item.type === 'accessory' ? (
+                      <>
+                        {item.loai_phu_kien && (
+                          <div>
+                            Loại: <span className="text-slate-700">{item.loai_phu_kien}</span>
+                          </div>
+                        )}
+                        {item.mau_sac && (
+                          <div>
+                            Màu: <span className="text-slate-700">{item.mau_sac}</span>
+                          </div>
+                        )}
+                        {!item.loai_phu_kien && !item.mau_sac && <div>-</div>}
+                      </>
+                    ) : (
+                      <>
+                        {item.loai_may && <div>Loại: <span className="text-slate-700">{item.loai_may}</span></div>}
+                        {item.pin && <div>Pin: <span className="text-slate-700">{item.pin}</span></div>}
+                        {item.tinh_trang && <div>Tình trạng: <span className="text-slate-700">{item.tinh_trang}</span></div>}
+                        {!item.loai_may && !item.pin && !item.tinh_trang && <div>-</div>}
+                      </>
+                    )}
+                  </div>
                   {/* Giá: cho mobile đặt ngay dưới tên SP bằng flex-wrap; Desktop vẫn ở cột riêng */}
-                  <div className="font-semibold flex items-center gap-1">
+                  <div className="font-semibold flex items-center gap-1 tabular-nums text-left sm:text-center sm:justify-center sm:justify-self-center">
                     {editingPriceId === item.id ? (
                       <>
                         <input
@@ -1027,7 +1527,7 @@ export default function BanHangPage() {
                       </>
                     )}
                   </div>
-                  <div>
+                  <div className="text-left sm:text-center sm:justify-self-center">
                     <Badge
                       className={
                         item.trang_thai === "Đã đặt cọc"
@@ -1085,19 +1585,19 @@ export default function BanHangPage() {
         </CardContent>
       </Card>
   )}
-    </div>
+  </div>
 
-    {/* Thông tin đơn hàng */}
-    {(!isMobile || mobileView==='thanh-toan') && (
-    <div className="space-y-6">
+  {/* Thông tin đơn hàng */}
+  {(!isMobile || mobileView==='thanh-toan') && (
+  <div className="space-y-6 lg:max-w-[520px]">
   {/* Khách hàng */}
-  <Card className="min-h-[80px] max-h-[200px] flex flex-col" >
+  <Card className="min-h-[80px] flex flex-col" >
         <CardHeader>
           <CardTitle>Khách hàng</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {customerResults.length > 0 && (
-            <div className="border rounded bg-white max-h-40 overflow-y-auto">
+            <div className="border rounded bg-white max-h-56 overflow-y-auto">
               {customerResults.map((kh: Customer & { isDeposit?: boolean }) => (
                 <div
                   key={kh.id}
@@ -1124,7 +1624,7 @@ export default function BanHangPage() {
           )}
 
           {selectedCustomer ? (
-            <div className="p-3 border rounded-lg">
+            <div className="p-3 border rounded-lg bg-white">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">{selectedCustomer.ho_ten}</p>
@@ -1146,7 +1646,7 @@ export default function BanHangPage() {
           <div className="flex gap-2 mt-2">
             <Button
               variant="outline"
-              className="flex-1 bg-transparent"
+              className="flex-1 bg-white"
               onClick={() => setIsCustomerSelectOpen(true)}
             >
               <User className="mr-2 h-4 w-4" />
@@ -1154,6 +1654,7 @@ export default function BanHangPage() {
             </Button>
             <Button
               variant="outline"
+              className="bg-white"
               onClick={() => setIsCustomerDialogOpen(true)}
             >
               <Plus className="h-4 w-4" />
@@ -1164,7 +1665,7 @@ export default function BanHangPage() {
       </Card>
 
   {/* Thanh toán */}
-  <Card className=" flex flex-col" >
+  <Card className="flex flex-col" >
         <CardHeader>
           <CardTitle>Thanh toán</CardTitle>
         </CardHeader>
@@ -1244,9 +1745,9 @@ export default function BanHangPage() {
           </div>
 
           {/* Loại đơn + vận chuyển */}
-          <div className="flex gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Select value={loaiDon} onValueChange={setLoaiDon}>
-              <SelectTrigger className="w-32 bg-white">
+              <SelectTrigger className="bg-white">
                 <SelectValue placeholder="Loại đơn" />
               </SelectTrigger>
               <SelectContent className="bg-white">
@@ -1259,7 +1760,7 @@ export default function BanHangPage() {
                 value={hinhThucVanChuyen}
                 onValueChange={setHinhThucVanChuyen}
               >
-                <SelectTrigger className="w-40 bg-white">
+                <SelectTrigger className="bg-white">
                   <SelectValue placeholder="Hình thức vận chuyển" />
                 </SelectTrigger>
                 <SelectContent className="bg-white">
@@ -1434,6 +1935,8 @@ export default function BanHangPage() {
                               so_dien_thoai: order["Số Điện Thoại"] || order["so_dien_thoai"] || ""
                             });
                             setGiamGia(0);
+                            setLoaiThanhToan('Thanh toán đủ');
+                            setCurrentDepositOrderId(maDon || null)
                             setActiveTab('ban-hang');
                             setMobileView('thanh-toan');
                           };
@@ -1537,6 +2040,8 @@ export default function BanHangPage() {
                                 so_dien_thoai: order["Số Điện Thoại"] || order["so_dien_thoai"] || ""
                               });
                               setGiamGia(0);
+                              setLoaiThanhToan('Thanh toán đủ');
+                              setCurrentDepositOrderId(maDon || null)
                               setActiveTab("ban-hang");
                             };
                             return (

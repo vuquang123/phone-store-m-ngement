@@ -140,6 +140,14 @@ export async function POST(request: NextRequest) {
           if (k === "ID Máy") return idMay
           if (k === "Ngày Nhập") return ngayNhap
           if (k === "Trạng Thái") return "Còn hàng"
+          if (k === "Giá Nhập") {
+            const raw = p[k] ?? p["gia_nhap"] ?? p["Gia Nhap"]
+            return (raw !== undefined && raw !== null && String(raw) !== "") ? toNumber(raw) : ""
+          }
+          if (k === "Giá Bán") {
+            const raw = p[k] ?? p["gia_ban"] ?? p["Gia Ban"]
+            return (raw !== undefined && raw !== null && String(raw) !== "") ? toNumber(raw) : ""
+          }
           return p[k] || p[k.replace(/\s/g, "_").toLowerCase()] || p[k.replace(/\s/g, "").toLowerCase()] || ""
         })
         const result = await import("@/lib/google-sheets").then(mod => mod.appendToGoogleSheets(SHEET, newRow))
@@ -229,11 +237,11 @@ export async function POST(request: NextRequest) {
         }
         if (k === "Giá Nhập") {
           const v = body.gia_nhap ?? bodyNormMap["gianhap"]
-          return v !== undefined ? v : ""
+          return v !== undefined && v !== null && String(v) !== "" ? toNumber(v) : ""
         }
         if (k === "Giá Bán") {
           const v = body.gia_ban ?? bodyNormMap["giaban"]
-          return v !== undefined ? v : ""
+          return v !== undefined && v !== null && String(v) !== "" ? toNumber(v) : ""
         }
         if (k === "Ghi Chú") {
           return body.ghi_chu || bodyNormMap["ghichu"] || ""

@@ -58,10 +58,15 @@ function findIdx(header: string[], candidates: string[]) {
   return -1
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url)
+    const forceRefresh = url.searchParams.get('refresh') === '1'
     const now = Date.now()
-    if (cachedPartnerSheet && now - cachedPartnerSheet.timestamp < CACHE_TTL_MS) {
+    if (forceRefresh) {
+      cachedPartnerSheet = null
+    }
+    if (!forceRefresh && cachedPartnerSheet && now - cachedPartnerSheet.timestamp < CACHE_TTL_MS) {
       const age = now - cachedPartnerSheet.timestamp
       return NextResponse.json({
         ...cachedPartnerSheet.payload,
@@ -70,7 +75,7 @@ export async function GET() {
       })
     }
 
-    if (lastQuotaHitAt && now - lastQuotaHitAt < CACHE_TTL_MS && cachedPartnerSheet) {
+    if (!forceRefresh && lastQuotaHitAt && now - lastQuotaHitAt < CACHE_TTL_MS && cachedPartnerSheet) {
       const age = now - cachedPartnerSheet.timestamp
       return NextResponse.json({
         ...cachedPartnerSheet.payload,
@@ -104,7 +109,7 @@ export async function GET() {
     }
     if (!usedSheet) {
       const quotaMessage = typeof lastError?.message === "string" && lastError.message.toLowerCase().includes("quota exceeded")
-      if (quotaMessage && cachedPartnerSheet) {
+      if (!forceRefresh && quotaMessage && cachedPartnerSheet) {
         const age = now - cachedPartnerSheet.timestamp
         return NextResponse.json({
           ...cachedPartnerSheet.payload,

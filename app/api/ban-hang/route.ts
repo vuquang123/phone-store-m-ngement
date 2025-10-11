@@ -2,6 +2,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets } from "@/lib/google-sheets"
+import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
 
 const SHEETS = {
@@ -738,6 +739,19 @@ export async function POST(request: NextRequest) {
       console.error("[WARRANTY] Lỗi xử lý bảo hành:", warrantyError)
     }
     const finalTotalServer = finalTotalFromClient || (coreTotalServer + warrantyTotalFee)
+    // Ghi thông báo hệ thống: Đơn hàng mới
+    try {
+      const customerName = body.customerName || body.ten_khach_hang || body.ho_ten || (body.khach_hang && (body.khach_hang.ten || body.khach_hang.ten_khach_hang)) || "Khách lẻ"
+      await addNotification({
+        tieu_de: `Đơn hàng mới ${idDonHang || ''}`.trim(),
+        noi_dung: `Khách: ${customerName} • Tổng: ₫${Number(finalTotalServer || 0).toLocaleString('vi-VN')}`,
+        loai: "ban_hang",
+        nguoi_gui_id: body.employeeId || "system",
+        nguoi_nhan_id: "all",
+      })
+    } catch (e) {
+      console.warn("[NOTIFY] Không thể ghi thông báo đơn hàng mới:", e)
+    }
     return NextResponse.json({
       ok: true,
       created: true,
