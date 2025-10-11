@@ -998,8 +998,18 @@ export default function BanHangPage() {
       <div className="space-y-6 pb-28 md:pb-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="sticky top-0 z-10 bg-white shadow-sm">
-            <TabsTrigger value="ban-hang">Bán hàng</TabsTrigger>
-            <TabsTrigger value="don-dat-coc">Đơn đặt cọc</TabsTrigger>
+            <TabsTrigger
+              value="ban-hang"
+              className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              Bán hàng
+            </TabsTrigger>
+            <TabsTrigger
+              value="don-dat-coc"
+              className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              Đơn đặt cọc
+            </TabsTrigger>
           </TabsList>
 
           {/* Tab bán hàng */}
@@ -1008,9 +1018,24 @@ export default function BanHangPage() {
   {/* Thanh điều hướng luồng mobile: Sản phẩm / Giỏ hàng / Thanh toán */}
   {isMobile && (
     <div className="sticky top-0 z-10 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b px-4 py-2 flex gap-2">
-      <Button size="sm" variant={mobileView==='san-pham'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('san-pham')}>Sản phẩm</Button>
-      <Button size="sm" variant={mobileView==='gio-hang'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('gio-hang')}>Giỏ hàng ({cart.length})</Button>
-      <Button size="sm" variant={mobileView==='thanh-toan'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('thanh-toan')}>Thanh toán</Button>
+      <Button
+        size="sm"
+        variant={mobileView==='san-pham'? 'default':'outline'}
+        className={`flex-1 ${mobileView==='san-pham' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}`}
+        onClick={()=> setMobileView('san-pham')}
+      >Sản phẩm</Button>
+      <Button
+        size="sm"
+        variant={mobileView==='gio-hang'? 'default':'outline'}
+        className={`flex-1 ${mobileView==='gio-hang' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}`}
+        onClick={()=> setMobileView('gio-hang')}
+      >Giỏ hàng ({cart.length})</Button>
+      <Button
+        size="sm"
+        variant={mobileView==='thanh-toan'? 'default':'outline'}
+        className={`flex-1 ${mobileView==='thanh-toan' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}`}
+        onClick={()=> setMobileView('thanh-toan')}
+      >Thanh toán</Button>
     </div>
   )}
   <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.25fr)_minmax(0,0.75fr)] gap-6 items-start">
@@ -1049,15 +1074,27 @@ export default function BanHangPage() {
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <div className="flex items-center gap-1">
                 <span className="text-xs text-slate-500 mr-1">Nguồn:</span>
-                <Button size="sm" variant={filterSource==='all'?'default':'outline'} onClick={()=> setFilterSource('all')}>Tất cả</Button>
-                <Button size="sm" variant={filterSource==='inhouse'?'default':'outline'} onClick={()=> setFilterSource('inhouse')}>Trong kho</Button>
-                <Button size="sm" variant={filterSource==='partner'?'default':'outline'} onClick={()=> setFilterSource('partner')}>Đối tác</Button>
+                <Button size="sm" variant={filterSource==='all'?'default':'outline'}
+                  className={filterSource==='all' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
+                  onClick={()=> setFilterSource('all')}>Tất cả</Button>
+                <Button size="sm" variant={filterSource==='inhouse'?'default':'outline'}
+                  className={filterSource==='inhouse' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
+                  onClick={()=> setFilterSource('inhouse')}>Trong kho</Button>
+                <Button size="sm" variant={filterSource==='partner'?'default':'outline'}
+                  className={filterSource==='partner' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
+                  onClick={()=> setFilterSource('partner')}>Đối tác</Button>
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-xs text-slate-500 mr-1">Loại:</span>
-                <Button size="sm" variant={filterType==='all'?'default':'outline'} onClick={()=> setFilterType('all')}>Tất cả</Button>
-                <Button size="sm" variant={filterType==='iphone'?'default':'outline'} onClick={()=> setFilterType('iphone')}>iPhone</Button>
-                <Button size="sm" variant={filterType==='accessory'?'default':'outline'} onClick={()=> setFilterType('accessory')}>Phụ kiện</Button>
+                <Button size="sm" variant={filterType==='all'?'default':'outline'}
+                  className={filterType==='all' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
+                  onClick={()=> setFilterType('all')}>Tất cả</Button>
+                <Button size="sm" variant={filterType==='iphone'?'default':'outline'}
+                  className={filterType==='iphone' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
+                  onClick={()=> setFilterType('iphone')}>iPhone</Button>
+                <Button size="sm" variant={filterType==='accessory'?'default':'outline'}
+                  className={filterType==='accessory' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
+                  onClick={()=> setFilterType('accessory')}>Phụ kiện</Button>
               </div>
             </div>
 
@@ -1081,7 +1118,7 @@ export default function BanHangPage() {
                       aria-disabled={isDisabled}
                       onClick={() => { if (!isDisabled) { addToCart(product); try { (navigator as any).vibrate && navigator.vibrate(10) } catch {} } }}
                       onKeyDown={(e) => { if (!isDisabled && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); addToCart(product) } }}
-                      className={`group relative border rounded-xl p-3 pb-10 bg-white shadow-sm hover:shadow-md transition select-none ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-blue-300'}`}
+                      className={`group relative border rounded-xl p-3 pb-10 bg-white shadow-sm hover:shadow-md transition select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-blue-50 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-blue-300 active:border-blue-400'}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -1194,7 +1231,7 @@ export default function BanHangPage() {
                         <TableRow
                           key={`${product.id || product.imei || product.ten_san_pham}`}
                           data-index={idx}
-                          className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-blue-50/50'} ${idx===selectedIndex ? 'bg-blue-50' : ''} ${justAddedKey === (product.id || product.imei) ? 'animate-pulse bg-green-50' : ''} odd:bg-slate-50/30`}
+                          className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-blue-50/50 active:bg-blue-50'} ${idx===selectedIndex ? 'bg-blue-50' : ''} ${justAddedKey === (product.id || product.imei) ? 'animate-pulse bg-green-50' : ''} odd:bg-slate-50/30`}
                           onClick={() => { if (!isDisabled) { addToCart(product); setJustAddedKey(product.id || product.imei || null); setTimeout(()=> setJustAddedKey(null), 500); } }}
                         >
                           <TableCell className="px-3 py-2">
@@ -1596,12 +1633,12 @@ export default function BanHangPage() {
           <CardTitle>Khách hàng</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {customerResults.length > 0 && (
+              {customerResults.length > 0 && (
             <div className="border rounded bg-white max-h-56 overflow-y-auto">
               {customerResults.map((kh: Customer & { isDeposit?: boolean }) => (
                 <div
                   key={kh.id}
-                  className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-slate-100 ${
+                      className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 active:bg-blue-100 ${
                     kh.isDeposit ? "text-orange-600 font-semibold" : ""
                   }`}
                   onClick={() => {
