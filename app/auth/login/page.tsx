@@ -67,8 +67,12 @@ const handleLogin = async (e: React.FormEvent) => {
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8 animate-fade-in">
           <div className="flex justify-center mb-6">
-            <div className="p-4 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl shadow-lg transform hover:scale-105 transition-transform duration-200">
-              <Smartphone className="h-10 w-10 text-white" />
+            <div className="h-16 w-16 rounded-2xl overflow-hidden shadow-lg transform hover:scale-105 transition-transform duration-200 bg-white">
+              <img
+                src="/apple-touch-icon.png"
+                alt="DEV PỒ Logo"
+                className="h-full w-full object-cover scale-[1.2]"
+              />
             </div>
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent mb-2">

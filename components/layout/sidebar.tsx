@@ -220,11 +220,11 @@ export function Sidebar({ className }: SidebarProps) {
       <div className="space-y-4 py-4">
         <div className="px-3 py-2">
           <div className="flex items-center gap-3 mb-8 p-3 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-xl shadow-lg">
-            <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+            <div className="h-9 w-9 rounded-md overflow-hidden bg-white shadow-sm">
               {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="h-7 w-7 rounded object-contain bg-white/80" />
+                <img src={logoUrl} alt="Logo" className="h-full w-full object-cover" />
               ) : (
-                <Smartphone className="h-7 w-7 text-white" />
+                <img src="/apple-touch-icon.png" alt="DEV PỒ Logo" className="h-full w-full object-cover" />
               )}
             </div>
             <div>
