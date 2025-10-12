@@ -1369,7 +1369,7 @@ export default function BanHangPage() {
                               {product.mau_sac ? ` - ${product.mau_sac}` : ''}
                             </div>
                             <div className="mt-1 flex items-center gap-2 text-xs">
-                              <Badge variant="outline">{isAccessory ? 'Phụ kiện' : 'iPhone'}</Badge>
+                              <Badge variant="outline">{isAccessory ? 'Phụ kiện' : ((String(product.ten_san_pham||'').toLowerCase().includes('ipad') || String(product.loai_may||'').toLowerCase().includes('ipad')) ? 'iPad' : 'iPhone')}</Badge>
                               {source === 'Đối tác' && <Badge variant="outline" className="border-teal-600 text-teal-700" title={`${product.ten_doi_tac || ''}${product.ten_doi_tac && product.sdt_doi_tac ? ' • ' : ''}${product.sdt_doi_tac || ''}`.trim() || 'Đối tác'}>Đối tác</Badge>}
                             </div>
                           </TableCell>

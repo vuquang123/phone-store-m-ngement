@@ -151,7 +151,8 @@ export async function GET(request: Request) {
       boNho: findIdx(header, ["Bộ Nhớ", "Bo Nho", "Dung Lượng", "Dung Luong", "Storage"]),
       pinPct: findIdx(header, ["Pin (%)", "Pin", "Pin %", "Pin(%)"]),
       tinhTrang: findIdx(header, ["Tình Trạng", "Tinh Trang", "Tình trạng", "Tinh trang", "Tình Trạng Máy", "Tinh Trang May"]),
-      imei: findIdx(header, ["IMEI"]),
+  imei: findIdx(header, ["IMEI"]),
+  serial: findIdx(header, ["Serial", "Số Serial", "So Serial"]),
       giaChuyen: findIdx(header, ["Giá Chuyển", "Gia Chuyen", "Giá chuyển (VND)", "Gia chuyen (VND)", "Giá nhập", "Gia nhap"]),
       giaGoiYBan: findIdx(header, ["Giá Gợi Ý Bán", "Gia Goi Y Ban", "Giá bán gợi ý", "Gia ban goi y", "Giá Bán", "Gia Ban"]),
       eta: findIdx(header, ["ETA", "Ngày Nhận Dự Kiến", "Ngay Nhan Du Kien", "Ngày nhận", "Ngay nhan"]),
@@ -169,7 +170,7 @@ export async function GET(request: Request) {
         const rawGiaGoiY = val(idx.giaGoiYBan).replace(/[^0-9.-]/g, "")
         const giaGoiYBan = rawGiaGoiY ? Number(rawGiaGoiY) : undefined
         return {
-          id: `${i + 2}-${val(idx.imei) || val(idx.model)}`,
+          id: `${i + 2}-${val(idx.imei) || val(idx.serial) || val(idx.model)}`,
           sheet: usedSheet,
           hang: val(idx.nguonHang) || "Shop khác",
           ten_doi_tac: val(idx.tenDoiTac),
@@ -181,6 +182,7 @@ export async function GET(request: Request) {
           pin_pct: val(idx.pinPct),
           tinh_trang: val(idx.tinhTrang),
           imei: val(idx.imei),
+          serial: val(idx.serial),
           gia_chuyen: giaChuyen,
           gia_goi_y_ban: giaGoiYBan,
           eta: val(idx.eta),
