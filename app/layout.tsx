@@ -11,6 +11,22 @@ export const metadata: Metadata = {
   title: "Quản lý Cửa hàng iPhone Lock",
   description: "Hệ thống quản lý cửa hàng điện thoại iPhone Lock",
   generator: "v0.app",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "DEV PÔ",
+    statusBarStyle: "black-translucent",
+  },
 }
 
 // Bật viewport chuẩn cho mobile (đúng tỷ lệ và hỗ trợ safe-area trên iOS)
