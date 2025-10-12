@@ -126,6 +126,22 @@
   }
 }
 
+/* Lock outer page scrolling and avoid scroll chaining */
+html, body {
+  height: 100%;
+}
+body {
+  overflow: hidden;              /* remove outer vertical scrollbar */
+  overscroll-behavior: none;     /* prevent scroll chaining/bounce to body */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Utility to hide scrollbars on inner scrollers while keeping scroll */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
 /* Apply safe-area padding only when running as installed PWA (standalone) */
 @media (display-mode: standalone) {
   body {
