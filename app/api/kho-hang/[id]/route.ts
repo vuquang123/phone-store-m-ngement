@@ -53,6 +53,7 @@ function idxKhoHang(header: string[]) {
     pin: colIndex(header, "Pin (%)"),
     mauSac: colIndex(header, "Màu Sắc"),
     imei: colIndex(header, "IMEI"),
+    serial: colIndex(header, "Serial"),
     tinhTrang: colIndex(header, "Tình Trạng Máy"),
     giaNhap: colIndex(header, "Giá Nhập"),
     giaBan: colIndex(header, "Giá Bán"),
@@ -85,6 +86,7 @@ export async function GET(_request: NextRequest, ctx: { params: { id: string } }
       pin: K.pin !== -1 ? r[K.pin] : null,
       mau_sac: K.mauSac !== -1 ? r[K.mauSac] : null,
       imei: K.imei !== -1 ? r[K.imei] : null,
+  serial: K.serial !== -1 ? r[K.serial] : null,
       tinh_trang: K.tinhTrang !== -1 ? r[K.tinhTrang] : null,
       gia_nhap: K.giaNhap !== -1 ? Number(r[K.giaNhap] || 0) : null,
       gia_ban: K.giaBan !== -1 ? Number(r[K.giaBan] || 0) : null, // map 'Giá Bán'
@@ -112,6 +114,7 @@ export async function PUT(request: NextRequest, ctx: { params: { id: string } } 
       dung_luong,
       mau_sac,
       imei,
+  serial,
       tinh_trang,
       gia_nhap,
       gia_ban,        // map sang Giá Bán
@@ -144,6 +147,7 @@ export async function PUT(request: NextRequest, ctx: { params: { id: string } } 
     if (K.mauSac !== -1 && typeof mau_sac !== "undefined") current[K.mauSac] = mau_sac
     if (K.pin !== -1 && typeof pin !== "undefined") current[K.pin] = pin
     if (K.imei !== -1 && typeof imei !== "undefined") current[K.imei] = imei
+    if (K.serial !== -1 && typeof serial !== "undefined") current[K.serial] = serial
     if (K.tinhTrang !== -1 && typeof tinh_trang !== "undefined") current[K.tinhTrang] = tinh_trang
   if (K.giaNhap !== -1 && typeof gia_nhap !== "undefined") current[K.giaNhap] = String(Number(gia_nhap))
   if (K.giaBan !== -1 && typeof gia_ban !== "undefined") current[K.giaBan] = String(Number(gia_ban))
@@ -164,6 +168,7 @@ export async function PUT(request: NextRequest, ctx: { params: { id: string } } 
       pin: K.pin !== -1 ? current[K.pin] : null,
       mau_sac: K.mauSac !== -1 ? current[K.mauSac] : null,
       imei: K.imei !== -1 ? current[K.imei] : null,
+  serial: K.serial !== -1 ? current[K.serial] : null,
       tinh_trang: K.tinhTrang !== -1 ? current[K.tinhTrang] : null,
       gia_nhap: K.giaNhap !== -1 ? Number(current[K.giaNhap] || 0) : null,
       gia_ban: K.giaBan !== -1 ? Number(current[K.giaBan] || 0) : null,

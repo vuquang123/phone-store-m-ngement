@@ -338,14 +338,21 @@ export async function updateProductsStatus(productIds: string[], newStatus: stri
   const { header, rows } = await readFromGoogleSheets("Kho_Hang")
   const idxId = header.indexOf("ID Máy")
   const idxIMEI = header.indexOf("IMEI")
+  const idxSerial = header.indexOf("Serial")
   const idxTrangThai = header.indexOf("Trạng Thái")
-  if (idxId === -1 || idxIMEI === -1 || idxTrangThai === -1) return { success: false, error: "Không tìm thấy cột ID Máy, IMEI hoặc Trạng Thái" }
+  if (idxId === -1 || idxTrangThai === -1) return { success: false, error: "Không tìm thấy cột ID Máy hoặc Trạng Thái" }
   const updatedRows = rows.map(row => {
     // So sánh 5 số cuối IMEI với ID Máy
-    const imei = row[idxIMEI] || ""
+    const imei = idxIMEI !== -1 ? (row[idxIMEI] || "") : ""
+    const serial = idxSerial !== -1 ? (row[idxSerial] || "") : ""
     const idMay = row[idxId] || ""
-    const imeiLast5 = imei.slice(-5)
-    if (productIds.includes(imei) || productIds.includes(imeiLast5) || productIds.includes(idMay)) {
+    const imeiLast5 = imei ? String(imei).slice(-5) : ""
+    const serialLast5 = serial ? String(serial).slice(-5) : ""
+    if (
+      (imei && (productIds.includes(imei) || (imeiLast5 && productIds.includes(imeiLast5)))) ||
+      (serial && (productIds.includes(serial) || (serialLast5 && productIds.includes(serialLast5)))) ||
+      (idMay && productIds.includes(idMay))
+    ) {
       row[idxTrangThai] = newStatus
     }
     return row

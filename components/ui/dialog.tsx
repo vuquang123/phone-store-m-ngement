@@ -24,7 +24,27 @@ const Dialog = ({
 )
 Dialog.displayName = "Dialog"
 
-const DialogTrigger = DialogPrimitive.Trigger
+const DialogTrigger = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Trigger>
+>(({ onPointerDown, onKeyDown, ...props }, ref) => (
+  <DialogPrimitive.Trigger
+    ref={ref}
+    onPointerDown={(e) => {
+      try { (document.activeElement as HTMLElement | null)?.blur() } catch {}
+      onPointerDown?.(e)
+    }}
+    onKeyDown={(e) => {
+      // Nếu mở bằng phím Enter/Space, blur phần tử đang focus trước khi mở
+      if (e.key === 'Enter' || e.key === ' ') {
+        try { (document.activeElement as HTMLElement | null)?.blur() } catch {}
+      }
+      onKeyDown?.(e)
+    }}
+    {...props}
+  />
+))
+DialogTrigger.displayName = DialogPrimitive.Trigger.displayName
 
 const DialogPortal = DialogPrimitive.Portal
 

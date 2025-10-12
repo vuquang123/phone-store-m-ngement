@@ -68,8 +68,14 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
       [p.loai_may || p.loai, p.dung_luong || p.dungLuong, p.mau_sac || p.mauSac].filter(Boolean).join("/")
     ].filter(Boolean)
     const head = parts.join(" ")
-    const imei = p.imei ? ` | IMEI: ${p.imei}` : ""
-    return `• ${head}${imei}`
+    const idLine = (() => {
+      const imei = p.imei || p.IMEI
+      const serial = p.serial || p.Serial
+      if (imei) return ` | IMEI: ${imei}`
+      if (serial) return ` | Serial: ${serial}`
+      return ""
+    })()
+    return `• ${head}${idLine}`
   })
 
   // Gói bảo hành: ưu tiên mảng codes, hoặc chuỗi có sẵn
@@ -91,9 +97,75 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
 
   const reasonLine = reason ? `\n <b>Lý do hoàn:</b> ${reason}` : ""
 
-  const totalLine = (() => {
-    if (typeof order.tong_tien === 'number') return `\n\n <b>Tổng tiền:</b> ${order.tong_tien.toLocaleString("vi-VN")} VNĐ`
-    return `\n\n <b>Tổng tiền:</b> N/A`
+  // Phụ kiện: ưu tiên mảng accessories; fallback từ "Chi Tiết PK" (JSON) hoặc chuỗi phu_kien
+  const accessoriesArr = (() => {
+    if (Array.isArray(order.accessories)) return order.accessories
+    const rawDetail = order["Chi Tiết PK"] || order["Chi Tiết Phụ Kiện"] || order.chi_tiet_pk
+    if (typeof rawDetail === 'string' && rawDetail.trim()) {
+      try { const parsed = JSON.parse(rawDetail); if (Array.isArray(parsed)) return parsed } catch {}
+    }
+    return []
+  })()
+  const accessoriesStr = (order.phu_kien || order["Phụ Kiện"] || '').toString().trim()
+  const accessoryLines = (() => {
+    const arr = accessoriesArr as any[]
+    if (Array.isArray(arr) && arr.length) {
+      return arr.slice(0, 20).map((a: any) => {
+        const ten = a.ten_phu_kien || a.ten || a.name || ''
+        const loai = a.loai || a.type || ''
+        const slRaw = a.sl ?? a.so_luong ?? a.quantity
+        const sl = Number.isFinite(slRaw) ? Number(slRaw) : (typeof slRaw === 'string' ? Number(slRaw.replace(/[^\d.-]/g,'')) : 0)
+        const qty = sl && sl > 1 ? ` x${sl}` : ''
+        const nameWithType = loai ? `${loai} ${ten}` : (ten || 'Phụ kiện')
+        return `• ${nameWithType}${qty}`
+      })
+    }
+    if (accessoriesStr) return [accessoriesStr]
+    return []
+  })()
+  const accessoriesSection = accessoryLines.length
+    ? `\n🧩 <b>Phụ kiện:</b>\n${accessoryLines.join('\n')}${(Array.isArray(accessoriesArr) && accessoriesArr.length > 20) ? "\n…" : ""}`
+    : ''
+
+  // Tổng tiền: ưu tiên tổng cuối cùng nếu có, sau đó đến tong_tien/total
+  const parseAmount = (v: any): number => {
+    if (v === null || v === undefined) return 0
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+    const n = Number(String(v).replace(/[^\d.-]/g, ''))
+    return Number.isFinite(n) ? n : 0
+  }
+  const totalCandidates = [order.final_total, order.finalThanhToan, order.tong_tien, order.total, order["Tổng Thu"]]
+  const totalVal = totalCandidates.map(parseAmount).find(n => n > 0) || 0
+  const totalLine = `\n\n <b>Tổng tiền:</b> ${totalVal > 0 ? totalVal.toLocaleString('vi-VN') + ' VNĐ' : 'N/A'}`
+
+  // Chi tiết thanh toán: nếu có mảng payments thì render đầy đủ; nếu không, dùng chuỗi tóm tắt có sẵn
+  const paymentLines = (() => {
+    const payments = Array.isArray(order.payments) ? order.payments : []
+    if (!payments.length) return [] as string[]
+    const label = (m: string) => m === 'cash' ? 'Tiền mặt' : m === 'transfer' ? 'Chuyển khoản' : m === 'card' ? 'Thẻ' : m === 'installment' ? 'Trả góp' : m
+    const lines: string[] = []
+    for (const p of payments) {
+      const method = label(String(p.method || p.loai || p.type || ''))
+      if ((p.method === 'installment') || /trả\s*góp|tra\s*gop/i.test(String(p.method))) {
+        const provider = p.provider || p.nha_cung_cap || p.providerName || ''
+        const subs: string[] = []
+        const fmt = (v: any) => {
+          const n = typeof v === 'number' ? v : Number(String(v).replace(/[^\d.-]/g, ''))
+          return Number.isFinite(n) && n > 0 ? `₫${n.toLocaleString('vi-VN')}` : ''
+        }
+        const dp = fmt(p.downPayment ?? p.tra_truoc)
+        const loan = fmt(p.loanAmount ?? p.khoan_vay)
+        if (dp) subs.push(`Trả trước ${dp}`)
+        if (loan) subs.push(`Khoản vay ${loan}`)
+        const suffix = subs.length ? `: ${subs.join(', ')}` : ''
+        lines.push(`• ${method}${provider ? ` (${provider})` : ''}${suffix}`)
+      } else {
+        const amt = typeof p.amount === 'number' ? p.amount : Number(String(p.amount || '').replace(/[^\d.-]/g, ''))
+        const amtStr = Number.isFinite(amt) && amt > 0 ? ` ₫${amt.toLocaleString('vi-VN')}` : ''
+        lines.push(`• ${method}${amtStr}`)
+      }
+    }
+    return lines
   })()
 
   return `
@@ -104,10 +176,12 @@ ${emoji} <b>${action}</b>
  <b>Khách hàng:</b> ${order.khach_hang?.ten || order.khach_hang?.ho_ten || order.customerName || "Khách lẻ"}
  <b>SĐT:</b> ${order.khach_hang?.so_dien_thoai || order.khach_hang?.sdt || order.customerPhone || "N/A"}
 ${productSection}
+${accessoriesSection}
 ${warrantyLine}
 ${reasonLine}
 ${totalLine}
- <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || "N/A"}
+ <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || (paymentLines.length ? 'Chi tiết bên dưới' : 'N/A')}
+${paymentLines.length ? `\n${paymentLines.join('\n')}` : ''}
 
  <b>Thời gian:</b> ${new Date(order.ngay_tao).toLocaleString("vi-VN")}
   `.trim()

@@ -62,13 +62,18 @@ export async function GET(request: NextRequest) {
       "Lần Mua Cuối": "lan_mua_cuoi",
       "Ghi Chú": "ghi_chu"
     }
-    const mapped = rows.map((row) => {
+    let mapped = rows.map((row) => {
       const obj: Record<string, any> = {}
       header.forEach((k, i) => {
         if (keyMap[k]) obj[keyMap[k]] = row[i]
       })
       return obj
     })
+    const q = request.nextUrl.searchParams.get('search') || ''
+    const qDigits = (q || '').replace(/\D/g, '')
+    if (qDigits) {
+      mapped = mapped.filter((it: any) => ((it.sdt || '').replace(/\D/g, '')).includes(qDigits))
+    }
     return NextResponse.json(mapped)
   } catch (error) {
     console.error("Khach_Hang GET error:", error)
@@ -95,7 +100,7 @@ export async function POST(request: NextRequest) {
         case "Tổng Mua": return body.tong_mua || 0
         case "Lần Mua Cuối": return body.lan_mua_cuoi || ""
         case "Ghi Chú": return body.ghi_chu || ""
-        case "Ngày tạo": return body.created_at || new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+  case "Ngày tạo": return body.created_at || new Date().toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
         default: return ""
       }
     })

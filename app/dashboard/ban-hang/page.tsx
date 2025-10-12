@@ -27,6 +27,7 @@ interface CartItem {
   so_luong: number
   max_quantity?: number
   imei?: string
+  serial?: string
   trang_thai?: string
   [key: string]: any
 }
@@ -55,7 +56,7 @@ export default function BanHangPage() {
   const [mobileView, setMobileView] = useState<"san-pham" | "gio-hang" | "thanh-toan">("san-pham")
   // Bộ lọc nhanh cho mobile-first
   const [filterSource, setFilterSource] = useState<"all" | "inhouse" | "partner">("all")
-  const [filterType, setFilterType] = useState<"all" | "iphone" | "accessory">("all")
+  const [filterType, setFilterType] = useState<"all" | "iphone" | "ipad" | "accessory">("all")
   // Lấy employeeId từ API /me và lưu vào localStorage
   useEffect(() => {
     async function fetchEmployeeId() {
@@ -124,7 +125,17 @@ export default function BanHangPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [giamGia, setGiamGia] = useState(0)
-  const [phuongThucThanhToan, setPhuongThucThanhToan] = useState("Tiền mặt")
+  // Thanh toán: hỗ trợ nhiều phương thức + trả góp
+  const [cashEnabled, setCashEnabled] = useState(false)
+  const [cashAmount, setCashAmount] = useState(0)
+  const [transferEnabled, setTransferEnabled] = useState(false)
+  const [transferAmount, setTransferAmount] = useState(0)
+  const [cardEnabled, setCardEnabled] = useState(false)
+  const [cardAmount, setCardAmount] = useState(0)
+  const [installmentEnabled, setInstallmentEnabled] = useState(false)
+  const [installmentType, setInstallmentType] = useState<'' | 'Góp iCloud' | 'Thẻ tín dụng' | 'Mira'>('')
+  const [installmentDown, setInstallmentDown] = useState(0)
+  const [installmentLoan, setInstallmentLoan] = useState(0)
   const [loaiDon, setLoaiDon] = useState("")
   const [hinhThucVanChuyen, setHinhThucVanChuyen] = useState("")
   const [ghiChu, setGhiChu] = useState("")
@@ -156,10 +167,10 @@ export default function BanHangPage() {
     try {
       const savedQ = localStorage.getItem('bh_search_query')
       const savedSrc = localStorage.getItem('bh_filter_source') as any
-      const savedType = localStorage.getItem('bh_filter_type') as any
+  const savedType = localStorage.getItem('bh_filter_type') as any
       if (savedQ !== null) setSearchQuery(savedQ)
       if (savedSrc === 'all' || savedSrc === 'inhouse' || savedSrc === 'partner') setFilterSource(savedSrc)
-      if (savedType === 'all' || savedType === 'iphone' || savedType === 'accessory') setFilterType(savedType)
+  if (savedType === 'all' || savedType === 'iphone' || savedType === 'ipad' || savedType === 'accessory') setFilterType(savedType)
     } catch {}
     // run once
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -188,7 +199,7 @@ export default function BanHangPage() {
   /* ===== Warranty state ===== */
   const [warrantyPackages, setWarrantyPackages] = useState<WarrantyPackageUI[]>([])
   const [warrantyPkgLoading, setWarrantyPkgLoading] = useState(false)
-  const [selectedWarranties, setSelectedWarranties] = useState<Record<string,string|null>>({}) // imei -> packageCode
+  const [selectedWarranties, setSelectedWarranties] = useState<Record<string,string|null>>({}) // deviceId (IMEI/Serial) -> packageCode
   const [openWarrantyInfo, setOpenWarrantyInfo] = useState<string|null>(null)
   // Inline edit price (3.1)
   const [editingPriceId, setEditingPriceId] = useState<string|null>(null)
@@ -227,8 +238,8 @@ export default function BanHangPage() {
     loadWarrantyPkgs()
   }, [])
 
-  function handleSelectWarranty(imei: string, pkgCode: string | null) {
-    setSelectedWarranties(prev => ({ ...prev, [imei]: pkgCode }))
+  function handleSelectWarranty(deviceId: string, pkgCode: string | null) {
+    setSelectedWarranties(prev => ({ ...prev, [deviceId]: pkgCode }))
   }
   // Persist cart & selections (9.3)
   useEffect(()=>{ try { localStorage.setItem('cart_draft_v1', JSON.stringify(cart)) } catch{} }, [cart])
@@ -298,11 +309,13 @@ export default function BanHangPage() {
         const filteredKho = khoHangProducts.filter((item) => (
           item.ten_san_pham?.toLowerCase().includes(qLower) ||
           item.imei?.toLowerCase().includes(qLower) ||
+          item.serial?.toLowerCase().includes(qLower) ||
           (item.loai_phu_kien?.toLowerCase().includes(qLower) ?? false)
         ))
         const filteredPartner = partnerProducts.filter((item) => (
           item.ten_san_pham?.toLowerCase().includes(qLower) ||
           item.imei?.toLowerCase().includes(qLower) ||
+          item.serial?.toLowerCase().includes(qLower) ||
           item.loai_may?.toLowerCase().includes(qLower) ||
           item.dung_luong?.toLowerCase().includes(qLower) ||
           item.mau_sac?.toLowerCase().includes(qLower)
@@ -360,6 +373,7 @@ export default function BanHangPage() {
               'Loại Máy': p.loai_may,
               'Dung Lượng': p.dung_luong,
               'IMEI': p.imei,
+              serial: p.serial || p['Serial'] || '',
               'Màu Sắc': p.mau_sac,
               'Pin (%)': p.pin,
               'Tình Trạng Máy': p.tinh_trang_may
@@ -390,7 +404,7 @@ export default function BanHangPage() {
           const data = await resPartner.json()
           const items = Array.isArray(data?.items) ? data.items : []
           mappedPartner = items.map((p: any) => ({
-            id: p.imei || p.id,
+            id: p.imei || p.serial || p.id,
             type: 'product',
             ten_san_pham: p.model || '',
             gia_ban: typeof p.gia_goi_y_ban === 'number' ? p.gia_goi_y_ban : 0,
@@ -398,6 +412,7 @@ export default function BanHangPage() {
             so_luong: 1,
             max_quantity: 1,
             imei: p.imei || '',
+            serial: p.serial || '',
             trang_thai: 'Còn hàng',
             loai_may: p.loai_may || '',
             dung_luong: p.bo_nho || '',
@@ -504,7 +519,7 @@ export default function BanHangPage() {
       try {
         toast({
           title: "Đã thêm vào giỏ",
-          description: product.ten_san_pham || product.imei || "Sản phẩm",
+          description: product.ten_san_pham || product.imei || product.serial || "Sản phẩm",
           action: (
             <button
               onClick={() => setCart(prevCart)}
@@ -570,26 +585,82 @@ export default function BanHangPage() {
   }
 
   // === CHECKOUT ===
+  const isWarrantyEligible = (item: CartItem): boolean => {
+    if (item.type !== 'product') return false
+    const isPartner = String(item.nguon || item.source || '').toLowerCase().includes('đối tác')
+    const isIpad = String(item.ten_san_pham || '').toLowerCase().includes('ipad') || String(item.loai_may || '').toLowerCase().includes('ipad')
+    if (isIpad) {
+      const hasId = !!(item.imei || item.serial)
+      if (!hasId) return false
+      if (isPartner && item.imei && !(item as any).imei_confirmed && !(item as any).imei_initial) return false
+      return true
+    }
+    if (!isPartner) return !!item.imei
+    return !!(item.imei && (((item as any).imei_confirmed) || ((item as any).imei_initial)))
+  }
   const tongTien = cart.reduce((sum, item) => sum + item.gia_ban * item.so_luong, 0)
   const thanhToan = tongTien - giamGia // (chưa cộng phí bảo hành)
-  const warrantyTotal = cart
-    .filter(i => i.type==='product' && i.imei && selectedWarranties[i.imei])
-    .reduce((sum, i) => {
-      const pkg = warrantyPackages.find(p => p.code === selectedWarranties[i.imei!])
-      return sum + (pkg?.price || 0)
-    }, 0)
+  const warrantyTotal = cart.reduce((sum, i) => {
+    if (!isWarrantyEligible(i)) return sum
+    const key = (i.imei || i.serial || i.id) as string
+    if (!key) return sum
+    const code = selectedWarranties[key]
+    if (!code) return sum
+    const pkg = warrantyPackages.find(p => p.code === code)
+    return sum + (pkg?.price || 0)
+  }, 0)
   // Cơ sở tính giảm giá: tổng tiền hàng + phí bảo hành trước giảm
   const discountBase = Math.max(tongTien + warrantyTotal, 0)
   const finalThanhToan = Math.max(tongTien + warrantyTotal - giamGia, 0)
+  const expectedCollect = loaiThanhToan === 'Đặt cọc' ? Math.max(Number(soTienCoc)||0, 0) : finalThanhToan
+  // Tổng thanh toán ngay (không bao gồm phần góp): Tiền mặt + Chuyển khoản + Thẻ
+  const immediateSum = (cashEnabled ? (cashAmount||0) : 0)
+    + (transferEnabled ? (transferAmount||0) : 0)
+    + (cardEnabled ? (cardAmount||0) : 0)
+  // Logic trả góp: Trả trước = immediateSum. Tổng đã nhập = Trả trước + Góp (không cộng lại Trả trước lần nữa)
+  const sumPayments = Math.max(0, immediateSum + (installmentEnabled ? (installmentLoan||0) : 0))
+  // Nếu có trả góp, yêu cầu Trả trước == (Tiền mặt + Chuyển khoản + Thẻ)
+  const mustMatchDownPayment = !installmentEnabled || ((installmentDown||0) === immediateSum)
+  const paymentParts: string[] = []
+  if (cashEnabled && cashAmount>0) paymentParts.push(`Tiền mặt: ₫${cashAmount.toLocaleString('vi-VN')}`)
+  if (transferEnabled && transferAmount>0) paymentParts.push(`Chuyển khoản: ₫${transferAmount.toLocaleString('vi-VN')}`)
+  if (cardEnabled && cardAmount>0) paymentParts.push(`Thẻ: ₫${cardAmount.toLocaleString('vi-VN')}`)
+  if (installmentEnabled && (installmentDown>0 || installmentLoan>0)) {
+    const label = installmentType || 'Trả góp'
+    const parts: string[] = []
+    if (installmentDown>0) parts.push(`Trả trước ₫${installmentDown.toLocaleString('vi-VN')}`)
+    if (installmentLoan>0) parts.push(`Góp ₫${installmentLoan.toLocaleString('vi-VN')}`)
+    paymentParts.push(`${label}: ${parts.join(' + ')}`)
+  }
+  const paymentSummary = paymentParts.join(' | ')
+  const paymentsArray = [
+    cashEnabled && cashAmount>0 ? { method: 'Tiền mặt', amount: cashAmount } : null,
+    transferEnabled && transferAmount>0 ? { method: 'Chuyển khoản', amount: transferAmount } : null,
+    cardEnabled && cardAmount>0 ? { method: 'Thẻ', amount: cardAmount } : null,
+  ].filter(Boolean) as any[]
+  if (installmentEnabled && (installmentDown>0 || installmentLoan>0)) {
+    paymentsArray.push({ method: 'Trả góp', provider: installmentType || undefined, downPayment: installmentDown||0, loanAmount: installmentLoan||0, amount: (installmentDown||0)+(installmentLoan||0) })
+  }
 
   // Kết quả tìm kiếm sau khi áp bộ lọc Nguồn/Loại, dùng chung cho mobile cards + desktop table
   const filteredSearchResults = useMemo(() => {
+    const isIpad = (p: any) => {
+      const name = String(p.ten_san_pham || '').toLowerCase()
+      const loai = String(p.loai_may || p['Loại Máy'] || '').toLowerCase()
+      return name.includes('ipad') || loai.includes('ipad')
+    }
     return searchResults.filter((p: any) => {
       const src = String(p.nguon || p.source || '').toLowerCase()
       if (filterSource==='inhouse' && src.includes('đối tác')) return false
       if (filterSource==='partner' && !src.includes('đối tác')) return false
-      const isAccessory = (p.type === 'accessory') || (!!p.loai_phu_kien && !p.imei)
-      if (filterType==='iphone' && isAccessory) return false
+      const isAccessory = (p.type === 'accessory') || (!!p.loai_phu_kien && !p.imei && !p.serial)
+      if (filterType==='iphone') {
+        if (isAccessory) return false
+        if (isIpad(p)) return false
+      }
+      if (filterType==='ipad') {
+        if (!isIpad(p)) return false
+      }
       if (filterType==='accessory' && !isAccessory) return false
       return true
     })
@@ -598,12 +669,12 @@ export default function BanHangPage() {
   // Sort results based on column and order
   const sortedSearchResults = useMemo(() => {
     const arr = [...filteredSearchResults]
-  const isProductItem = (p: any) => (p.type === 'product') || (!!p.imei)
+  const isProductItem = (p: any) => (p.type === 'product') || (!!p.imei) || (!!p.serial)
   const typeRank = (p: any) => isProductItem(p) ? 0 : 1
     const getSource = (p: any) => String(p.nguon || p.source || '').toLowerCase().includes('đối tác') ? 'Đối tác' : 'Trong kho'
     const getGia = (p: any) => (typeof p.gia_ban === 'number' ? p.gia_ban : 0)
     const getTrangThai = (p: any) => p.trang_thai || 'Còn hàng'
-    const getImeiLoai = (p: any) => p.imei ? String(p.imei) : String(p.loai_phu_kien || '-')
+    const getImeiLoai = (p: any) => (p.imei ? String(p.imei) : (p.serial ? String(p.serial) : String(p.loai_phu_kien || '-')))
     const getTen = (p: any) => String(p.ten_san_pham || '')
     const cmp = (a: any, b: any) => {
   const typeDiff = typeRank(a) - typeRank(b)
@@ -708,15 +779,33 @@ export default function BanHangPage() {
       toast({ title: 'Giảm giá không hợp lệ', variant: 'destructive' as any })
       return
     }
+    // Quy tắc: Nếu có trả góp, Trả trước phải bằng tổng thanh toán ngay (Tiền mặt + Chuyển khoản + Thẻ)
+    if (installmentEnabled && ((installmentDown||0) !== ((cashEnabled ? (cashAmount||0) : 0) + (transferEnabled ? (transferAmount||0) : 0) + (cardEnabled ? (cardAmount||0) : 0)))) {
+      const immediate = (cashEnabled ? (cashAmount||0) : 0) + (transferEnabled ? (transferAmount||0) : 0) + (cardEnabled ? (cardAmount||0) : 0)
+      toast({
+        title: 'Trả trước chưa khớp',
+        description: `Trả trước ₫${(installmentDown||0).toLocaleString('vi-VN')} phải bằng tổng Tiền mặt + Chuyển khoản + Thẻ: ₫${immediate.toLocaleString('vi-VN')}`,
+        variant: 'destructive' as any
+      })
+      try { setMobileView('thanh-toan') } catch {}
+      return
+    }
+    // Validate tổng tiền phải khớp tổng phương thức thanh toán
+    const expected = expectedCollect
+    if (Math.abs(sumPayments - expected) > 0) {
+      toast({ title: 'Tổng phương thức thanh toán không khớp', description: `Cần thu: ₫${expected.toLocaleString('vi-VN')} • Đã nhập: ₫${sumPayments.toLocaleString('vi-VN')}`, variant: 'destructive' as any })
+      try { setMobileView('thanh-toan') } catch {}
+      return
+    }
     // YÊU CẦU IMEI CHO MÁY ĐỐI TÁC CHỈ KHI THANH TOÁN ĐỦ (không áp cho Đặt cọc)
     if (loaiThanhToan !== 'Đặt cọc') {
       const partnerMissingImei = cart.some(
-        (i) => i.type === 'product' && !i.imei && String(i.nguon || i.source || '').toLowerCase().includes('đối tác')
+        (i) => i.type === 'product' && !i.imei && !i.serial && String(i.nguon || i.source || '').toLowerCase().includes('đối tác')
       )
       if (partnerMissingImei) {
         toast({
-          title: 'Thiếu IMEI cho máy đối tác',
-          description: 'Vui lòng nhập IMEI cho máy nguồn Đối tác trước khi xuất đơn.',
+          title: 'Thiếu mã máy cho máy đối tác',
+          description: 'Vui lòng nhập IMEI hoặc Serial cho máy nguồn Đối tác trước khi xuất đơn.',
           variant: 'destructive' as any,
         })
         try { setMobileView('gio-hang') } catch {}
@@ -736,7 +825,9 @@ export default function BanHangPage() {
       if (loaiThanhToan === "Đặt cọc") {
         // Flow Đặt cọc: chỉ đổi trạng thái → 'Đã đặt cọc' (hàng nội bộ), KHÔNG xóa khỏi kho, ghi vào sheet Đặt Cọc
         try {
-          const internalImeis = products.filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác')).map(p => p.imei)
+          const internalImeis = products
+            .filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác'))
+            .map(p => p.imei || p.serial || p.id)
           if (internalImeis.length > 0) {
             const resStatus = await fetch("/api/update-product-status", {
               method: "POST",
@@ -764,12 +855,22 @@ export default function BanHangPage() {
               pin: p.pin,
               mau_sac: p.mau_sac,
               imei: p.imei,
+              serial: p.serial,
               tinh_trang_may: p.tinh_trang || p.tinh_trang_may,
               gia_ban: p.gia_ban,
               gia_nhap: p.gia_nhap,
             })),
-            phu_kien: accessories.length ? accessories.map(pk => pk.ten_san_pham).join(", ") : "",
-            hinh_thuc_thanh_toan: phuongThucThanhToan,
+            phu_kien: accessories.length
+              ? accessories
+                  .map(pk => {
+                    const typePrefix = pk.loai_phu_kien ? pk.loai_phu_kien + ' ' : ''
+                    const qty = pk.so_luong && pk.so_luong > 1 ? ` x${pk.so_luong}` : ''
+                    return `${typePrefix}${pk.ten_san_pham}${qty}`
+                  })
+                  .join(", ")
+              : "",
+            hinh_thuc_thanh_toan: paymentSummary,
+            payments: paymentsArray,
             so_tien_coc: soTienCocNum,
             so_tien_con_lai: conLai,
             han_thanh_toan: ngayHenTraDu || "",
@@ -786,7 +887,10 @@ export default function BanHangPage() {
           if (!res.ok) throw new Error("API dat-coc lỗi: " + (await res.text()))
           const dc = await res.json()
           // Xóa sản phẩm khỏi kho cho hàng nội bộ ngay khi đặt cọc
-          const internalImeisForDelete = products.filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác')).map(p => p.imei).filter(Boolean)
+          const internalImeisForDelete = products
+            .filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác'))
+            .map(p => p.imei || p.serial || p.id)
+            .filter(Boolean)
           if (internalImeisForDelete.length > 0) {
             try {
               const resDel = await fetch("/api/delete-product-from-kho", {
@@ -814,7 +918,9 @@ export default function BanHangPage() {
         // Flow Thanh toán đủ: như cũ → đổi trạng thái 'Đã bán', xoá khỏi kho, ghi vào Ban_Hang
         // Cập nhật trạng thái sản phẩm thành 'Đã bán'
         try {
-          const internalImeis = products.filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác')).map(p => p.imei)
+          const internalImeis = products
+            .filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác'))
+            .map(p => p.imei || p.serial || p.id)
           if (internalImeis.length > 0) {
             const resStatus = await fetch("/api/update-product-status", {
               method: "POST",
@@ -828,7 +934,10 @@ export default function BanHangPage() {
           setIsLoading(false); return;
         }
         // Xóa sản phẩm khỏi kho cho hàng nội bộ
-        const internalImeisForDelete = products.filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác')).map(p => p.imei).filter(Boolean)
+        const internalImeisForDelete = products
+          .filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('đối tác'))
+          .map(p => p.imei || p.serial || p.id)
+          .filter(Boolean)
         if (internalImeisForDelete.length > 0) {
           try {
             const resDel = await fetch("/api/delete-product-from-kho", {
@@ -847,12 +956,20 @@ export default function BanHangPage() {
           "Ngày Xuất": new Date().toLocaleDateString("vi-VN"),
           "Tên Khách Hàng": selectedCustomer?.ho_ten || "Khách lẻ",
           "Số Điện Thoại": selectedCustomer?.so_dien_thoai || "",
-          "Phụ Kiện": accessories.length ? accessories.map(pk => pk.ten_san_pham).join(", ") : "",
+          "Phụ Kiện": accessories.length
+            ? accessories
+                .map(pk => {
+                  const typePrefix = pk.loai_phu_kien ? pk.loai_phu_kien + ' ' : ''
+                  const qty = pk.so_luong && pk.so_luong > 1 ? ` x${pk.so_luong}` : ''
+                  return `${typePrefix}${pk.ten_san_pham}${qty}`
+                })
+                .join(", ")
+            : "",
           // Giá Bán & Thanh Toan (cốt lõi) chỉ phản ánh tiền hàng sau giảm giá (không gồm bảo hành)
           "Giá Bán": thanhToan,
           "Thanh Toan": thanhToan,
           "Giá Nhập": products.reduce((s, p) => s + (p.gia_nhap || 0), 0) + giaNhapPhuKien,
-          "Hình Thức Thanh Toán": phuongThucThanhToan,
+          "Hình Thức Thanh Toán": paymentSummary,
           "Người Bán": employeeId,
           "Loại Đơn": loaiDon,
           "Hình Thức Vận Chuyển": loaiDon === "Đơn onl" ? hinhThucVanChuyen : "",
@@ -865,6 +982,7 @@ export default function BanHangPage() {
             loai_may: p.loai_may,
             dung_luong: p.dung_luong,
             imei: p.imei,
+            serial: p.serial,
             mau_sac: p.mau_sac,
             pin: p.pin,
             tinh_trang_may: p.tinh_trang,
@@ -881,6 +999,7 @@ export default function BanHangPage() {
           accessories: accessories.map(i => ({
             id: i.id,
             ten_phu_kien: i.ten_san_pham,
+            loai: i.loai_phu_kien || i.loai || '',
             gia_ban: i.gia_ban,
             gia_nhap: i.gia_nhap,
             so_luong: i.so_luong
@@ -896,9 +1015,11 @@ export default function BanHangPage() {
               coreTotal: thanhToan,
               warrantyTotal: warrantyTotal,
               finalThanhToan: finalThanhToan,
+              hinh_thuc_thanh_toan: paymentSummary,
+              payments: paymentsArray,
               warrantySelections: cart
-                .filter(i => i.type==='product' && i.imei && selectedWarranties[i.imei])
-                .map(i => ({ imei: i.imei, packageCode: selectedWarranties[i.imei!] as string }))
+                .filter(i => i.type==='product' && selectedWarranties[(i.imei || i.serial || i.id) as string])
+                .map(i => ({ imei: i.imei || '', serial: i.serial || '', packageCode: selectedWarranties[(i.imei || i.serial || i.id) as string] as string }))
             })
           });
           if (!res.ok) throw new Error("API ban-hang lỗi: " + (await res.text()));
@@ -907,7 +1028,9 @@ export default function BanHangPage() {
           setSelectedCustomer(null);
           setGiamGia(0);
           setGhiChu("");
-          setPhuongThucThanhToan("Tiền mặt");
+          // Reset payment inputs
+          setCashAmount(0); setTransferAmount(0); setCardAmount(0);
+          setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0);
           // Nếu là tiếp tục thanh toán từ đơn đặt cọc, cập nhật trạng thái đơn đặt cọc
           try {
             if (currentDepositOrderId) {
@@ -949,15 +1072,15 @@ export default function BanHangPage() {
         const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
         return m === maDon;
       });
-      const imeis = allRows.map((o: any) => o["IMEI"] || o["imei"]).filter(Boolean);
-      if (imeis.length === 0) {
-        toast({ title: 'Không tìm thấy IMEI để hủy đặt cọc', variant: 'destructive' as any })
+      const productIds = allRows.map((o: any) => o["IMEI"] || o["Serial"] || o["ID Máy"] || o["imei"] || o["serial"] || o["id"]).filter(Boolean);
+      if (productIds.length === 0) {
+        toast({ title: 'Không tìm thấy mã máy để hủy đặt cọc', variant: 'destructive' as any })
         return
       }
       await fetch("/api/update-product-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productIds: imeis, newStatus: "Còn hàng" })
+        body: JSON.stringify({ productIds, newStatus: "Còn hàng" })
       });
       await fetch("/api/kho-hang", {
         method: "POST",
@@ -965,9 +1088,9 @@ export default function BanHangPage() {
         body: JSON.stringify({ products: allRows })
       });
       await fetch("/api/dat-coc", {
-        method: "DELETE",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productIds: imeis })
+        body: JSON.stringify({ orderId: maDon, newStatus: "Hủy đặt cọc" })
       });
       toast({ title: 'Đã hủy đặt cọc', description: 'Sản phẩm đã trả về kho.' })
       setReloadFlag(f => f + 1)
@@ -1051,7 +1174,7 @@ export default function BanHangPage() {
           <div className="relative mb-4">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Tìm theo Tên, Loại phụ kiện, IMEI..."
+              placeholder="Tìm theo Tên, Loại phụ kiện, IMEI/Serial..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8"
@@ -1092,6 +1215,9 @@ export default function BanHangPage() {
                 <Button size="sm" variant={filterType==='iphone'?'default':'outline'}
                   className={filterType==='iphone' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
                   onClick={()=> setFilterType('iphone')}>iPhone</Button>
+                <Button size="sm" variant={filterType==='ipad'?'default':'outline'}
+                  className={filterType==='ipad' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
+                  onClick={()=> setFilterType('ipad')}>iPad</Button>
                 <Button size="sm" variant={filterType==='accessory'?'default':'outline'}
                   className={filterType==='accessory' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
                   onClick={()=> setFilterType('accessory')}>Phụ kiện</Button>
@@ -1109,10 +1235,10 @@ export default function BanHangPage() {
                   const hasPin = rawPin !== undefined && rawPin !== null && String(rawPin).trim() !== ''
                   const formattedPin = !hasPin ? '' : typeof rawPin === 'number' ? `${rawPin}%` : String(rawPin)
                   const tinhTrang = product.tinh_trang || product['Tình Trạng Máy'] || ''
-                  const isAccessoryItem = (product.type === 'accessory') || (!!product.loai_phu_kien && !product.imei)
+                  const isAccessoryItem = (product.type === 'accessory') || (!!product.loai_phu_kien && !product.imei && !product.serial)
                   return (
                     <div
-                      key={`${product.id || product.imei || product.ten_san_pham}`}
+                      key={`${product.id || product.imei || product.serial || product.ten_san_pham}`}
                       role="button"
                       tabIndex={0}
                       aria-disabled={isDisabled}
@@ -1142,7 +1268,9 @@ export default function BanHangPage() {
                             {product.loai_may && <div>Loại máy: <span className="text-slate-800">{product.loai_may}</span></div>}
                             {hasPin && <div>Pin: <span className="text-slate-800">{formattedPin}</span></div>}
                             {tinhTrang && <div>Tình trạng: <span className="text-slate-800">{tinhTrang}</span></div>}
-                            {product.imei && (<div>IMEI: <span className="font-mono text-slate-800">{product.imei}</span></div>)}
+                            {(product.imei || product.serial) && (
+                              <div>{product.imei ? 'IMEI' : 'Serial'}: <span className="font-mono text-slate-800">{product.imei || product.serial}</span></div>
+                            )}
                           </>
                         ) : (
                           <>
@@ -1189,7 +1317,7 @@ export default function BanHangPage() {
                       </TableHead>
                       <TableHead className="w-[20%]">
                         <button className="flex items-center gap-1" onClick={()=> toggleSort('imei_loai')}>
-                          IMEI / Loại {sortKey==='imei_loai' && <span>{sortOrder==='asc'?'▲':'▼'}</span>}
+                          IMEI/Serial / Loại {sortKey==='imei_loai' && <span>{sortOrder==='asc'?'▲':'▼'}</span>}
                         </button>
                       </TableHead>
                       <TableHead className="w-[34%] text-center">Chi tiết</TableHead>
@@ -1220,7 +1348,7 @@ export default function BanHangPage() {
                     )}
                     {sortedSearchResults.map((product: any, idx: number) => {
                       const isDisabled = product.trang_thai === 'Đã đặt cọc' || product.trang_thai === 'Đã bán'
-                      const isAccessory = (product.type==='accessory') || (!!product.loai_phu_kien && !product.imei)
+                      const isAccessory = (product.type==='accessory') || (!!product.loai_phu_kien && !product.imei && !product.serial)
                       const source = String(product.nguon || product.source || '').toLowerCase().includes('đối tác') ? 'Đối tác' : 'Trong kho'
                       const loaiMay = product.loai_may || product['Loại Máy'] || ''
                       const rawPin = product.pin ?? product['Pin (%)']
@@ -1229,10 +1357,10 @@ export default function BanHangPage() {
                       const tinhTrang = product.tinh_trang || product['Tình Trạng Máy'] || product.trang_thai || ''
                       return (
                         <TableRow
-                          key={`${product.id || product.imei || product.ten_san_pham}`}
+                          key={`${product.id || product.imei || product.serial || product.ten_san_pham}`}
                           data-index={idx}
-                          className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-blue-50/50 active:bg-blue-50'} ${idx===selectedIndex ? 'bg-blue-50' : ''} ${justAddedKey === (product.id || product.imei) ? 'animate-pulse bg-green-50' : ''} odd:bg-slate-50/30`}
-                          onClick={() => { if (!isDisabled) { addToCart(product); setJustAddedKey(product.id || product.imei || null); setTimeout(()=> setJustAddedKey(null), 500); } }}
+                          className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-blue-50/50 active:bg-blue-50'} ${idx===selectedIndex ? 'bg-blue-50' : ''} ${justAddedKey === (product.id || product.imei || product.serial) ? 'animate-pulse bg-green-50' : ''} odd:bg-slate-50/30`}
+                          onClick={() => { if (!isDisabled) { addToCart(product); setJustAddedKey(product.id || product.imei || product.serial || null); setTimeout(()=> setJustAddedKey(null), 500); } }}
                         >
                           <TableCell className="px-3 py-2">
                             <div className="font-medium line-clamp-2">
@@ -1246,15 +1374,15 @@ export default function BanHangPage() {
                             </div>
                           </TableCell>
                           <TableCell className="font-mono text-xs px-3 py-2">
-                            {product.imei ? (
+                            {(product.imei || product.serial) ? (
                               <button
                                 type="button"
-                                onClick={async (e) => { e.stopPropagation(); try { await navigator.clipboard.writeText(product.imei) } catch {}; setCopiedImei(product.imei); toast({ title: 'Đã sao chép IMEI', description: product.imei }); setTimeout(()=> setCopiedImei(null), 1000) }}
+                                onClick={async (e) => { e.stopPropagation(); const v = product.imei || product.serial; try { await navigator.clipboard.writeText(v) } catch {}; setCopiedImei(v); toast({ title: product.imei ? 'Đã sao chép IMEI' : 'Đã sao chép Serial', description: v }); setTimeout(()=> setCopiedImei(null), 1000) }}
                                 className="inline-flex items-center gap-1 underline decoration-dotted hover:text-blue-700"
-                                title="Click để sao chép IMEI"
+                                title="Click để sao chép IMEI/Serial"
                               >
                                 <Copy className="h-3 w-3"/>
-                                {copiedImei === product.imei ? 'Đã sao chép' : highlight(String(product.imei), searchQuery)}
+                                {copiedImei === (product.imei || product.serial) ? 'Đã sao chép' : highlight(String(product.imei || product.serial), searchQuery)}
                               </button>
                             ) : (
                               <span>{highlight(String(product.loai_phu_kien || '-'), searchQuery)}</span>
@@ -1327,7 +1455,7 @@ export default function BanHangPage() {
           ) : (
             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
               {/* Apply all warranty (4.1) */}
-              {cart.filter(i=> i.type==='product' && i.imei).length > 1 && warrantyPackages.length>0 && (
+              {cart.filter(i=> isWarrantyEligible(i as any)).length > 1 && warrantyPackages.length>0 && (
                 <div className="flex items-center gap-2 border rounded p-2 bg-slate-50">
                   <select
                     className="text-xs border rounded px-2 py-1 bg-white"
@@ -1335,7 +1463,7 @@ export default function BanHangPage() {
                     onChange={e=>{
                       const code = e.target.value || null
                       setSelectedWarranties(prev=>{
-                        const next = {...prev}; cart.forEach(it=>{ if(it.type==='product' && it.imei) next[it.imei]=code })
+                        const next = {...prev}; cart.forEach(it=>{ if(isWarrantyEligible(it as any)){ const key = (it.imei || it.serial || it.id) as string; if (key) next[key]=code } })
                         return next
                       })
                     }}
@@ -1346,7 +1474,7 @@ export default function BanHangPage() {
                   <button
                     type="button"
                     className="text-[11px] text-red-600 underline"
-                    onClick={()=> setSelectedWarranties(prev=>{ const next={...prev}; cart.forEach(it=>{ if(it.imei) next[it.imei]=null }); return next })}
+                    onClick={()=> setSelectedWarranties(prev=>{ const next={...prev}; cart.forEach(it=>{ if(isWarrantyEligible(it as any)){ const key=(it.imei||it.serial||it.id) as string; if (key) next[key]=null } }); return next })}
                   >Xóa toàn bộ</button>
                 </div>
               )}
@@ -1359,8 +1487,8 @@ export default function BanHangPage() {
                 >
                   <div>
                     <p className="font-medium">{item.ten_san_pham}</p>
-                    {item.imei && (
-                      <p className="text-[11px] text-muted-foreground font-mono">IMEI: {item.imei}</p>
+                    {(item.imei || item.serial) && (
+                      <p className="text-[11px] text-muted-foreground font-mono">{item.imei ? 'IMEI' : 'Serial'}: {item.imei || item.serial}</p>
                     )}
                     {String(item.nguon || item.source || '').toLowerCase().includes('đối tác') && (
                       <div className="mt-1">
@@ -1389,18 +1517,21 @@ export default function BanHangPage() {
                     {String(item.nguon || item.source || '').toLowerCase().includes('đối tác') && item.type==='product' && (
                       <div className="mt-1 flex items-center gap-3 flex-wrap">
                         <input
-                          placeholder="Nhập IMEI..."
-                          className="h-7 w-48 border rounded px-2 text-[12px] font-mono"
-                          defaultValue={item.imei || ''}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
+                          placeholder="Nhập IMEI hoặc Serial..."
+                          className="h-7 w-56 border rounded px-2 text-[12px] font-mono"
+                          defaultValue={item.imei || item.serial || ''}
                           onBlur={(e)=>{
-                            const val = (e.target.value || '').replace(/\D/g,'')
+                            const valRaw = (e.target.value || '').trim()
+                            const val = valRaw.replace(/\s/g,'')
                             setCart(prev=> prev.map(p=> {
                               if (p.id===item.id && p.type===item.type) {
-                                const prevImei = (p.imei || '')
-                                const changed = prevImei !== (val || '')
-                                return { ...p, imei: val || '', imei_confirmed: changed ? false : (p as any).imei_confirmed }
+                                const prevId = (p.imei || p.serial || '')
+                                const changed = prevId !== (val || '')
+                                const next: any = { ...p, imei_confirmed: changed ? false : (p as any).imei_confirmed }
+                                // simple heuristic: if all digits and length >= 10 treat as IMEI, else Serial
+                                if (/^\d{10,}$/.test(val)) { next.imei = val; next.serial = '' }
+                                else { next.serial = val; next.imei = '' }
+                                return next
                               }
                               return p
                             }))
@@ -1456,47 +1587,54 @@ export default function BanHangPage() {
                               setCart(prev=> prev.map(p=> (p.id===item.id && p.type===item.type) ? { ...p, imei_confirmed: !(p as any).imei_confirmed } : p))
                             }
                           }}
-                          title={item.imei ? 'Xác nhận IMEI' : 'Nhập IMEI trước'}
+                          title={(item.imei || item.serial) ? 'Xác nhận mã máy' : 'Nhập IMEI/Serial trước'}
                         >
                           <CheckCircle className={`h-4 w-4 ${ (item as any).imei_confirmed ? 'text-green-600' : 'text-slate-400' }`} />
                           <span></span>
                         </button>
                       </div>
                     )}
-                    {(
-                      // Hiển thị chọn gói bảo hành:
-                      // - Máy nội bộ: khi có IMEI
-                      // - Máy đối tác: khi có IMEI và (đã xác nhận hoặc IMEI đã tồn tại sẵn từ trước)
-                      (item.type==='product') && (
-                        (!String(item.nguon || item.source || '').toLowerCase().includes('đối tác') && !!item.imei)
-                        || (String(item.nguon || item.source || '').toLowerCase().includes('đối tác') && !!item.imei && (((item as any).imei_confirmed) || ((item as any).imei_initial)))
-                      )
-                    ) && (
+                    {(() => {
+                      if (item.type !== 'product') return false
+                      const isPartner = String(item.nguon || item.source || '').toLowerCase().includes('đối tác')
+                      const isIpad = String(item.ten_san_pham || '').toLowerCase().includes('ipad') || String(item.loai_may || '').toLowerCase().includes('ipad')
+                      if (isIpad) {
+                        const hasId = !!(item.imei || item.serial)
+                        if (!hasId) return false
+                        if (isPartner && item.imei && !(item as any).imei_confirmed && !(item as any).imei_initial) return false
+                        return true
+                      }
+                      if (!isPartner) return !!item.imei
+                      return !!(item.imei && (((item as any).imei_confirmed) || ((item as any).imei_initial)))
+                    })() && (
                       <div className="mt-1">
                         <select
                           className="text-[11px] border rounded px-1 py-0.5 bg-white"
-                          value={selectedWarranties[item.imei] || ''}
-                          onChange={e => handleSelectWarranty(item.imei!, e.target.value || null)}
+                          value={selectedWarranties[(item.imei || item.serial || item.id) as string] || ''}
+                          onChange={e => handleSelectWarranty((item.imei || item.serial || item.id) as string, e.target.value || null)}
                         >
                           <option value="">Chọn gói bảo hành...</option>
                           {warrantyPackages.map(p => (
                             <option key={p.code} value={p.code}>{p.code}{p.hwMonths?`-${p.hwMonths}T`:''}{p.lifetime?'(Life)':''}</option>
                           ))}
                         </select>
-                        {selectedWarranties[item.imei] && (
+                        {selectedWarranties[(item.imei || item.serial || item.id) as string] && (
                           <button
                             type="button"
                             className="ml-2 text-[11px] underline text-blue-600"
                             onClick={() => {
-                              if(!item.imei) return
-                              setOpenWarrantyInfo(openWarrantyInfo===item.imei ? null : item.imei)
+                              const key=(item.imei||item.serial||item.id) as string
+                              if(!key) return
+                              setOpenWarrantyInfo(openWarrantyInfo===key ? null : key)
                             }}
                           >Chi tiết</button>
                         )}
-                        {openWarrantyInfo===item.imei && selectedWarranties[item.imei] && (
+                        {(() => { const key=(item.imei||item.serial||item.id) as string; return openWarrantyInfo===key && selectedWarranties[key] })() && (
                           <div className="mt-1 p-2 rounded border bg-slate-50 text-[11px] space-y-0.5">
                             {(() => {
-                              const pkg = warrantyPackages.find(p=>p.code===selectedWarranties[item.imei!])
+                              const key=(item.imei||item.serial||item.id) as string
+                              const sel = selectedWarranties[key] as string
+                              const pkg = warrantyPackages.find(p=>p.code===sel)
                               if(!pkg) return null
                               return (
                                 <>
@@ -1689,14 +1827,7 @@ export default function BanHangPage() {
               <User className="mr-2 h-4 w-4" />
               Chọn khách hàng
             </Button>
-            <Button
-              variant="outline"
-              className="bg-white"
-              onClick={() => setIsCustomerDialogOpen(true)}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            {/* Đã gộp máy đối tác vào Tìm kiếm sản phẩm, bỏ nút riêng */}
+            {/* Bỏ nút '+' tạo nhanh: việc tạo sẽ xuất hiện trong dialog khi không tìm thấy SĐT */}
           </div>
         </CardContent>
       </Card>
@@ -1709,19 +1840,141 @@ export default function BanHangPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Phương thức thanh toán</label>
-            <Select
-              value={phuongThucThanhToan}
-              onValueChange={setPhuongThucThanhToan}
-            >
-              <SelectTrigger className="bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-white">
-                <SelectItem value="Tiền mặt">Tiền mặt</SelectItem>
-                <SelectItem value="Chuyển khoản">Chuyển khoản</SelectItem>
-                <SelectItem value="Thẻ">Thẻ</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-1 gap-2">
+              {/* Each row uses a fixed label column (w-28) and a flexible input column to keep fields aligned */}
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2 select-none w-28">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 appearance-none rounded-full border border-slate-400 bg-white checked:bg-blue-600 checked:border-blue-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                    checked={cashEnabled}
+                    onChange={(e)=> { setCashEnabled(e.target.checked); if (!e.target.checked) setCashAmount(0) }}
+                    aria-label="Tiền mặt"
+                  />
+                  <span className="text-sm">Tiền mặt</span>
+                </label>
+                <div className="flex-1">
+                  {cashEnabled && (
+                    <Input
+                      placeholder="₫0"
+                      value={cashAmount ? cashAmount.toLocaleString('vi-VN') : ''}
+                      onChange={(e)=> setCashAmount(Number(e.target.value.replace(/[^\d]/g,''))||0)}
+                      className="bg-white"
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2 select-none w-28">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 appearance-none rounded-full border border-slate-400 bg-white checked:bg-blue-600 checked:border-blue-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                    checked={transferEnabled}
+                    onChange={(e)=> { setTransferEnabled(e.target.checked); if (!e.target.checked) setTransferAmount(0) }}
+                    aria-label="Chuyển khoản"
+                  />
+                  <span className="text-sm">Chuyển khoản</span>
+                </label>
+                <div className="flex-1">
+                  {transferEnabled && (
+                    <Input
+                      placeholder="₫0"
+                      value={transferAmount ? transferAmount.toLocaleString('vi-VN') : ''}
+                      onChange={(e)=> setTransferAmount(Number(e.target.value.replace(/[^\d]/g,''))||0)}
+                      className="bg-white"
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2 select-none w-28">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 appearance-none rounded-full border border-slate-400 bg-white checked:bg-blue-600 checked:border-blue-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                    checked={cardEnabled}
+                    onChange={(e)=> { setCardEnabled(e.target.checked); if (!e.target.checked) setCardAmount(0) }}
+                    aria-label="Thẻ"
+                  />
+                  <span className="text-sm">Thẻ</span>
+                </label>
+                <div className="flex-1">
+                  {cardEnabled && (
+                    <Input
+                      placeholder="₫0"
+                      value={cardAmount ? cardAmount.toLocaleString('vi-VN') : ''}
+                      onChange={(e)=> setCardAmount(Number(e.target.value.replace(/[^\d]/g,''))||0)}
+                      className="bg-white"
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-2 select-none w-28">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 appearance-none rounded-full border border-slate-400 bg-white checked:bg-blue-600 checked:border-blue-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                    checked={installmentEnabled}
+                    onChange={(e)=> setInstallmentEnabled(e.target.checked)}
+                    aria-label="Trả góp"
+                  />
+                  <span className="text-sm">Trả góp</span>
+                </label>
+                <div className="flex-1">
+                  {installmentEnabled && (
+                    <Select value={installmentType} onValueChange={(v:any)=> setInstallmentType(v)}>
+                      <SelectTrigger className="bg-white w-44"><SelectValue placeholder="Chọn loại"/></SelectTrigger>
+                      <SelectContent className="bg-white">
+                        <SelectItem value="Góp iCloud">Góp iCloud</SelectItem>
+                        <SelectItem value="Thẻ tín dụng">Thẻ tín dụng</SelectItem>
+                        <SelectItem value="Mira">Mira</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+              {installmentEnabled && (
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="w-28 text-sm text-slate-600">Trả trước</span>
+                    <div className="flex-1">
+                      <Input
+                        placeholder="₫0"
+                        value={installmentDown ? installmentDown.toLocaleString('vi-VN') : ''}
+                        onChange={(e)=> setInstallmentDown(Number(e.target.value.replace(/[^\d]/g,''))||0)}
+                        className="bg-white"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="w-28 text-sm text-slate-600">Góp</span>
+                    <div className="flex-1">
+                      <Input
+                        placeholder="₫0"
+                        value={installmentLoan ? installmentLoan.toLocaleString('vi-VN') : ''}
+                        onChange={(e)=> setInstallmentLoan(Number(e.target.value.replace(/[^\d]/g,''))||0)}
+                        className="bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="text-xs text-slate-600">
+                <div className="mt-1">
+                  Tổng đã nhập: <span className="font-semibold">₫{sumPayments.toLocaleString('vi-VN')}</span> • Cần thu: <span className="font-semibold">₫{expectedCollect.toLocaleString('vi-VN')}</span>
+                  {sumPayments !== expectedCollect && (
+                    <span className="ml-2 text-red-600">(chưa khớp – vui lòng điều chỉnh)</span>
+                  )}
+                  {installmentEnabled && !mustMatchDownPayment && (
+                    <div className="text-red-600 text-xs mt-1">
+                      Trả trước phải bằng tổng Tiền mặt + Chuyển khoản + Thẻ (hiện tại: Trả trước ₫{(installmentDown||0).toLocaleString('vi-VN')} ≠ Thanh toán ngay ₫{immediateSum.toLocaleString('vi-VN')})
+                    </div>
+                  )}
+                </div>
+              </div>
+              {paymentSummary && (
+                <div className="text-xs text-slate-500">Tổng hợp: {paymentSummary}</div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -1756,7 +2009,7 @@ export default function BanHangPage() {
           <Separator />
 
           <div className="space-y-2">
-            {cart.some(i=>i.type==='product' && i.imei) && !Object.values(selectedWarranties).some(Boolean) && (
+            {cart.some(i=>i.type==='product') && !Object.values(selectedWarranties).some(Boolean) && (
               <div className="text-xs p-2 rounded border bg-amber-50 text-amber-700">
                 Gợi ý: Thêm gói bảo hành để tăng giá trị dịch vụ & chăm sóc khách hàng.
               </div>
@@ -1950,7 +2203,7 @@ export default function BanHangPage() {
                               return m === maDon;
                             });
                             const products: CartItem[] = allRows.map((o: any) => ({
-                              id: o["IMEI"] || o["ID Máy"] || o["Tên Sản Phẩm"] || o["ten_san_pham"] || o["imei"] || o["id"],
+                              id: o["IMEI"] || o["Serial"] || o["ID Máy"] || o["Tên Sản Phẩm"] || o["ten_san_pham"] || o["imei"] || o["serial"] || o["id"],
                               type: "product",
                               ten_san_pham: o["Tên Sản Phẩm"] || o["ten_san_pham"] || "",
                               gia_ban: typeof o["Giá Bán"] === "string" ? parseInt(o["Giá Bán"].replace(/[^\d]/g, "")) || 0 : o["Giá Bán"] || 0,
@@ -1958,6 +2211,7 @@ export default function BanHangPage() {
                               so_luong: 1,
                               max_quantity: 1,
                               imei: o["IMEI"] || "",
+                              serial: o["Serial"] || "",
                               trang_thai: o["Tình Trạng Máy"] || o["tinh_trang_may"] || "",
                               loai_may: o["Loại Máy"] || o["loai_may"] || "",
                               dung_luong: o["Dung Lượng"] || o["dung_luong"] || "",
@@ -2055,7 +2309,7 @@ export default function BanHangPage() {
                                 return m === maDon;
                               });
                               const products: CartItem[] = allRows.map((o: any) => ({
-                                id: o["IMEI"] || o["ID Máy"] || o["Tên Sản Phẩm"] || o["ten_san_pham"] || o["imei"] || o["id"],
+                                id: o["IMEI"] || o["Serial"] || o["ID Máy"] || o["Tên Sản Phẩm"] || o["ten_san_pham"] || o["imei"] || o["serial"] || o["id"],
                                 type: "product",
                                 ten_san_pham: o["Tên Sản Phẩm"] || o["ten_san_pham"] || "",
                                 gia_ban: typeof o["Giá Bán"] === "string" ? parseInt(o["Giá Bán"].replace(/[^\d]/g, "")) || 0 : o["Giá Bán"] || 0,
@@ -2063,6 +2317,7 @@ export default function BanHangPage() {
                                 so_luong: 1,
                                 max_quantity: 1,
                                 imei: o["IMEI"] || "",
+                                serial: o["Serial"] || "",
                                 trang_thai: o["Tình Trạng Máy"] || o["tinh_trang_may"] || "",
                                 loai_may: o["Loại Máy"] || o["loai_may"] || "",
                                 dung_luong: o["Dung Lượng"] || o["dung_luong"] || "",

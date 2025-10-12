@@ -110,74 +110,60 @@ export async function POST(req: Request) {
     // Tạo id đơn hàng chung cho tất cả sản phẩm
     const id_don_hang = body.id_don_hang || `DC${Date.now()}`
 
-    // Nếu có mảng products, ghi từng dòng cho từng sản phẩm
+    // Đọc header để map động theo tên cột (tránh lệch khi thêm 'Serial' hoặc cột khác)
+    const { header } = await readFromGoogleSheets("Dat_Coc")
+    const norm = (s: string) => (s||"")
+      .normalize("NFD")
+      // @ts-ignore
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .trim()
+    const idx = (name: string) => header.findIndex(h => norm(h) === norm(name))
+
+    const setField = (row: any[], name: string, value: any) => {
+      const i = idx(name)
+      if (i !== -1) row[i] = value ?? ""
+    }
+
+    const buildRow = (p: any, idxLine: number) => {
+      const row = Array(header.length).fill("")
+      setField(row, "ID Đơn Hàng", id_don_hang)
+      setField(row, "Mã Đơn Hàng", id_don_hang) // fallback nếu dùng tiêu đề này
+      setField(row, "Ngày Đặt Cọc", ngay_dat_coc || new Date().toLocaleDateString("vi-VN"))
+      setField(row, "Tên Khách Hàng", ten_khach_hang || "")
+      setField(row, "Số Điện Thoại", so_dien_thoai || "")
+      setField(row, "Tên Sản Phẩm", p.ten_san_pham || body.ten_san_pham || "")
+      setField(row, "Loại Máy", p.loai_may || body.loai_may || "")
+      setField(row, "Dung Lượng", p.dung_luong || body.dung_luong || "")
+      setField(row, "Pin (%)", p.pin || body.pin || "")
+      setField(row, "Màu Sắc", p.mau_sac || body.mau_sac || "")
+      setField(row, "IMEI", p.imei || body.imei || "")
+      setField(row, "Serial", (p.serial || body.serial || "").toString().toUpperCase())
+      setField(row, "Tình Trạng Máy", p.tinh_trang_may || body.tinh_trang_may || "")
+      if (idxLine === 0) setField(row, "Phụ Kiện", phu_kien || "")
+      setField(row, "Giá Bán", p.gia_ban ?? body.gia_ban ?? "")
+      setField(row, "Hình Thức Thanh Toán", hinh_thuc_thanh_toan || "")
+      setField(row, "Giá Nhập", p.gia_nhap ?? body.gia_nhap ?? "")
+      if (idxLine === 0) setField(row, "Số Tiền Cọc", so_tien_coc || "")
+      if (idxLine === 0) setField(row, "Số Tiền Còn Lại", so_tien_con_lai || "")
+      setField(row, "Hạn Thanh Toán", han_thanh_toan || "")
+      setField(row, "Người Bán", nguoi_ban || "")
+      setField(row, "Loại Đơn", loai_don || "")
+      setField(row, "Ghi Chú", ghi_chu || "")
+      setField(row, "Trạng Thái", "Đặt cọc")
+      return row
+    }
+
     if (Array.isArray(products) && products.length > 0) {
-      // Chỉ dòng đầu ghi tổng số tiền cọc và tổng còn lại, các dòng sau để trống
-      const rows = products.map((p: any, idx: number) => [
-        id_don_hang,
-        ngay_dat_coc || new Date().toLocaleDateString("vi-VN"),
-        ten_khach_hang || "",
-        so_dien_thoai || "",
-        p.ten_san_pham || "",
-        p.loai_may || "",
-        p.dung_luong || "",
-        p.pin || "",
-        p.mau_sac || "",
-        p.imei || "",
-        p.tinh_trang_may || "",
-        idx === 0 ? (phu_kien || "") : "", // chỉ dòng đầu ghi phụ kiện
-        p.gia_ban || "",
-        hinh_thuc_thanh_toan || "",
-        p.gia_nhap || "",
-        idx === 0 ? (so_tien_coc || "") : "", // chỉ dòng đầu ghi số tiền cọc
-        idx === 0 ? (so_tien_con_lai || "") : "", // chỉ dòng đầu ghi số tiền còn lại
-        han_thanh_toan || "",
-        nguoi_ban || "",
-        loai_don || "",
-        ghi_chu || "",
-        "Đặt cọc" // Trạng thái
-      ])
-      // Ghi tất cả dòng vào sheet
-      for (const row of rows) {
+      let lineNo = 0
+      for (const p of products) {
+        const row = buildRow(p, lineNo)
         await appendToGoogleSheets("Dat_Coc", row)
+        lineNo++
       }
       return NextResponse.json({ ok: true, created: true, id_don_hang }, { status: 201 })
     } else {
-      // Nếu chỉ có 1 sản phẩm, ghi như cũ
-      const {
-        ten_san_pham,
-        loai_may,
-        dung_luong,
-        pin,
-        mau_sac,
-        imei,
-        tinh_trang_may,
-        gia_ban: gia_ban_sp,
-        gia_nhap: gia_nhap_sp
-      } = body
-      const row = [
-        id_don_hang,
-        ngay_dat_coc || new Date().toLocaleDateString("vi-VN"),
-        ten_khach_hang || "",
-        so_dien_thoai || "",
-        ten_san_pham || "",
-        loai_may || "",
-        dung_luong || "",
-        pin || "",
-        mau_sac || "",
-        imei || "",
-        tinh_trang_may || "",
-        phu_kien || "",
-        gia_ban_sp || gia_ban || "",
-        hinh_thuc_thanh_toan || "",
-        gia_nhap_sp || gia_nhap || "",
-        so_tien_coc || "",
-        so_tien_con_lai || "",
-        han_thanh_toan || "",
-        nguoi_ban || "",
-        loai_don || "",
-        ghi_chu || ""
-      ]
+      const row = buildRow(body, 0)
       await appendToGoogleSheets("Dat_Coc", row)
       return NextResponse.json({ ok: true, created: true, id_don_hang }, { status: 201 })
     }

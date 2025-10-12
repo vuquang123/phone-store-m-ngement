@@ -23,35 +23,49 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ orderId
       return i1 !== -1 ? i1 : i2
     })()
 
+    // helper to get flexible column index
+    const colIndex = (...names: string[]) => {
+      for (const n of names) {
+        const i = header.indexOf(n)
+        if (i !== -1) return i
+      }
+      return -1
+    }
+    const idxPhuKien = colIndex("Phụ Kiện")
+    const idxChiTietPK = colIndex('Chi Tiết PK', 'Chi Tiết Phụ Kiện', 'Chi Tiet PK', 'Accessory Detail')
+
     const orderDetail = {
       id: orderId,
       ma_don_hang: orderId,
       ngay_ban: first[idx("Ngày Xuất")],
       trang_thai: "hoan_thanh",
       phuong_thuc_thanh_toan: first[idx("Hình Thức Thanh Toán")],
+      phu_kien_text: idxPhuKien !== -1 ? (first[idxPhuKien] || '') : '',
       nhan_vien: { ho_ten: first[idx("Người Bán")] },
       khach_hang: {
         ho_ten: first[idx("Tên Khách Hàng")] || "Khách lẻ",
         so_dien_thoai: first[idx("Số Điện Thoại")] || ""
       },
-      chi_tiet: orderRows.map((row, i) => {
-          const isMay = !!row[idx("IMEI")];
+      chi_tiet: orderRows
+        .map((row, i) => {
+          const isMay = !!row[idx("IMEI")]
+          if (!isMay) return null
           return {
             id: `${orderId}_${i}`,
             so_luong: 1,
-            gia_ban: isMay ? parseInt((row[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0 : 0,
-            thanh_tien: isMay ? parseInt((row[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0 : 0,
+            gia_ban: parseInt((row[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0,
+            thanh_tien: parseInt((row[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0,
             nguon_hang: idxNguon !== -1 ? (row[idxNguon] || '') : '',
-            san_pham: isMay ? {
+            san_pham: {
               ten_san_pham: row[idx("Tên Sản Phẩm")],
               loai_may: row[idx("Loại Máy")],
               dung_luong: row[idx("Dung Lượng")],
               mau_sac: row[idx("Màu Sắc")],
               imei: row[idx("IMEI")],
-            } : undefined,
-            phu_kien: !isMay && row[idx("Phụ Kiện")] ? { ten_phu_kien: row[idx("Phụ Kiện")], loai_phu_kien: "" } : undefined
+            },
           }
-      }),
+        })
+        .filter(Boolean) as any[],
       tong_tien: orderRows.reduce((s, r) => {
         const isMay = !!r[idx("IMEI")];
         return s + (isMay ? (parseInt((r[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0) : 0);

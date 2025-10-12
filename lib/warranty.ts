@@ -13,7 +13,8 @@ export interface WarrantyPackage {
 }
 
 export interface WarrantySelectionInput {
-  imei: string
+  imei?: string
+  serial?: string
   packageCode: string
   startDate?: string // ISO string optional
   phone?: string
@@ -25,6 +26,7 @@ export interface WarrantyContractRow {
   contractCode: string
   orderId: string
   imei: string
+  serial?: string
   phone: string
   packageCode: string
   purchaseDate: string
@@ -70,12 +72,12 @@ export async function loadWarrantyPackages(): Promise<Record<string, WarrantyPac
   return map
 }
 
-export function generateContractCode(orderId: string, imei: string) {
+export function generateContractCode(orderId: string, identifier: string) {
   const orderDigits = (orderId || '').replace(/\D/g, '')
   const last3Order = orderDigits.slice(-3).padStart(3, '0')
-  const imeiDigits = (imei || '').replace(/\D/g, '')
-  const last5Imei = imeiDigits.slice(-5).padStart(5, '0')
-  return `HĐ${last5Imei}-${last3Order}`
+  const idDigits = (identifier || '').replace(/\W/g, '')
+  const last5 = idDigits.slice(-5).padStart(5, '0')
+  return `HĐ${last5}-${last3Order}`
 }
 
 function addDays(date: Date, d: number) { const nd = new Date(date); nd.setDate(nd.getDate() + d); return nd }
@@ -97,10 +99,12 @@ export function buildContracts(orderId: string, phone: string, selections: Warra
       cncMonths: pkg.cncMonths,
       lifetimeSupport: pkg.lifetime
     }
+    const identifier = sel.imei || sel.serial || ''
     return {
-      contractCode: generateContractCode(orderId, sel.imei),
+      contractCode: generateContractCode(orderId, identifier),
       orderId,
-      imei: sel.imei,
+      imei: sel.imei || '',
+      serial: sel.serial,
       phone: sel.phone || phone,
       packageCode: pkg.code,
       purchaseDate: fmt(now),
@@ -129,6 +133,7 @@ export async function saveContracts(rows: WarrantyContractRow[]) {
         case 'Mã HĐ': return row.contractCode
         case 'Mã Đơn': return row.orderId
         case 'IMEI': return row.imei
+        case 'Serial': return row.serial || ''
         case 'SĐT Khách': return row.phone
         case 'Mã Gói': return row.packageCode
         case 'Ngày Mua': return row.purchaseDate
@@ -154,6 +159,7 @@ export async function saveContracts(rows: WarrantyContractRow[]) {
 export interface WarrantyQueryFilter {
   orderId?: string
   imei?: string
+  serial?: string
   phone?: string
   status?: string // active | expired
   expiringDays?: number
@@ -163,7 +169,7 @@ export async function queryContracts(filter: WarrantyQueryFilter = {}) {
   const { header, rows } = await readFromGoogleSheets(CONTRACT_SHEET)
   const idx = (name: string) => header.indexOf(name)
   const C = {
-    contractCode: idx('Mã HĐ'), orderId: idx('Mã Đơn'), imei: idx('IMEI'), phone: idx('SĐT Khách'), pkg: idx('Mã Gói'),
+    contractCode: idx('Mã HĐ'), orderId: idx('Mã Đơn'), imei: idx('IMEI'), serial: idx('Serial'), phone: idx('SĐT Khách'), pkg: idx('Mã Gói'),
     exchange: idx('Hạn 1 Đổi 1'), hw: idx('Hạn Phần Cứng'), cnc: idx('Hạn CNC/Độ Sim'), overall: idx('Hạn Tổng'), lifetime: idx('Hỗ Trợ Trọn Đời'), status: idx('Trạng Thái')
   }
   const today = new Date()
@@ -174,6 +180,7 @@ export async function queryContracts(filter: WarrantyQueryFilter = {}) {
       ma_hd: r[C.contractCode] || '',
       ma_don: r[C.orderId] || '',
       imei: r[C.imei] || '',
+      serial: C.serial!==-1 ? (r[C.serial] || '') : '',
       sdt: r[C.phone] || '',
       ma_goi: r[C.pkg] || '',
       han_tong: r[C.overall] || '',
@@ -181,6 +188,7 @@ export async function queryContracts(filter: WarrantyQueryFilter = {}) {
     }
     if (filter.orderId && rec.ma_don !== filter.orderId) continue
     if (filter.imei && rec.imei !== filter.imei) continue
+    if (filter.serial && rec.serial !== filter.serial) continue
     if (filter.phone && rec.sdt !== filter.phone) continue
     if (filter.status && rec.trang_thai !== filter.status) continue
     if (expDays) {
@@ -199,6 +207,7 @@ export async function queryContracts(filter: WarrantyQueryFilter = {}) {
 export interface WarrantyContractFilter {
   orderId?: string
   imei?: string
+  serial?: string
   phone?: string
   status?: string // active | expired
   expiringDays?: number
@@ -208,7 +217,7 @@ export async function loadWarrantyContracts(filter: WarrantyContractFilter = {})
   const { header, rows } = await readFromGoogleSheets(CONTRACT_SHEET)
   const idx = (name: string) => header.indexOf(name)
   const C = {
-    maHd: idx('Mã HĐ'), maDon: idx('Mã Đơn'), imei: idx('IMEI'), phone: idx('SĐT Khách'), maGoi: idx('Mã Gói'),
+    maHd: idx('Mã HĐ'), maDon: idx('Mã Đơn'), imei: idx('IMEI'), serial: idx('Serial'), phone: idx('SĐT Khách'), maGoi: idx('Mã Gói'),
     hanDoi1: idx('Hạn 1 Đổi 1'), hw: idx('Hạn Phần Cứng'), cnc: idx('Hạn CNC/Độ Sim'), hanTong: idx('Hạn Tổng'),
     trangThai: idx('Trạng Thái'), lifetime: idx('Hỗ Trợ Trọn Đời')
   }
@@ -219,7 +228,8 @@ export async function loadWarrantyContracts(filter: WarrantyContractFilter = {})
     return {
       ma_hd: C.maHd!==-1? r[C.maHd]: '',
       ma_don: C.maDon!==-1? r[C.maDon]: '',
-      imei: C.imei!==-1? r[C.imei]: '',
+  imei: C.imei!==-1? r[C.imei]: '',
+  serial: C.serial!==-1? r[C.serial]: '',
       sdt_khach: C.phone!==-1? r[C.phone]: '',
       ma_goi: C.maGoi!==-1? r[C.maGoi]: '',
       han_1doi1: C.hanDoi1!==-1? r[C.hanDoi1]: '',
@@ -234,6 +244,7 @@ export async function loadWarrantyContracts(filter: WarrantyContractFilter = {})
   let filtered = list
   if (filter.orderId) filtered = filtered.filter(c => c.ma_don === filter.orderId)
   if (filter.imei) filtered = filtered.filter(c => c.imei === filter.imei)
+  if (filter.serial) filtered = filtered.filter(c => c.serial === filter.serial)
   if (filter.phone) filtered = filtered.filter(c => c.sdt_khach === filter.phone)
   if (filter.status) filtered = filtered.filter(c => c.trang_thai === filter.status)
   if (typeof filter.expiringDays === 'number' && filter.expiringDays > 0) {

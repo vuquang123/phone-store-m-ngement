@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets } from "@/lib/google-sheets"
+import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { addNotification } from "@/lib/notifications"
 import { cancelContractsByIMEIs } from "@/lib/warranty"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
@@ -111,6 +112,7 @@ export async function POST(req: NextRequest) {
       so_dien_thoai,
       san_pham,
       imei,
+      serial,
       ly_do,
       trang_thai,
       nguoi_xu_ly,
@@ -156,7 +158,7 @@ export async function POST(req: NextRequest) {
     if (H.khach !== -1) line[H.khach] = khach_hang || ""
     if (H.sdt !== -1) line[H.sdt] = so_dien_thoai ? normalizePhone(String(so_dien_thoai)) : ""
     if (H.sp !== -1) line[H.sp] = san_pham || ""
-    if (H.imei !== -1) line[H.imei] = imei || ""
+  if (H.imei !== -1) line[H.imei] = imei || ""
     if (H.lyDo !== -1) line[H.lyDo] = ly_do || ""
     if (H.trangThai !== -1) line[H.trangThai] = trang_thai || "Đang xử lý"
     if (H.nguoiXL !== -1) line[H.nguoiXL] = nguoi_xu_ly || ""
@@ -191,7 +193,7 @@ export async function POST(req: NextRequest) {
     try {
       if (ma_don_hang || imei) {
         const { header: BH, rows: BR } = await readFromGoogleSheets('Ban_Hang')
-        const bIdx = {
+      const bIdx = {
           idDon: BH.indexOf('ID Đơn Hàng'),
           tenSP: BH.indexOf('Tên Sản Phẩm'),
           loaiMay: BH.indexOf('Loại Máy'),
@@ -199,6 +201,7 @@ export async function POST(req: NextRequest) {
           pin: BH.indexOf('Pin (%)'),
           mauSac: BH.indexOf('Màu Sắc'),
           imei: BH.indexOf('IMEI'),
+        serial: BH.indexOf('Serial'),
           tinhTrang: BH.indexOf('Tình Trạng Máy'),
           giaNhap: BH.indexOf('Giá Nhập'),
           giaBan: BH.indexOf('Giá Bán'),
@@ -213,6 +216,7 @@ export async function POST(req: NextRequest) {
         }
         const targetId = String(ma_don_hang || '')
         const imeiStr = String(imei || '')
+        const serialStr = String(serial || '')
         const matchedIndexes: number[] = []
         for (let i = 0; i < BR.length; i++) {
           const row = BR[i]
@@ -220,6 +224,8 @@ export async function POST(req: NextRequest) {
           let isMatch = false
           if (imeiStr) {
             isMatch = bIdx.imei !== -1 && String(row[bIdx.imei] || '') === imeiStr
+          } else if (serialStr) {
+            isMatch = bIdx.serial !== -1 && String(row[bIdx.serial] || '') === serialStr
           } else if (targetId) {
             // Fallback: only if IMEI is not provided, match by order ID
             isMatch = bIdx.idDon !== -1 && String(row[bIdx.idDon] || '') === targetId
@@ -254,6 +260,7 @@ export async function POST(req: NextRequest) {
             pin: KH.indexOf('Pin (%)'),
             mauSac: KH.indexOf('Màu Sắc'),
             imei: KH.indexOf('IMEI'),
+            serial: KH.indexOf('Serial'),
             tinhTrang: KH.indexOf('Tình Trạng Máy') !== -1 ? KH.indexOf('Tình Trạng Máy') : KH.indexOf('Tình Trạng'),
             giaNhap: KH.indexOf('Giá Nhập'),
             giaBan: KH.indexOf('Giá Bán'),
@@ -264,9 +271,9 @@ export async function POST(req: NextRequest) {
           // Chỉ lấy ngày dạng dd/mm/yyyy theo múi giờ VN
           const nowVN = new Date()
           const ngayVN = nowVN.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
-          const computeIdMay = (im: string) => {
-            const digits = (im||'').replace(/\D/g,'')
-            return digits ? digits.slice(-5) : ''
+          const computeIdMay = (im: string, sr: string) => {
+            const deviceId = getDeviceId({ IMEI: (im||'').trim(), Serial: (sr||'').trim().toUpperCase() })
+            return deviceId ? last5FromDeviceId(deviceId) : ''
           }
           const toNum = (v:any) => { const n = Number(String(v).replace(/[^\d.-]/g,'')); return Number.isFinite(n)? n: 0 }
           for (const idxRow of matchedIndexes) {
@@ -275,9 +282,10 @@ export async function POST(req: NextRequest) {
             const isPartner = nguon.includes('đối tác') || nguon.includes('doi tac') || nguon.includes('partner')
             if (isPartner) continue // không nhập lại kho shop cho hàng đối tác
             const im = bIdx.imei !== -1 ? String(r[bIdx.imei]||'') : ''
-            if (!im) continue // không có IMEI thì bỏ qua để tránh nhập nhầm
+            const sr = bIdx.serial !== -1 ? String(r[bIdx.serial]||'') : ''
+            if (!im && !sr) continue // không có định danh thì bỏ qua để tránh nhập nhầm
             const newRow = KH.map((col, ci) => {
-              if (ci === kIdx.idMay) return computeIdMay(im)
+              if (ci === kIdx.idMay) return computeIdMay(im, sr)
               if (ci === kIdx.ngayNhap) return ngayVN
               if (ci === kIdx.tenSP) return bIdx.tenSP !== -1 ? r[bIdx.tenSP] : ''
               if (ci === kIdx.loaiMay) return bIdx.loaiMay !== -1 ? r[bIdx.loaiMay] : ''
@@ -285,6 +293,7 @@ export async function POST(req: NextRequest) {
               if (ci === kIdx.pin) return bIdx.pin !== -1 ? r[bIdx.pin] : ''
               if (ci === kIdx.mauSac) return bIdx.mauSac !== -1 ? r[bIdx.mauSac] : ''
               if (ci === kIdx.imei) return im
+              if (ci === kIdx.serial) return sr
               if (ci === kIdx.tinhTrang) return bIdx.tinhTrang !== -1 ? r[bIdx.tinhTrang] : ''
               if (ci === kIdx.giaNhap) return bIdx.giaNhap !== -1 ? toNum(r[bIdx.giaNhap]) : ''
               if (ci === kIdx.giaBan) return bIdx.giaBan !== -1 ? toNum(r[bIdx.giaBan]) : ''
@@ -432,6 +441,11 @@ export async function PATCH(req: NextRequest) {
             {
               ten_san_pham: colSp !== -1 ? (r[colSp] || '') : '',
               imei: colImei !== -1 ? (r[colImei] || '') : '',
+              // best-effort: if Ban_Hang has Serial column, try include it
+              serial: ((): string => {
+                const colSerial = idx('Serial')
+                return colSerial !== -1 ? (r[colSerial] || '') : ''
+              })(),
             }
           ],
         }

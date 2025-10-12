@@ -25,6 +25,7 @@ interface Product {
   mau_sac: string
   pin: string
   imei: string
+  serial?: string
   tinh_trang: string
   trang_thai: string
   gia_nhap: number
@@ -85,6 +86,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     mau_sac: "",
     pin: "",
     imei: "",
+    serial: "",
     tinh_trang: "",
     trang_thai: "Còn hàng",
     gia_nhap: "",
@@ -118,6 +120,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         mau_sac: product.mau_sac || "",
         pin: product.pin || "",
         imei: product.imei || "",
+        serial: (product as any).serial || (product as any).Serial || "",
         tinh_trang: product.tinh_trang || "",
         trang_thai: product.trang_thai || "Còn hàng",
         gia_nhap: (typeof product.gia_nhap === "number" && !isNaN(product.gia_nhap)) ? product.gia_nhap.toString() : "",
@@ -136,6 +139,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         mau_sac: "",
         pin: "",
         imei: "",
+        serial: "",
         tinh_trang: "",
         trang_thai: "Còn hàng",
         gia_nhap: "",
@@ -154,7 +158,6 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
       "loai_phu_kien",
       "dung_luong",
       "mau_sac",
-      "imei",
       "tinh_trang",
       "trang_thai",
       "gia_nhap",
@@ -172,10 +175,13 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
       return
     }
 
-    if (formData.imei.length !== 15 || !/^\d{15}$/.test(formData.imei)) {
+    // Validate identifier: require either a valid IMEI (15 digits) or a valid Serial (6-30 alphanumeric)
+    const hasImei = !!formData.imei && /^\d{15}$/.test(formData.imei)
+    const hasSerial = !!formData.serial && /^[A-Za-z0-9-]{6,30}$/.test(formData.serial)
+    if (!hasImei && !hasSerial) {
       toast({
-        title: "IMEI không hợp lệ",
-        description: "IMEI phải có đúng 15 chữ số!",
+        title: "Thiếu định danh thiết bị",
+        description: "Nhập IMEI 15 số hoặc Serial (6-30 ký tự chữ/số).",
         variant: "destructive",
       })
       return
@@ -327,10 +333,10 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
       </div>
     </div>
 
-    {/* Row 3: IMEI & Tình trạng */}
+    {/* Row 3: IMEI/Serial & Tình trạng */}
     <div className="grid grid-cols-2 gap-4">
       <div className="space-y-2">
-  <Label htmlFor="imei">IMEI <span className="text-red-500">*</span></Label>
+  <Label htmlFor="imei">IMEI</Label>
         <Input
           id="imei"
           value={formData.imei}
@@ -338,12 +344,27 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
             const value = e.target.value.replace(/\D/g, "").slice(0, 15)
             setFormData({ ...formData, imei: value })
           }}
-          placeholder="Nhập IMEI (15 chữ số)"
+          placeholder="Nhập IMEI (15 chữ số) (tuỳ chọn)"
           maxLength={15}
           className="font-mono"
-          required
         />
         <p className="text-xs text-muted-foreground">{formData.imei.length}/15 ký tự</p>
+      </div>
+      <div className="space-y-2">
+  <Label htmlFor="serial">Serial</Label>
+        <Input
+          id="serial"
+          value={formData.serial}
+          onChange={(e) => {
+            const value = e.target.value.toUpperCase()
+            if (!/^[A-Z0-9-]*$/.test(value)) return
+            if (value.length > 30) return
+            setFormData({ ...formData, serial: value })
+          }}
+          placeholder="Nhập Serial (6-30 ký tự) (tuỳ chọn)"
+          maxLength={30}
+        />
+        <p className="text-xs text-muted-foreground">{(formData.serial || '').length}/30 ký tự</p>
       </div>
       <div className="space-y-2">
   <Label htmlFor="tinh_trang">Tình trạng <span className="text-red-500">*</span></Label>

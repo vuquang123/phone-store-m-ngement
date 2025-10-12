@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, appendToGoogleSheets } from "@/lib/google-sheets"
+import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 
 export const dynamic = "force-dynamic"
 
@@ -77,6 +78,7 @@ function idxKho(header: string[]) {
     pin: colIndex(header, "Pin (%)"),
     mauSac: colIndex(header, "Màu Sắc"),
     imei: colIndex(header, "IMEI"),
+    serial: colIndex(header, "Serial"),
     tinhTrang: colIndex(header, "Tình Trạng Máy"),
     giaNhap: colIndex(header, "Giá Nhập"),
     giaBan: colIndex(header, "Giá Bán"),
@@ -98,6 +100,7 @@ export async function GET(request: NextRequest) {
       mau_sac: row[idx.mauSac],
       pin: row[idx.pin],
       imei: row[idx.imei],
+      serial: idx.serial !== -1 ? row[idx.serial] : undefined,
       tinh_trang: row[idx.tinhTrang],
       gia_nhap: toNumber(row[idx.giaNhap]),
       gia_ban: toNumber(row[idx.giaBan]),
@@ -124,18 +127,10 @@ export async function POST(request: NextRequest) {
       const now = new Date()
       const ngayNhap = now.toLocaleDateString("vi-VN")
       for (const p of body.products) {
-        let idMay = ""
-        let imeiStr = ""
-        if (p.imei) {
-          imeiStr = String(p.imei)
-          idMay = imeiStr.slice(-5)
-        } else if (p["IMEI"]) {
-          imeiStr = String(p["IMEI"])
-          idMay = imeiStr.slice(-5)
-        } else {
-          // Nếu không có IMEI, sinh ngẫu nhiên
-          idMay = Math.floor(10000 + Math.random() * 90000).toString()
-        }
+        const imeiStr = String(p.imei || p["IMEI"] || "").trim()
+        const serialStr = String(p.serial || p["Serial"] || "").trim().toUpperCase()
+        const deviceId = getDeviceId({ IMEI: imeiStr, Serial: serialStr })
+        const idMay = deviceId ? last5FromDeviceId(deviceId) : Math.floor(10000 + Math.random() * 90000).toString()
         const newRow = header.map((k) => {
           if (k === "ID Máy") return idMay
           if (k === "Ngày Nhập") return ngayNhap
@@ -148,6 +143,8 @@ export async function POST(request: NextRequest) {
             const raw = p[k] ?? p["gia_ban"] ?? p["Gia Ban"]
             return (raw !== undefined && raw !== null && String(raw) !== "") ? toNumber(raw) : ""
           }
+          if (k === "IMEI") return imeiStr
+          if (k === "Serial") return serialStr
           return p[k] || p[k.replace(/\s/g, "_").toLowerCase()] || p[k.replace(/\s/g, "").toLowerCase()] || ""
         })
         const result = await import("@/lib/google-sheets").then(mod => mod.appendToGoogleSheets(SHEET, newRow))
@@ -196,17 +193,21 @@ export async function POST(request: NextRequest) {
         bodyNormMap[normalizeKey(k)] = body[k]
       })
 
-      // 2) Tạo ID Máy từ IMEI (nếu có)
-      const imeiVal = body.imei || bodyNormMap["imei"] || ""
-      const imeiStr = String(imeiVal)
-      const idMay = imeiStr ? imeiStr.slice(-5) : Math.floor(10000 + Math.random() * 90000).toString()
+  // 2) Tạo ID Máy từ IMEI hoặc Serial (nếu có)
+  const imeiVal = body.imei || bodyNormMap["imei"] || ""
+  const serialVal = body.serial || bodyNormMap["serial"] || ""
+  const imeiStr = String(imeiVal).trim()
+  const serialStr = String(serialVal).trim().toUpperCase()
+  const deviceId = getDeviceId({ IMEI: imeiStr, Serial: serialStr })
+  const idMay = deviceId ? last5FromDeviceId(deviceId) : Math.floor(10000 + Math.random() * 90000).toString()
 
       // 3) Đặt một số mapping đặc biệt theo tên cột phổ biến
       const getValForHeader = (k: string) => {
         const nk = normalizeKey(k)
         // Ưu tiên các cột đặc biệt
         if (k === "ID Máy") return idMay
-        if (k === "IMEI") return imeiStr
+  if (k === "IMEI") return imeiStr
+  if (k === "Serial") return serialStr
         if (k === "Trạng Thái") return body.trang_thai || bodyNormMap["trangthai"] || "Còn hàng"
         if (k === "Ngày Nhập") {
           const input = body.ngay_nhap || bodyNormMap["ngaynhap"]

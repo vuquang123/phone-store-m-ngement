@@ -41,8 +41,9 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
   const fetchCustomers = async () => {
     try {
       setIsLoading(true)
+      const digits = (search || "").replace(/\D/g, "")
       const params = new URLSearchParams()
-      if (search) params.append("search", search)
+      if (digits) params.append("search", digits)
 
       const response = await fetch(`/api/khach-hang?${params}`)
       if (response.ok) {
@@ -110,17 +111,20 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
   <DialogContent className="sm:max-w-[600px] bg-white">
         <DialogHeader>
           <DialogTitle>Chọn khách hàng</DialogTitle>
-          <DialogDescription>Tìm kiếm và chọn khách hàng cho đơn hàng</DialogDescription>
+          <DialogDescription>Nhập số điện thoại để tìm khách; nếu không có sẽ hiện nút tạo mới.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Tìm kiếm theo tên hoặc số điện thoại..."
+              placeholder="Nhập SĐT khách hàng..."
+              inputMode="numeric"
               value={search}
               onChange={(e) => {
-                setSearch(e.target.value)
+                // Chỉ cho phép số để ép tìm theo SĐT
+                const digits = e.target.value.replace(/\D/g, "")
+                setSearch(digits)
                 setHighlightIndex(-1)
               }}
               className="pl-8"
@@ -135,7 +139,7 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
                 } else if (e.key === "Enter") {
                   if (highlightIndex >= 0 && customers[highlightIndex]) {
                     handleSelect(customers[highlightIndex])
-                  } else if (!isLoading && customers.length === 0 && search.trim().length >= 6) {
+                  } else if (!isLoading && customers.length === 0 && search.trim().length >= 9) {
                     setShowCreate(true)
                   }
                 }
@@ -167,7 +171,7 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
             {!isLoading && customers.length === 0 && (
               <div className="text-center py-4 space-y-2 text-muted-foreground">
                 <p>Không tìm thấy khách hàng</p>
-                {search.trim().length >= 6 && (
+                {search.trim().length >= 9 && (
                   <Button variant="default" size="sm" onClick={() => setShowCreate(true)}>
                     + Tạo khách mới với SĐT "{search.trim()}"
                   </Button>

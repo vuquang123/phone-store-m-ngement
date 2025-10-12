@@ -26,6 +26,7 @@ interface OrderDetail {
   trang_thai: string
   ngay_ban: string
   ghi_chu?: string
+  phu_kien_text?: string
   khach_hang?: {
     ho_ten: string
     so_dien_thoai: string
@@ -157,6 +158,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
         trang_thai: data.trang_thai || "hoan_thanh",
         ngay_ban: ngayBan,
         ghi_chu: data.ghi_chu || data["Ghi Chú"] || "",
+        phu_kien_text: (data.phu_kien_text || data["Phụ Kiện"] || "").toString(),
         khach_hang: data.khach_hang || (data.ten_khach_hang || data["Tên Khách Hàng"]
           ? {
               ho_ten: data.ten_khach_hang || data["Tên Khách Hàng"] || "Khách lẻ",
@@ -203,6 +205,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               }
             ],
       }
+    // Không nhét phụ kiện vào chi_tiet nữa; sẽ hiển thị ở block riêng bằng phu_kien_text
     setOrder(orderDetail)
     // Sau khi có chi tiết đơn hàng mới fetch bảo hành (tránh gọi 2 lần)
     fetchWarranties(orderDetail.ma_don_hang)
@@ -404,24 +407,12 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                               <TableCell className="font-mono text-xs">{w.imei}</TableCell>
                               <TableCell>{w.ma_goi}</TableCell>
                               <TableCell>
-                                <div className="space-y-1 text-left">
-                                  <div className="grid grid-cols-[3.5rem_auto] items-baseline w-full">
-                                    <div />
-                                    <div className="font-mono tabular-nums">{w.han_tong || '—'}</div>
-                                  </div>
-                                  <div className="text-[11px] text-muted-foreground leading-tight space-y-0.5">
-                                    <div className="grid grid-cols-[3.5rem_auto] items-baseline w-full">
-                                      <div className="text-right pr-1">1-1:</div>
-                                      <div className="font-mono tabular-nums">{w.han_1doi1 || '—'}</div>
-                                    </div>
-                                    <div className="grid grid-cols-[3.5rem_auto] items-baseline w-full">
-                                      <div className="text-right pr-1">HW:</div>
-                                      <div className="font-mono tabular-nums">{w.han_phan_cung || '—'}</div>
-                                    </div>
-                                    <div className="grid grid-cols-[3.5rem_auto] items-baseline w-full">
-                                      <div className="text-right pr-1">CNC:</div>
-                                      <div className="font-mono tabular-nums">{w.han_cnc || '—'}</div>
-                                    </div>
+                                <div className="flex flex-col items-center justify-center text-center">
+                                  <div className="font-mono tabular-nums text-sm">{w.han_tong || '—'}</div>
+                                  <div className="mt-1 text-[11px] text-muted-foreground leading-tight">
+                                    <div className="flex items-baseline gap-1 justify-center"><span className="opacity-80">1-1:</span><span className="font-mono tabular-nums">{w.han_1doi1 || '—'}</span></div>
+                                    <div className="flex items-baseline gap-1 justify-center"><span className="opacity-80">HW:</span><span className="font-mono tabular-nums">{w.han_phan_cung || '—'}</span></div>
+                                    <div className="flex items-baseline gap-1 justify-center"><span className="opacity-80">CNC:</span><span className="font-mono tabular-nums">{w.han_cnc || '—'}</span></div>
                                   </div>
                                 </div>
                               </TableCell>
@@ -475,19 +466,6 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                           </div>
                         </div>
                       )}
-                      {item.phu_kien && (
-                        <div className="rounded-xl border p-3 bg-white">
-                          <div className="font-medium">{item.phu_kien.ten_phu_kien}</div>
-                          <div className="text-xs text-muted-foreground capitalize">{item.phu_kien.loai_phu_kien}</div>
-                          <div className="mt-1 text-sm">SL: {item.so_luong}</div>
-                        </div>
-                      )}
-                      {(item as any)["Phụ Kiện"] && (
-                        <div className="rounded-xl border p-3 bg-white">
-                          <div className="font-medium">{(item as any)["Phụ Kiện"]}</div>
-                          <div className="mt-1 text-sm">SL: 1</div>
-                        </div>
-                      )}
                     </Fragment>
                   ))}
                 </div>
@@ -521,35 +499,40 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                               <TableCell className="text-right">₫{Number(item.thanh_tien ?? 0).toLocaleString()}</TableCell>
                             </TableRow>
                           )}
-                          {item.phu_kien && (
-                            <TableRow key={item.id + "-pk"}>
-                              <TableCell>
-                                <div className="font-medium">{item.phu_kien.ten_phu_kien}</div>
-                                <div className="text-sm text-muted-foreground capitalize">
-                                  {item.phu_kien.loai_phu_kien}
-                                </div>
-                              </TableCell>
-                              <TableCell></TableCell>
-                              <TableCell>{item.so_luong}</TableCell>
-                              <TableCell className="text-right"></TableCell>
-                            </TableRow>
-                          )}
-                          {(item as any)["Phụ Kiện"] && (
-                            <TableRow key={item.id + "-pkstr"}>
-                              <TableCell>
-                                <div className="font-medium">{(item as any)["Phụ Kiện"]}</div>
-                              </TableCell>
-                              <TableCell></TableCell>
-                              <TableCell>1</TableCell>
-                              <TableCell className="text-right"></TableCell>
-                            </TableRow>
-                          )}
                         </Fragment>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
               )}
+              {/* Phụ kiện (gộp) nếu có) – đặt bên dưới sản phẩm */}
+              {(() => {
+                const accessoriesText = (order as any)?.phu_kien_text || ''
+                const tokens = String(accessoriesText).split(',').map(s=>s.trim()).filter(Boolean)
+                if (!tokens.length) return null
+                // Gom trùng tên: "Tên xN" => cộng dồn theo Tên
+                const map = new Map<string, { name: string, qty: number }>()
+                for (const tk of tokens) {
+                  const m = tk.match(/^(.*?)(?:\s*x(\d+))?$/i)
+                  const name = (m && m[1] ? m[1] : tk).replace(/\s+/g,' ').trim()
+                  const q = m && m[2] ? Number(m[2]) : 1
+                  const key = name.toLowerCase()
+                  const prev = map.get(key)
+                  if (prev) prev.qty += q
+                  else map.set(key, { name, qty: q })
+                }
+                const parts = Array.from(map.values())
+                return (
+                  <div className="mt-3 rounded-md border p-3 bg-slate-50">
+                    <div className="text-sm font-medium mb-1">Phụ kiện</div>
+                    <ul className="list-disc pl-5 text-sm space-y-0.5">
+                      {parts.map((it, i)=>(
+                        <li key={`acc-${i}`}>{it.name}{it.qty>1?` x${it.qty}`:''}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })()}
             </div>
 
             <Separator />

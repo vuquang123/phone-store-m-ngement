@@ -176,7 +176,7 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
 
   const target = normalizePhone(phone)
   const foundIdx = rows.findIndex((r) => normalizePhone(String(r[K.sdt] || "")) === target)
-  const nowVN = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+  const nowVN = new Date().toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
 
   if (foundIdx === -1) {
     // Thêm KH mới
@@ -184,8 +184,8 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
     if (K.ten !== -1) row[K.ten] = name || "Khách lẻ"
     row[K.sdt] = target
     if (K.tongMua !== -1) row[K.tongMua] = Number(amountToAdd) || 0
-    if (K.lanMuaCuoi !== -1) row[K.lanMuaCuoi] = nowVN
-    if (K.ngayTao !== -1) row[K.ngayTao] = nowVN    // ⬅️ ghi Ngày tạo
+  if (K.lanMuaCuoi !== -1) row[K.lanMuaCuoi] = nowVN
+  if (K.ngayTao !== -1) row[K.ngayTao] = nowVN    // ⬅️ ghi Ngày tạo (chỉ ngày)
     await appendToGoogleSheets("Khach_Hang", row)
     return { ten: row[K.ten] || "Khách lẻ", sdt: target, tongMua: row[K.tongMua] || amountToAdd }
   } else {
@@ -211,9 +211,9 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
       await updateRangeValues(`Khach_Hang!${toColumnLetter(K.tongMua + 1)}${rowNumber}`, [[newTotal]])
     }
     if (K.lanMuaCuoi !== -1) {
-      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.lanMuaCuoi + 1)}${rowNumber}`, [[nowVN]])
+  await updateRangeValues(`Khach_Hang!${toColumnLetter(K.lanMuaCuoi + 1)}${rowNumber}`, [[nowVN]])
     }
-    // Nếu ô Ngày tạo đang trống thì bổ sung
+    // Nếu ô Ngày tạo đang trống thì bổ sung (chỉ ngày)
     if (K.ngayTao !== -1 && !rows[foundIdx][K.ngayTao]) {
       await updateRangeValues(`Khach_Hang!${toColumnLetter(K.ngayTao + 1)}${rowNumber}`, [[nowVN]])
     }
@@ -392,9 +392,10 @@ export async function POST(request: NextRequest) {
           const ten = pk.ten_phu_kien || pk.ten || pk.name || ''
           const loai = pk.loai || pk.type || ''
           const sl = pk.so_luong && !Number.isNaN(Number(pk.so_luong)) ? Number(pk.so_luong) : 1
-          const typeSuffix = loai ? ` (${loai})` : ''
+          // Định dạng mong muốn: Loại + Tên (vd: "Cable TYPE-C")
+          const nameWithType = loai ? `${loai} ${ten}` : ten
           const qtySuffix = sl > 1 ? ` x${sl}` : ''
-          return `${ten}${typeSuffix}${qtySuffix}`
+          return `${nameWithType}${qtySuffix}`
         })
         phuKien = labels.join(", ")
         giaNhapPhuKien = normalizedAccessories.reduce((s: number, pk: any) => s + (pk.gia_nhap || 0) * (pk.so_luong || 1), 0)
@@ -629,12 +630,26 @@ export async function POST(request: NextRequest) {
           ten: body.customerName || body.ten_khach_hang || body.ho_ten || body["Tên Khách Hàng"] || "Khách lẻ",
           so_dien_thoai: body.customerPhone || body.so_dien_thoai || body.sdt || body["Số Điện Thoại"] || "N/A"
         },
+        // Tổng tiền: ưu tiên final từ FE nếu có, fallback về trường cũ
+        final_total: (typeof finalTotalFromClient === 'number' ? finalTotalFromClient : undefined),
         tong_tien: body["Thanh Toan"] || body.tong_tien || body.thanh_toan || 0,
         phuong_thuc_thanh_toan: body["Phuong Thuc Thanh Toan"] || body["phuong_thuc_thanh_toan"] || body.paymentMethod || body.hinh_thuc_thanh_toan || body["Hình Thức Thanh Toán"] || "N/A",
         ngay_tao: Date.now(),
         products: productList,
         // Gửi gói bảo hành nếu có
         warrantyPackages: warrantyPkgCodes,
+        // Chi tiết thanh toán dạng mảng để formatter render rõ từng dòng
+        payments: Array.isArray(body.payments) ? body.payments : [],
+        // Phụ kiện kèm loại + số lượng
+        accessories: Array.isArray(body.accessories)
+          ? body.accessories
+          : (Array.isArray(body.phu_kien) ? body.phu_kien.map((pk: any)=> ({
+              id: pk.id,
+              ten_phu_kien: pk.ten_phu_kien || pk.ten || pk.name,
+              loai: pk.loai || pk.type || '',
+              so_luong: pk.so_luong || pk.sl || 1,
+              gia_ban: pk.gia_ban
+            })) : [])
       }
       console.log("[TELEGRAM DEBUG] orderInfo gửi đi:", orderInfo)
       // Chuẩn hóa loại đơn để nhận diện đúng đơn online/offline
