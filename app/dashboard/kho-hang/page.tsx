@@ -954,13 +954,13 @@ export default function KhoHangPage() {
                 </div>
               )}
 
-              <div className="border rounded-lg overflow-hidden shadow-sm mt-6">
+              <div className={`border rounded-lg overflow-hidden shadow-sm mt-6${isMobile ? ' mx-[-2px]' : ''}`}> 
                 <div className="bg-slate-50 px-6 py-4 border-b">
                   <h3 className="font-semibold">Danh sách sản phẩm</h3>
                   <p className="text-sm">Hiển thị {filteredProducts.length} sản phẩm</p>
                 </div>
                 {isMobile ? (
-                  <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="px-1 pt-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {isLoading ? (
                       <div className="text-center text-slate-400 col-span-full py-6">Đang tải...</div>
                     ) : filteredProducts.length === 0 ? (
@@ -969,7 +969,7 @@ export default function KhoHangPage() {
                       filteredProducts.map((p) => (
                         <div
                           key={p.id}
-                          className={`relative rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:scale-[0.99] transition ${isEditMode ? "cursor-pointer" : ""}`}
+                          className={`relative rounded-xl border border-slate-200 bg-white p-3 shadow-sm active:scale-[0.99] transition ${isEditMode ? "cursor-pointer" : ""} mx-[-2px]"`}
                           onClick={() => { if (isEditMode) handleSelectProduct(p.id) }}
                         >
                           {isEditMode && (

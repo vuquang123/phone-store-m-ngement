@@ -147,10 +147,12 @@ export default function BanHangPage() {
     try {
       const uniq = new Set<string>()
       for (const o of depositOrdersState) {
-        const ma = (o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"] || "").toString().trim()
-        if (ma) uniq.add(ma)
+        const status = (o["Trạng Thái"] || o["trang_thai"] || o["Trạng thái"] || o["status"] || "").toLowerCase();
+        if (status === "đã thanh toán" || status === "đã tất toán") continue;
+        const ma = (o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"] || "").toString().trim();
+        if (ma) uniq.add(ma);
       }
-      return uniq.size
+      return uniq.size;
     } catch { return 0 }
   }, [depositOrdersState])
   // State to hold kho hàng products
@@ -1103,11 +1105,18 @@ export default function BanHangPage() {
   }
 
   // === ĐƠN ĐẶT CỌC ===
-  const depositOrders = depositOrdersState.length > 0
+  const depositOrders = (depositOrdersState.length > 0
     ? depositOrdersState
     : orders.filter(
         (o) => o.trang_thai === "Chờ thanh toán đủ" || o.loai_don === "Đặt cọc"
       )
+  ).filter(
+    (o) => {
+      // Trạng thái có thể là "Đã thanh toán" hoặc "Đã tất toán" hoặc các biến thể
+      const status = (o["Trạng Thái"] || o["trang_thai"] || o["Trạng thái"] || o["status"] || "").toLowerCase();
+      return status !== "đã thanh toán" && status !== "đã tất toán";
+    }
+  );
 
   // Hủy đặt cọc: trả sản phẩm về kho + xóa khỏi sheet đặt cọc
   const [cancelingDepositId, setCancelingDepositId] = useState<string|null>(null)

@@ -205,7 +205,10 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     noteLine,
     totalLine,
     depositLine,
-    ` <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || (paymentLines.length ? 'Chi tiết bên dưới' : 'N/A')}`,
+    // Nếu có paymentLines chi tiết thì chỉ hiển thị các dòng chi tiết, không lặp lại tổng hợp
+    !paymentLines.length
+      ? ` <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || 'N/A'}`
+      : '',
     paymentLines.length ? `\n${paymentLines.join('\n')}` : '',
     `\n <b>Thời gian:</b> ${new Date(order.ngay_tao || Date.now()).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })}`
   ]
