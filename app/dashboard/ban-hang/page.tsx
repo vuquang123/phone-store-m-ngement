@@ -118,6 +118,41 @@ export default function BanHangPage() {
     };
     fetchDepositOrders();
   }, [activeTab, reloadFlag]);
+  // Lấy tổng đơn đặt cọc ngay khi vào trang để hiện badge
+  useEffect(() => {
+    const fetchOnce = async () => {
+      try {
+        const res = await fetch("/api/dat-coc")
+        if (res.ok) {
+          const data = await res.json()
+          let orders: any[] = []
+          const payload = data?.data
+          if (Array.isArray(payload) && Array.isArray(payload[0])) {
+            const [header, ...rows] = payload as any[]
+            orders = rows.map((row: any[]) => {
+              const obj: Record<string, any> = {}
+              ;(header as string[]).forEach((key: string, idx: number) => { obj[key] = row[idx] })
+              return obj
+            })
+          }
+          setDepositOrders(orders)
+        }
+      } catch {}
+    }
+    fetchOnce()
+  }, [])
+
+  // Đếm tổng số đơn đặt cọc (theo mã đơn duy nhất, bỏ trạng thái hủy)
+  const depositOrderCount = useMemo(() => {
+    try {
+      const uniq = new Set<string>()
+      for (const o of depositOrdersState) {
+        const ma = (o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"] || "").toString().trim()
+        if (ma) uniq.add(ma)
+      }
+      return uniq.size
+    } catch { return 0 }
+  }, [depositOrdersState])
   // State to hold kho hàng products
   const [khoHangProducts, setKhoHangProducts] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -138,6 +173,7 @@ export default function BanHangPage() {
   const [installmentLoan, setInstallmentLoan] = useState(0)
   const [loaiDon, setLoaiDon] = useState("")
   const [hinhThucVanChuyen, setHinhThucVanChuyen] = useState("")
+  const [diaChiNhan, setDiaChiNhan] = useState("")
   const [ghiChu, setGhiChu] = useState("")
   const [copiedImei, setCopiedImei] = useState<string | null>(null)
   const [justAddedKey, setJustAddedKey] = useState<string | null>(null)
@@ -376,7 +412,8 @@ export default function BanHangPage() {
               serial: p.serial || p['Serial'] || '',
               'Màu Sắc': p.mau_sac,
               'Pin (%)': p.pin,
-              'Tình Trạng Máy': p.tinh_trang_may
+              'Tình Trạng Máy': p.tinh_trang_may,
+              ghi_chu: p.ghi_chu ?? p['Ghi Chú'] ?? ''
             }))
         }
 
@@ -1017,6 +1054,14 @@ export default function BanHangPage() {
               finalThanhToan: finalThanhToan,
               hinh_thuc_thanh_toan: paymentSummary,
               payments: paymentsArray,
+              // Thông tin giao hàng (đơn online)
+              dia_chi_nhan: loaiDon === 'Đơn onl' ? diaChiNhan : '',
+              "Địa Chỉ Nhận": loaiDon === 'Đơn onl' ? diaChiNhan : '',
+              khach_hang: {
+                ten: selectedCustomer?.ho_ten || 'Khách lẻ',
+                so_dien_thoai: selectedCustomer?.so_dien_thoai || '',
+                dia_chi: loaiDon === 'Đơn onl' ? diaChiNhan : ''
+              },
               warrantySelections: cart
                 .filter(i => i.type==='product' && selectedWarranties[(i.imei || i.serial || i.id) as string])
                 .map(i => ({ imei: i.imei || '', serial: i.serial || '', packageCode: selectedWarranties[(i.imei || i.serial || i.id) as string] as string }))
@@ -1028,6 +1073,7 @@ export default function BanHangPage() {
           setSelectedCustomer(null);
           setGiamGia(0);
           setGhiChu("");
+          setDiaChiNhan("");
           // Reset payment inputs
           setCashAmount(0); setTransferAmount(0); setCardAmount(0);
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0);
@@ -1129,9 +1175,17 @@ export default function BanHangPage() {
             </TabsTrigger>
             <TabsTrigger
               value="don-dat-coc"
-              className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="relative data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              Đơn đặt cọc
+              <span>Đơn đặt cọc</span>
+              {depositOrderCount > 0 && (
+                <span
+                  className="ml-2 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-semibold bg-blue-600 text-white"
+                  aria-label={`Tổng ${depositOrderCount} đơn đặt cọc`}
+                >
+                  {depositOrderCount}
+                </span>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -1258,6 +1312,9 @@ export default function BanHangPage() {
                             {String(product.nguon || product.source || '').toLowerCase().includes('đối tác') && (
                               <Badge variant="outline" className="border-teal-600 text-teal-700">Đối tác</Badge>
                             )}
+                            {String(product.ghi_chu || '').toLowerCase().includes('sale') && (
+                              <Badge variant="outline" className="border-red-600 text-red-700">Sale</Badge>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1315,12 +1372,13 @@ export default function BanHangPage() {
                           Sản phẩm {sortKey==='san_pham' && <span>{sortOrder==='asc'?'▲':'▼'}</span>}
                         </button>
                       </TableHead>
+                      <TableHead className="w-[14%]">Ghi chú</TableHead>
                       <TableHead className="w-[20%]">
                         <button className="flex items-center gap-1" onClick={()=> toggleSort('imei_loai')}>
                           IMEI/Serial / Loại {sortKey==='imei_loai' && <span>{sortOrder==='asc'?'▲':'▼'}</span>}
                         </button>
                       </TableHead>
-                      <TableHead className="w-[34%] text-center">Chi tiết</TableHead>
+                      <TableHead className="w-[28%] text-center">Chi tiết</TableHead>
                       <TableHead className="w-[12%]">
                         <button className="flex items-center gap-1" onClick={()=> toggleSort('trang_thai')}>
                           Trạng thái {sortKey==='trang_thai' && <span>{sortOrder==='asc'?'▲':'▼'}</span>}
@@ -1339,8 +1397,9 @@ export default function BanHangPage() {
                       Array.from({ length: 8 }).map((_, i) => (
                         <TableRow key={`skeleton-${i}`}>
                           <TableCell className="w-[30%]"><div className="h-4 w-3/4 bg-slate-200 rounded animate-pulse"/></TableCell>
+                          <TableCell className="w-[14%]"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse"/></TableCell>
                           <TableCell className="w-[20%]"><div className="h-4 w-28 bg-slate-200 rounded animate-pulse"/></TableCell>
-                          <TableCell className="w-[34%]"><div className="h-4 w-48 bg-slate-200 rounded animate-pulse"/></TableCell>
+                          <TableCell className="w-[28%]"><div className="h-4 w-48 bg-slate-200 rounded animate-pulse"/></TableCell>
                           <TableCell className="w-[12%]"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"/></TableCell>
                           <TableCell className="text-right"><div className="h-4 w-24 bg-slate-200 rounded ml-auto animate-pulse"/></TableCell>
                         </TableRow>
@@ -1372,6 +1431,15 @@ export default function BanHangPage() {
                               <Badge variant="outline">{isAccessory ? 'Phụ kiện' : ((String(product.ten_san_pham||'').toLowerCase().includes('ipad') || String(product.loai_may||'').toLowerCase().includes('ipad')) ? 'iPad' : 'iPhone')}</Badge>
                               {source === 'Đối tác' && <Badge variant="outline" className="border-teal-600 text-teal-700" title={`${product.ten_doi_tac || ''}${product.ten_doi_tac && product.sdt_doi_tac ? ' • ' : ''}${product.sdt_doi_tac || ''}`.trim() || 'Đối tác'}>Đối tác</Badge>}
                             </div>
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-xs align-top">
+                            {(() => {
+                              const note = String(product.ghi_chu || '').trim()
+                              const isSale = /sale/i.test(note)
+                              if (!note) return <span className="text-slate-400">-</span>
+                              if (isSale) return <Badge className="bg-red-100 text-red-700">Sale</Badge>
+                              return <span className="text-slate-700">{note}</span>
+                            })()}
                           </TableCell>
                           <TableCell className="font-mono text-xs px-3 py-2">
                             {(product.imei || product.serial) ? (
@@ -2061,6 +2129,18 @@ export default function BanHangPage() {
               </Select>
             )}
           </div>
+
+          {loaiDon === "Đơn onl" && (
+            <div className="space-y-2 mt-2">
+              <label className="text-sm font-medium">Địa chỉ nhận</label>
+              <Input
+                placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố"
+                value={diaChiNhan}
+                onChange={(e)=> setDiaChiNhan(e.target.value)}
+                className="bg-white"
+              />
+            </div>
+          )}
 
           {/* Loại thanh toán */}
           <div className="space-y-2">

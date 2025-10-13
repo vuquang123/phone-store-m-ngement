@@ -108,6 +108,7 @@ function idxBanHang(header: string[]) {
     ngayXuat: colIndex(header, "Ngày Xuất"),
     tenKH: colIndex(header, "Tên Khách Hàng"),
     sdt: colIndex(header, "Số Điện Thoại"),
+    diaChiNhan: colIndex(header, "Địa Chỉ Nhận", "Dia Chi Nhan", "Dia_Chi_Nhan"),
     tenSP: colIndex(header, "Tên Sản Phẩm"),
     loaiMay: colIndex(header, "Loại Máy"),
     dungLuong: colIndex(header, "Dung Lượng"),
@@ -233,6 +234,7 @@ export async function GET(request: NextRequest) {
       ngay_xuat: row[idx.ngayXuat],
       ten_khach_hang: row[idx.tenKH],
       so_dien_thoai: row[idx.sdt],
+      dia_chi_nhan: idx.diaChiNhan !== -1 ? row[idx.diaChiNhan] : undefined,
       ten_san_pham: row[idx.tenSP],
       loai_may: row[idx.loaiMay],
       dung_luong: row[idx.dungLuong],
@@ -425,6 +427,10 @@ export async function POST(request: NextRequest) {
         if (k === "Giá Nhập") {
           const rounded = Math.round(tongGiaNhap)
           return rounded > 0 ? rounded : ""
+        }
+        if (k === "Địa Chỉ Nhận") {
+          // chỉ set cho dòng đầu tiên, các dòng sau để trống để tránh lặp lại nhiều lần
+          return i === 0 ? (body["Địa Chỉ Nhận"] || body.dia_chi_nhan || "") : ""
         }
         if (k === "Nguồn Hàng" || k === "Nguồn") {
           // Nếu là hàng đối tác bán như bình thường → ghi chú rõ ràng
@@ -628,12 +634,14 @@ export async function POST(request: NextRequest) {
         nhan_vien_ban: body.employeeName || body.employeeId || body.nhan_vien_ban || body.nhan_vien || body["Người Bán"] || "N/A",
         khach_hang: body.khach_hang || {
           ten: body.customerName || body.ten_khach_hang || body.ho_ten || body["Tên Khách Hàng"] || "Khách lẻ",
-          so_dien_thoai: body.customerPhone || body.so_dien_thoai || body.sdt || body["Số Điện Thoại"] || "N/A"
+          so_dien_thoai: body.customerPhone || body.so_dien_thoai || body.sdt || body["Số Điện Thoại"] || "N/A",
+          dia_chi: body.dia_chi_nhan || body["Địa Chỉ Nhận"] || body.dia_chi || body.address || undefined
         },
         // Tổng tiền: ưu tiên final từ FE nếu có, fallback về trường cũ
         final_total: (typeof finalTotalFromClient === 'number' ? finalTotalFromClient : undefined),
         tong_tien: body["Thanh Toan"] || body.tong_tien || body.thanh_toan || 0,
         phuong_thuc_thanh_toan: body["Phuong Thuc Thanh Toan"] || body["phuong_thuc_thanh_toan"] || body.paymentMethod || body.hinh_thuc_thanh_toan || body["Hình Thức Thanh Toán"] || "N/A",
+        hinh_thuc_van_chuyen: body["Hình Thức Vận Chuyển"] || body.hinh_thuc_van_chuyen || undefined,
         ngay_tao: Date.now(),
         products: productList,
         // Gửi gói bảo hành nếu có
@@ -659,8 +667,10 @@ export async function POST(request: NextRequest) {
         if (/off|offline/.test(m)) return "offline"
         return ""
       })
-      const orderType = /onl|online/.test(normLoaiDon) ? "online" : "offline"
-      await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderType)
+  const orderType = /onl|online/.test(normLoaiDon) ? "online" : "offline"
+  // kèm loại đơn cho formatter usage
+  ;(orderInfo as any).order_type = orderType
+  await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderType)
     } catch (err) {
       console.error("Lỗi gửi thông báo Telegram:", err)
     }

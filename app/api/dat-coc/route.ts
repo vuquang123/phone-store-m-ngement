@@ -68,6 +68,7 @@ export async function DELETE(req: Request) {
 }
 import { NextResponse } from "next/server"
 import { appendToGoogleSheets, readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
+import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
 
 // API route: GET /api/dat-coc
 export async function GET() {
@@ -161,10 +162,74 @@ export async function POST(req: Request) {
         await appendToGoogleSheets("Dat_Coc", row)
         lineNo++
       }
+      try {
+        const orderInfo: any = {
+          ma_don_hang: id_don_hang,
+          nhan_vien_ban: nguoi_ban || "N/A",
+          khach_hang: {
+            ten: ten_khach_hang || "Khách lẻ",
+            so_dien_thoai: so_dien_thoai || "",
+            dia_chi: body.dia_chi_nhan || body["Địa Chỉ Nhận"] || undefined
+          },
+          products: (products || []).map((m: any) => ({
+            ten_san_pham: m.ten_san_pham,
+            loai_may: m.loai_may,
+            dung_luong: m.dung_luong,
+            mau_sac: m.mau_sac,
+            imei: m.imei,
+            serial: m.serial
+          })),
+          accessories: [],
+          payments: Array.isArray(body.payments) ? body.payments : [],
+          phuong_thuc_thanh_toan: hinh_thuc_thanh_toan || "",
+          final_total: (Number(so_tien_coc) || 0) + (Number(so_tien_con_lai) || 0),
+          tong_tien: (Number(so_tien_coc) || 0) + (Number(so_tien_con_lai) || 0),
+          so_tien_coc: Number(so_tien_coc) || 0,
+          so_tien_con_lai: Number(so_tien_con_lai) || 0,
+          hinh_thuc_van_chuyen: body.hinh_thuc_van_chuyen || "",
+          ngay_tao: Date.now(),
+          order_type: /onl|online/i.test(String(body.loai_don_ban || loai_don || '')) ? 'online' : 'offline'
+        }
+        await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderInfo.order_type)
+      } catch (e) {
+        console.warn("[TELE] Không thể gửi thông báo đặt cọc:", e)
+      }
       return NextResponse.json({ ok: true, created: true, id_don_hang }, { status: 201 })
     } else {
       const row = buildRow(body, 0)
       await appendToGoogleSheets("Dat_Coc", row)
+      try {
+        const orderInfo: any = {
+          ma_don_hang: id_don_hang,
+          nhan_vien_ban: nguoi_ban || "N/A",
+          khach_hang: {
+            ten: ten_khach_hang || "Khách lẻ",
+            so_dien_thoai: so_dien_thoai || "",
+            dia_chi: body.dia_chi_nhan || body["Địa Chỉ Nhận"] || undefined
+          },
+          products: [{
+            ten_san_pham: body.ten_san_pham,
+            loai_may: body.loai_may,
+            dung_luong: body.dung_luong,
+            mau_sac: body.mau_sac,
+            imei: body.imei,
+            serial: body.serial
+          }],
+          accessories: [],
+          payments: Array.isArray(body.payments) ? body.payments : [],
+          phuong_thuc_thanh_toan: hinh_thuc_thanh_toan || "",
+          final_total: (Number(so_tien_coc) || 0) + (Number(so_tien_con_lai) || 0),
+          tong_tien: (Number(so_tien_coc) || 0) + (Number(so_tien_con_lai) || 0),
+          so_tien_coc: Number(so_tien_coc) || 0,
+          so_tien_con_lai: Number(so_tien_con_lai) || 0,
+          hinh_thuc_van_chuyen: body.hinh_thuc_van_chuyen || "",
+          ngay_tao: Date.now(),
+          order_type: /onl|online/i.test(String(body.loai_don_ban || loai_don || '')) ? 'online' : 'offline'
+        }
+        await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderInfo.order_type)
+      } catch (e) {
+        console.warn("[TELE] Không thể gửi thông báo đặt cọc:", e)
+      }
       return NextResponse.json({ ok: true, created: true, id_don_hang }, { status: 201 })
     }
   } catch (error) {

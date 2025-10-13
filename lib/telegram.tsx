@@ -137,6 +137,12 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   const totalCandidates = [order.final_total, order.finalThanhToan, order.tong_tien, order.total, order["Tổng Thu"]]
   const totalVal = totalCandidates.map(parseAmount).find(n => n > 0) || 0
   const totalLine = `\n\n <b>Tổng tiền:</b> ${totalVal > 0 ? totalVal.toLocaleString('vi-VN') + ' VNĐ' : 'N/A'}`
+  // Dòng chi tiết đặt cọc nếu có
+  const coc = parseAmount(order.so_tien_coc)
+  const conLai = parseAmount(order.so_tien_con_lai)
+  const depositLine = (coc > 0 || conLai > 0)
+    ? `\n <b>Chi tiết:</b> Đã cọc ${coc > 0 ? ('₫' + coc.toLocaleString('vi-VN')) : '₫0'} | Còn lại ${conLai > 0 ? ('₫' + conLai.toLocaleString('vi-VN')) : '₫0'}`
+    : ''
 
   // Chi tiết thanh toán: nếu có mảng payments thì render đầy đủ; nếu không, dùng chuỗi tóm tắt có sẵn
   const paymentLines = (() => {
@@ -168,6 +174,15 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     return lines
   })()
 
+  // Địa chỉ nhận & vận chuyển (chỉ render khi là đơn online)
+  const orderType = order.order_type || order.type || order.loai_don || ''
+  const isOnline = /onl|online/i.test(String(orderType))
+  const address = order.khach_hang?.dia_chi || order.dia_chi_nhan || order["Địa Chỉ Nhận"] || order.address
+  const shipMethod = order.hinh_thuc_van_chuyen || order["Hình Thức Vận Chuyển"]
+  const shippingSection = isOnline && (address || shipMethod)
+    ? `\n <b>Địa chỉ nhận:</b> ${address || '-'}${shipMethod ? `\n <b>Vận chuyển:</b> ${shipMethod}` : ''}`
+    : ''
+
   return `
 ${emoji} <b>${action}</b>
 
@@ -175,11 +190,13 @@ ${emoji} <b>${action}</b>
  <b>Nhân viên:</b> ${order.nhan_vien_ban || order.employeeName || order.employeeId || "N/A"}
  <b>Khách hàng:</b> ${order.khach_hang?.ten || order.khach_hang?.ho_ten || order.customerName || "Khách lẻ"}
  <b>SĐT:</b> ${order.khach_hang?.so_dien_thoai || order.khach_hang?.sdt || order.customerPhone || "N/A"}
+${shippingSection}
 ${productSection}
 ${accessoriesSection}
 ${warrantyLine}
 ${reasonLine}
 ${totalLine}
+${depositLine}
  <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || (paymentLines.length ? 'Chi tiết bên dưới' : 'N/A')}
 ${paymentLines.length ? `\n${paymentLines.join('\n')}` : ''}
 
