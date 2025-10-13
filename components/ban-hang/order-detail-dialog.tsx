@@ -245,16 +245,61 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
   }
 
   const getPhuongThucColor = (phuongThuc: string) => {
-    switch (phuongThuc) {
-      case "Tiền mặt":
-        return "bg-blue-100 text-blue-800"
-      case "Chuyển khoản":
-        return "bg-purple-100 text-purple-800"
-      case "Thẻ":
-        return "bg-orange-100 text-orange-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+    const s = (phuongThuc || '').toLowerCase()
+    if (s.includes('tiền mặt') || s.includes('tien mat')) return 'bg-blue-100 text-blue-800'
+    if (s.includes('chuyển khoản') || s.includes('chuyen khoan')) return 'bg-purple-100 text-purple-800'
+    if (s.includes('thẻ') || s.includes('the')) return 'bg-orange-100 text-orange-800'
+    if (s.includes('trả góp') || s.includes('tra gop') || s.includes('góp')) return 'bg-amber-100 text-amber-800'
+    return 'bg-gray-100 text-gray-800'
+  }
+
+  // Tách các dòng thanh toán có số tiền từ chuỗi tổng hợp.
+  // Hỗ trợ nhiều biến thể: "Tiền mặt: ₫x | Chuyển khoản: ₫y", "CK 15.500.000", "The: 1,000,000đ"...
+  const parsePaymentBreakdown = (raw: string): Array<{label: string; amount: number}> => {
+    const s = String(raw || '').trim()
+    if (!s) return []
+    const parts = s.split(/\|/).map(p => p.trim()).filter(Boolean)
+    const out: Array<{label: string; amount: number}> = []
+
+    const normalize = (t: string) => t
+      .normalize('NFD')
+      // @ts-ignore - diacritic char class in modern runtimes
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+
+    const friendlyLabel = (t: string) => {
+      const n = normalize(t)
+      if (/(chuyen\s*khoan|\bck\b|bank|stk)/.test(n)) return 'Chuyển khoản'
+      if (/(tien\s*mat|cash)/.test(n)) return 'Tiền mặt'
+      if (/(\bthe\b|pos|card)/.test(n)) return 'Thẻ'
+      if (/(tra\s*gop|tragop|installment|credit|gop)/.test(n)) return 'Trả góp'
+      return (t.includes(':') ? t.split(':')[0] : t).trim()
     }
+
+    for (const p of parts) {
+      const label = friendlyLabel(p)
+      // Tìm số tiền đầu tiên trong đoạn
+      const numMatch = p.match(/\d[\d\.,]*/)
+      let amount = 0
+      if (numMatch) {
+        const amtStr = numMatch[0].replace(/[\.,](?=\d{3}\b)/g, '').replace(/[^\d-]/g, '')
+        const n = Number(amtStr)
+        amount = Number.isFinite(n) ? n : 0
+      } else {
+        // cũng thử mẫu sau dấu ':' nếu có
+        const m = p.match(/:(.*)$/)
+        if (m) {
+          const num2 = m[1].match(/\d[\d\.,]*/)
+          if (num2) {
+            const amtStr = num2[0].replace(/[\.,](?=\d{3}\b)/g, '').replace(/[^\d-]/g, '')
+            const n = Number(amtStr)
+            amount = Number.isFinite(n) ? n : 0
+          }
+        }
+      }
+      if (label) out.push({ label, amount })
+    }
+    return out
   }
 
   return (
@@ -544,14 +589,37 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                 <div className="space-y-2">
                   <div>
                     <span className="text-sm font-medium text-muted-foreground">Phương thức:</span>
-                    <Badge className={getPhuongThucColor(order.phuong_thuc_thanh_toan)}>
-                      {order.phuong_thuc_thanh_toan === "Tiền mặt"
-                        ? "Tiền mặt"
-                        : order.phuong_thuc_thanh_toan === "Chuyển khoản"
-                          ? "Chuyển khoản"
-                          : "Thẻ"}
-                    </Badge>
+                    <span className="ml-2 inline-flex flex-wrap gap-2 align-middle">
+                      {(() => {
+                        // tách và hiển thị badge theo phương thức, không kèm số tiền
+                        const raw = order.phuong_thuc_thanh_toan || ''
+                        const s = raw.toLowerCase()
+                        const arr: string[] = []
+                        if (s.includes('trả góp') || s.includes('tra gop') || s.includes('góp')) arr.push('Trả góp')
+                        if (s.includes('chuyển khoản') || s.includes('chuyen khoan')) arr.push('Chuyển khoản')
+                        if (s.includes('thẻ') || s.includes('the')) arr.push('Thẻ')
+                        if (s.includes('tiền mặt') || s.includes('tien mat')) arr.push('Tiền mặt')
+                        const labels = Array.from(new Set(arr))
+                        if (!labels.length) return <Badge className={getPhuongThucColor(raw)}>{raw || '-'}</Badge>
+                        return labels.map(lb => <Badge key={lb} className={getPhuongThucColor(lb)}>{lb}</Badge>)
+                      })()}
+                    </span>
                   </div>
+                  {/* Breakdown có số tiền */}
+                  {(() => {
+                    const arr = parsePaymentBreakdown(order.phuong_thuc_thanh_toan || '')
+                    if (!arr.length) return null
+                    return (
+                      <div className="mt-1 text-sm text-slate-700 space-y-1">
+                        {arr.map((p, i) => (
+                          <div key={`pay-${i}`} className="flex items-center justify-between">
+                            <span className="text-muted-foreground">{p.label}:</span>
+                            <span className="font-medium">{p.amount>0? `₫${p.amount.toLocaleString('vi-VN')}` : '-'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
                   {order.ghi_chu && (
                     <div>
                       <span className="text-sm font-medium text-muted-foreground">Ghi chú:</span>

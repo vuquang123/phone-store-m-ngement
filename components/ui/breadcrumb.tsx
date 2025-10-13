@@ -79,7 +79,6 @@ const BreadcrumbSeparator = ({
 }: React.ComponentProps<"li">) => (
   <li
     role="presentation"
-    aria-hidden="true"
     className={cn("[&>svg]:w-3.5 [&>svg]:h-3.5", className)}
     {...props}
   >
@@ -94,7 +93,6 @@ const BreadcrumbEllipsis = ({
 }: React.ComponentProps<"span">) => (
   <span
     role="presentation"
-    aria-hidden="true"
     className={cn("flex h-9 w-9 items-center justify-center", className)}
     {...props}
   >

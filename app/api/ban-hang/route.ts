@@ -637,6 +637,7 @@ export async function POST(request: NextRequest) {
           so_dien_thoai: body.customerPhone || body.so_dien_thoai || body.sdt || body["Số Điện Thoại"] || "N/A",
           dia_chi: body.dia_chi_nhan || body["Địa Chỉ Nhận"] || body.dia_chi || body.address || undefined
         },
+        ghi_chu: body.ghi_chu || body["Ghi Chú"] || '',
         // Tổng tiền: ưu tiên final từ FE nếu có, fallback về trường cũ
         final_total: (typeof finalTotalFromClient === 'number' ? finalTotalFromClient : undefined),
         tong_tien: body["Thanh Toan"] || body.tong_tien || body.thanh_toan || 0,

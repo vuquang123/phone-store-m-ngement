@@ -136,7 +136,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   }
   const totalCandidates = [order.final_total, order.finalThanhToan, order.tong_tien, order.total, order["Tổng Thu"]]
   const totalVal = totalCandidates.map(parseAmount).find(n => n > 0) || 0
-  const totalLine = `\n\n <b>Tổng tiền:</b> ${totalVal > 0 ? totalVal.toLocaleString('vi-VN') + ' VNĐ' : 'N/A'}`
+  const totalLine = `\n <b>Tổng tiền:</b> ${totalVal > 0 ? totalVal.toLocaleString('vi-VN') + ' VNĐ' : 'N/A'}`
   // Dòng chi tiết đặt cọc nếu có
   const coc = parseAmount(order.so_tien_coc)
   const conLai = parseAmount(order.so_tien_con_lai)
@@ -183,6 +183,11 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     ? `\n <b>Địa chỉ nhận:</b> ${address || '-'}${shipMethod ? `\n <b>Vận chuyển:</b> ${shipMethod}` : ''}`
     : ''
 
+  // Ghi chú đơn hàng (nếu có)
+  const rawNote = order.ghi_chu || order["Ghi Chú"] || order.note || order.ghiChu
+  const noteText = typeof rawNote === 'string' ? rawNote.trim() : (rawNote ?? '')
+  const noteLine = noteText ? `\n <b>Ghi chú:</b> ${noteText}` : ''
+
   return `
 ${emoji} <b>${action}</b>
 
@@ -195,11 +200,12 @@ ${productSection}
 ${accessoriesSection}
 ${warrantyLine}
 ${reasonLine}
+${noteLine}
 ${totalLine}
 ${depositLine}
  <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || (paymentLines.length ? 'Chi tiết bên dưới' : 'N/A')}
 ${paymentLines.length ? `\n${paymentLines.join('\n')}` : ''}
 
- <b>Thời gian:</b> ${new Date(order.ngay_tao).toLocaleString("vi-VN")}
+ <b>Thời gian:</b> ${new Date(order.ngay_tao || Date.now()).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })}
   `.trim()
 }

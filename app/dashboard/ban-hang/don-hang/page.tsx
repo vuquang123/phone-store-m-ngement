@@ -20,6 +20,7 @@ interface Order {
   giam_gia: number
   thanh_toan: number
   phuong_thuc_thanh_toan: string
+  phuong_thuc_list?: string[]
   trang_thai: string
   ngay_ban: string
   khach_hang?: { ho_ten: string; so_dien_thoai: string }
@@ -55,6 +56,27 @@ export default function DonHangPage() {
       if (!response.ok) throw new Error("Failed to fetch orders")
 
       const data = await response.json()
+      // Helper: tách danh sách phương thức từ chuỗi tổng hợp (không lấy số tiền)
+      const parseMethodList = (raw: any): string[] => {
+        const s0 = String(raw || '')
+        if (!s0) return []
+        // Chuẩn hoá: bỏ dấu, lowercase, chỉ giữ chữ & số & khoảng trắng
+        const s = s0
+          .normalize('NFD')
+          .replace(/\p{Diacritic}/gu, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9\s|]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        const methods: string[] = []
+        const add = (label: string) => { if (!methods.includes(label)) methods.push(label) }
+        // Hỗ trợ alias/viết tắt
+        if (/(tra\s*gop|tragop|mira|the\s*tin\s*dung|tindung|installment|credit)/.test(s)) add('Trả góp')
+        if (/(chuyen\s*khoan|chuyenkhoan|ck\b|\bck\b|bank|stk|mbbank|vietcom|vcb|acb)/.test(s)) add('Chuyển khoản')
+        if (/(\bthe\b|card|pos|quet\s*the|swipe)/.test(s)) add('Thẻ')
+        if (/(tien\s*mat|tm\b|cash)/.test(s)) add('Tiền mặt')
+        return methods
+      }
       // Map lại dữ liệu từ sheet
       const mappedRaw = Array.isArray(data.data)
         ? data.data.map((item: any, idx: number) => {
@@ -76,7 +98,8 @@ export default function DonHangPage() {
               tong_tien: giaBanNum,
               giam_gia: 0, // Sheet chưa có trường này
               thanh_toan: giaBanNum,
-              phuong_thuc_thanh_toan: item["Hình Thức Thanh Toán"] || item.hinh_thuc_thanh_toan || "",
+              phuong_thuc_thanh_toan: String(item["Hình Thức Thanh Toán"] || item.hinh_thuc_thanh_toan || ""),
+              phuong_thuc_list: parseMethodList(item["Hình Thức Thanh Toán"] || item.hinh_thuc_thanh_toan || ""),
               trang_thai: item.trang_thai || "hoan_thanh",
               ngay_ban: ngayBanDate,
               khach_hang: item["Tên Khách Hàng"] || item.ten_khach_hang || item.so_dien_thoai
@@ -108,6 +131,9 @@ export default function DonHangPage() {
           if (!ex.khach_hang && o.khach_hang) ex.khach_hang = o.khach_hang
           if (!ex.nhan_vien && o.nhan_vien) ex.nhan_vien = o.nhan_vien
           if (!ex.phuong_thuc_thanh_toan && o.phuong_thuc_thanh_toan) ex.phuong_thuc_thanh_toan = o.phuong_thuc_thanh_toan
+          // Gom danh sách phương thức (duy nhất)
+          const list = new Set<string>([...(ex.phuong_thuc_list || []), ...(o.phuong_thuc_list || [])])
+          ex.phuong_thuc_list = Array.from(list)
           ex._ids.push(o.id)
         }
       }
@@ -144,17 +170,13 @@ export default function DonHangPage() {
     }
   }
 
-  const getPhuongThucColor = (phuongThuc: string) => {
-    switch (phuongThuc) {
-      case "Tiền mặt":
-        return "bg-blue-100 text-blue-800"
-      case "Chuyển khoản":
-        return "bg-purple-100 text-purple-800"
-      case "Thẻ":
-        return "bg-orange-100 text-orange-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+  const getPhuongThucColor = (label: string) => {
+    const s = (label || '').toLowerCase()
+    if (s === 'tiền mặt' || s === 'tien mat') return 'bg-blue-100 text-blue-800'
+    if (s === 'chuyển khoản' || s === 'chuyen khoan') return 'bg-purple-100 text-purple-800'
+    if (s === 'thẻ' || s === 'the') return 'bg-orange-100 text-orange-800'
+    if (s === 'trả góp' || s === 'tra gop') return 'bg-amber-100 text-amber-800'
+    return 'bg-gray-100 text-gray-800'
   }
 
   return (
@@ -309,13 +331,18 @@ export default function DonHangPage() {
                             <div className="text-sm text-slate-500">Mã đơn</div>
                             <div className="font-semibold text-slate-900">{order.ma_don_hang || order.id}</div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <Badge className={getTrangThaiColor(order.trang_thai)}>
                               {order.trang_thai === "hoan_thanh" ? "Hoàn thành" : "Đã hủy"}
                             </Badge>
-                            <Badge className={getPhuongThucColor(order.phuong_thuc_thanh_toan)}>
-                              {order.phuong_thuc_thanh_toan}
-                            </Badge>
+                            {(order.phuong_thuc_list && order.phuong_thuc_list.length > 0
+                              ? order.phuong_thuc_list
+                              : (order.phuong_thuc_thanh_toan ? [order.phuong_thuc_thanh_toan] : [])
+                            ).map((m) => (
+                              <Badge key={m} className={getPhuongThucColor(m)}>
+                                {m}
+                              </Badge>
+                            ))}
                           </div>
                         </div>
                         <div className="mt-2 text-sm text-slate-700">
@@ -436,13 +463,16 @@ export default function DonHangPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge className={getPhuongThucColor(order.phuong_thuc_thanh_toan)}>
-                                {order.phuong_thuc_thanh_toan === "Tiền mặt"
-                                  ? "Tiền mặt"
-                                  : order.phuong_thuc_thanh_toan === "Chuyển khoản"
-                                    ? "Chuyển khoản"
-                                    : "Thẻ"}
-                              </Badge>
+                              <div className="flex items-center gap-2 flex-wrap max-w-[280px]">
+                                {(order.phuong_thuc_list && order.phuong_thuc_list.length > 0
+                                  ? order.phuong_thuc_list
+                                  : (order.phuong_thuc_thanh_toan ? [order.phuong_thuc_thanh_toan] : [])
+                                ).map((m) => (
+                                  <Badge key={m} className={getPhuongThucColor(m)}>
+                                    {m}
+                                  </Badge>
+                                ))}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">{order.loai_don || <span className="text-muted-foreground">-</span>}</Badge>

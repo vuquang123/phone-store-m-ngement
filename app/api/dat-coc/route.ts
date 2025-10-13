@@ -171,6 +171,7 @@ export async function POST(req: Request) {
             so_dien_thoai: so_dien_thoai || "",
             dia_chi: body.dia_chi_nhan || body["Địa Chỉ Nhận"] || undefined
           },
+          ghi_chu: ghi_chu || body.ghi_chu || body["Ghi Chú"] || '',
           products: (products || []).map((m: any) => ({
             ten_san_pham: m.ten_san_pham,
             loai_may: m.loai_may,
@@ -207,6 +208,7 @@ export async function POST(req: Request) {
             so_dien_thoai: so_dien_thoai || "",
             dia_chi: body.dia_chi_nhan || body["Địa Chỉ Nhận"] || undefined
           },
+          ghi_chu: ghi_chu || body.ghi_chu || body["Ghi Chú"] || '',
           products: [{
             ten_san_pham: body.ten_san_pham,
             loai_may: body.loai_may,
