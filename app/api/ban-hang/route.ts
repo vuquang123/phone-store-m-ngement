@@ -177,7 +177,10 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
 
   const target = normalizePhone(phone)
   const foundIdx = rows.findIndex((r) => normalizePhone(String(r[K.sdt] || "")) === target)
-  const nowVN = new Date().toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+  // Ngày tạo chỉ ngày, lần mua cuối đầy đủ thời gian
+  const now = new Date();
+  const nowVNDate = now.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  const nowVNFull = now.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) + ' ' + now.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 
   if (foundIdx === -1) {
     // Thêm KH mới
@@ -185,8 +188,8 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
     if (K.ten !== -1) row[K.ten] = name || "Khách lẻ"
     row[K.sdt] = target
     if (K.tongMua !== -1) row[K.tongMua] = Number(amountToAdd) || 0
-  if (K.lanMuaCuoi !== -1) row[K.lanMuaCuoi] = nowVN
-  if (K.ngayTao !== -1) row[K.ngayTao] = nowVN    // ⬅️ ghi Ngày tạo (chỉ ngày)
+    if (K.lanMuaCuoi !== -1) row[K.lanMuaCuoi] = nowVNFull
+    if (K.ngayTao !== -1) row[K.ngayTao] = nowVNDate
     await appendToGoogleSheets("Khach_Hang", row)
     return { ten: row[K.ten] || "Khách lẻ", sdt: target, tongMua: row[K.tongMua] || amountToAdd }
   } else {
@@ -212,11 +215,11 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
       await updateRangeValues(`Khach_Hang!${toColumnLetter(K.tongMua + 1)}${rowNumber}`, [[newTotal]])
     }
     if (K.lanMuaCuoi !== -1) {
-  await updateRangeValues(`Khach_Hang!${toColumnLetter(K.lanMuaCuoi + 1)}${rowNumber}`, [[nowVN]])
+      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.lanMuaCuoi + 1)}${rowNumber}`, [[nowVNFull]])
     }
     // Nếu ô Ngày tạo đang trống thì bổ sung (chỉ ngày)
     if (K.ngayTao !== -1 && !rows[foundIdx][K.ngayTao]) {
-      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.ngayTao + 1)}${rowNumber}`, [[nowVN]])
+      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.ngayTao + 1)}${rowNumber}`, [[nowVNDate]])
     }
 
     return { ten: (K.ten !== -1 ? rows[foundIdx][K.ten] : "") || name || "Khách lẻ", sdt: target, tongMua: newTotal }
