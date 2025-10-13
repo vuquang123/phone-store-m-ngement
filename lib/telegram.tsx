@@ -91,6 +91,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   const reason = order.reason || order.ly_do || order.lyDo || order["Lý Do"]
 
   // Lưu ý: giới hạn hiển thị 10 dòng sản phẩm để tránh message quá dài
+  // Nếu có sản phẩm thì luôn render tiêu đề và danh sách, không render nếu không có sản phẩm
   const productSection = productLines.length
     ? `\n📦 <b>Sản phẩm:</b>\n${productLines.join("\n")}${enrichedProducts.length > 10 ? "\n…" : ""}`
     : ""
@@ -123,6 +124,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     if (accessoriesStr) return [accessoriesStr]
     return []
   })()
+  // Chỉ render phụ kiện nếu thực sự có phụ kiện, không render dòng thừa
   const accessoriesSection = accessoryLines.length
     ? `\n🧩 <b>Phụ kiện:</b>\n${accessoryLines.join('\n')}${(Array.isArray(accessoriesArr) && accessoriesArr.length > 20) ? "\n…" : ""}`
     : ''
@@ -188,24 +190,26 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   const noteText = typeof rawNote === 'string' ? rawNote.trim() : (rawNote ?? '')
   const noteLine = noteText ? `\n <b>Ghi chú:</b> ${noteText}` : ''
 
-  return `
-${emoji} <b>${action}</b>
-
- <b>Mã đơn hàng:</b> ${order.ma_don_hang}
- <b>Nhân viên:</b> ${order.nhan_vien_ban || order.employeeName || order.employeeId || "N/A"}
- <b>Khách hàng:</b> ${order.khach_hang?.ten || order.khach_hang?.ho_ten || order.customerName || "Khách lẻ"}
- <b>SĐT:</b> ${order.khach_hang?.so_dien_thoai || order.khach_hang?.sdt || order.customerPhone || "N/A"}
-${shippingSection}
-${productSection}
-${accessoriesSection}
-${warrantyLine}
-${reasonLine}
-${noteLine}
-${totalLine}
-${depositLine}
- <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || (paymentLines.length ? 'Chi tiết bên dưới' : 'N/A')}
-${paymentLines.length ? `\n${paymentLines.join('\n')}` : ''}
-
- <b>Thời gian:</b> ${new Date(order.ngay_tao || Date.now()).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })}
-  `.trim()
+  // Gom các section, loại bỏ dòng trống nếu không có phụ kiện hoặc sản phẩm
+  let messageSections = [
+    `${emoji} <b>${action}</b>`,
+    `\n <b>Mã đơn hàng:</b> ${order.ma_don_hang}`,
+    ` <b>Nhân viên:</b> ${order.nhan_vien_ban || order.employeeName || order.employeeId || "N/A"}`,
+    ` <b>Khách hàng:</b> ${order.khach_hang?.ten || order.khach_hang?.ho_ten || order.customerName || "Khách lẻ"}`,
+    ` <b>SĐT:</b> ${order.khach_hang?.so_dien_thoai || order.khach_hang?.sdt || order.customerPhone || "N/A"}`,
+    shippingSection,
+    productSection,
+    accessoriesSection,
+    warrantyLine,
+    reasonLine,
+    noteLine,
+    totalLine,
+    depositLine,
+    ` <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || (paymentLines.length ? 'Chi tiết bên dưới' : 'N/A')}`,
+    paymentLines.length ? `\n${paymentLines.join('\n')}` : '',
+    `\n <b>Thời gian:</b> ${new Date(order.ngay_tao || Date.now()).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })}`
+  ]
+  // Xóa các section rỗng hoặc chỉ có khoảng trắng
+  messageSections = messageSections.filter(s => typeof s === 'string' && s.trim())
+  return messageSections.join('\n')
 }
