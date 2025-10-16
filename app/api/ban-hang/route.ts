@@ -731,7 +731,10 @@ export async function POST(request: NextRequest) {
   const orderType = /onl|online/.test(normLoaiDon) ? "online" : "offline"
   // kèm loại đơn cho formatter usage
   ;(orderInfo as any).order_type = orderType
-  await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderType)
+  // Only send Telegram notification here if FE didn't already send it (skipTelegram flag)
+  if (!body || !body.skipTelegram) {
+    await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderType)
+  }
     } catch (err) {
       console.error("Lỗi gửi thông báo Telegram:", err)
     }

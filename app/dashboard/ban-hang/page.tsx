@@ -866,7 +866,45 @@ export default function BanHangPage() {
         employeeId = localStorage.getItem("employeeId") || "";
       }
 
-      // If user selected receipt images but didn't upload immediately, upload now (FormData / multipart)
+      // Build orderInfo early so we can send the Telegram text first (and get thread id)
+      const orderInfoForMsg = {
+        ma_don_hang: '',
+        nhan_vien_ban: employeeId || 'N/A',
+        khach_hang: {
+          ten: selectedCustomer?.ho_ten || 'Khách lẻ',
+          so_dien_thoai: selectedCustomer?.so_dien_thoai || ''
+        },
+        ghi_chu: ghiChu,
+        final_total: finalThanhToan || undefined,
+        tong_tien: thanhToan,
+        phuong_thuc_thanh_toan: paymentSummary,
+        hinh_thuc_van_chuyen: loaiDon === 'Đơn onl' ? hinhThucVanChuyen : undefined,
+        ngay_tao: Date.now(),
+        products: products.map(p => ({ ten_san_pham: p.ten_san_pham, imei: p.imei, loai_may: p.loai_may, dung_luong: p.dung_luong })),
+        accessories: accessories.map(a => ({ ten_phu_kien: a.ten_san_pham, so_luong: a.so_luong || 1 }))
+      }
+
+      // 1) Send telegram text first to notify team. Capture any thread id returned or implied.
+      let messageThreadId: number | undefined = undefined
+      try {
+        const msgRes = await fetch('/api/telegram/send-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderInfo: orderInfoForMsg, orderType: loaiDon?.toLowerCase?.() ? (loaiDon.toLowerCase().includes('onl') ? 'online' : 'offline') : undefined })
+        })
+        if (msgRes.ok) {
+          // Telegram sendMessage doesn't return message_thread_id in our helper; nothing to parse here.
+          const jr = await msgRes.json().catch(()=>null)
+          // if the helper ever returns a result object with result.message_thread_id, capture it
+          if (jr && jr.result && jr.result.result && jr.result.result.message_thread_id) {
+            messageThreadId = Number(jr.result.result.message_thread_id)
+          }
+        }
+      } catch (e) {
+        console.warn('[checkout] send-message failed, continuing to photos/order', e)
+      }
+
+      // 2) Now upload photos (if any) and attach message_thread_id so photos appear in same topic
       let uploadedReceiptLocal: any = uploadedReceipt || null
       if (receiptBlobs && receiptBlobs.length > 0) {
         try {
@@ -875,13 +913,13 @@ export default function BanHangPage() {
             const file = b instanceof File ? b : new File([b], `receipt_${idx + 1}.jpg`, { type: (b as any).type || 'image/jpeg' })
             form.append('photo', file, file.name)
           })
+          if (messageThreadId) form.append('message_thread_id', String(messageThreadId))
           const upRes = await fetch('/api/telegram/send-photo', {
             method: 'POST',
             body: form
           })
           if (!upRes.ok) throw new Error('Upload ảnh thất bại: ' + (await upRes.text()))
           const upJson = await upRes.json()
-          // Expecting upJson.results as an array for multipart uploads
           const results = upJson?.results || (upJson?.result ? [upJson.result] : upJson || null)
           uploadedReceiptLocal = results
           setUploadedReceipt(uploadedReceiptLocal)
@@ -895,6 +933,7 @@ export default function BanHangPage() {
           const form = new FormData()
           const file = receiptBlob instanceof File ? receiptBlob : new File([receiptBlob], 'receipt.jpg', { type: (receiptBlob as any).type || 'image/jpeg' })
           form.append('photo', file, file.name)
+          if (messageThreadId) form.append('message_thread_id', String(messageThreadId))
           const upRes = await fetch('/api/telegram/send-photo', {
             method: 'POST',
             body: form
@@ -911,10 +950,12 @@ export default function BanHangPage() {
       } else if (receiptBase64 && !uploadedReceiptLocal) {
         // Fallback: older flow where ImagePicker provided base64
         try {
+          const payload: any = { image: receiptBase64, filename: 'receipt.jpg' }
+          if (messageThreadId) payload.message_thread_id = messageThreadId
           const upRes = await fetch('/api/telegram/send-photo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: receiptBase64, filename: 'receipt.jpg' })
+            body: JSON.stringify(payload)
           })
           if (!upRes.ok) throw new Error('Upload ảnh thất bại: ' + (await upRes.text()))
           const upJson = await upRes.json()
@@ -1117,6 +1158,8 @@ export default function BanHangPage() {
             body: JSON.stringify({
               ...orderData,
               receipt_image: uploadedReceiptLocal || uploadedReceipt || null,
+              // already sent notification from client, avoid duplicate on server
+              skipTelegram: true,
               nguon_hang: products.some(p => String(p.nguon || p.source || '').toLowerCase().includes('đối tác')) ? 'Đối tác' : '',
               coreTotal: thanhToan,
               warrantyTotal: warrantyTotal,
