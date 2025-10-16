@@ -1237,11 +1237,49 @@ export default function KhoHangPage() {
                     className="w-full"
                   />
                 </div>
-                {isMobile && filteredCNC.length === 0 ? (
-                  <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">
-                    <div className="text-3xl mb-2">🛠️</div>
-                    <div className="font-medium">Chưa có sản phẩm nào Đang CNC</div>
-                  </div>
+                {isMobile ? (
+                  filteredCNC.length === 0 ? (
+                    <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">
+                      <div className="text-3xl mb-2">🛠️</div>
+                      <div className="font-medium">Chưa có sản phẩm nào Đang CNC</div>
+                    </div>
+                  ) : (
+                    <div className="px-1 pt-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {filteredCNC.map((p: any, idx: number) => (
+                        <div
+                          key={`${p.id || idx}-${p.imei}`}
+                          className={`relative rounded-xl border border-slate-200 bg-white p-3 shadow-sm active:scale-[0.99] transition ${isEditCNCMode ? "cursor-pointer" : ""}`}
+                          onClick={() => {
+                            if (isEditCNCMode) {
+                              handleSelectCNCProduct(p.imei)
+                            } else {
+                              setViewCustomer({ dia_chi_bao_hanh: p.dia_chi_cnc || '-', ten_khach_hang: p.ten_khach_hang || '-', so_dien_thoai: p.so_dien_thoai || '-', imei: p.imei || '' })
+                            }
+                          }}
+                        >
+                          {isEditCNCMode && (
+                            <div className="absolute top-3 left-3">
+                              <input type="checkbox" checked={selectedCNCImeis.includes(p.imei)} readOnly />
+                            </div>
+                          )}
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="font-semibold text-slate-800">{p.ten_san_pham}</div>
+                              <div className="text-xs text-slate-500 mt-0.5">{p.loai_may || '-'}</div>
+                              <div className="mt-1 text-sm text-slate-700">IMEI: <span className="font-medium">{p.imei || '-'}</span></div>
+                              <div className="mt-1 text-xs text-slate-500">Nguồn: {p.nguon || '-'}</div>
+                            </div>
+                            <div className="text-right">
+                              <Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-2 py-0.5 text-[10px] font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge>
+                              {/* Eye icon removed per request - details available by tapping the card */}
+                            </div>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">Ngày gửi: {p.ngay_gui || '-'}</div>
+                          <div className="mt-1 text-xs text-slate-500">Ngày nhận lại: {p.ngay_nhan_lai || '-'}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )
                 ) : (
                 <Table>
                   <TableHeader>
@@ -1283,10 +1321,11 @@ export default function KhoHangPage() {
                           <TableCell className="text-sm text-slate-700">{p.ngay_nhan_lai}</TableCell>
                           <TableCell>
                             <button
+                              type="button"
                               className="p-1 rounded hover:bg-blue-50 cursor-pointer"
                               title="Xem thông tin CNC"
                               onClick={e => {
-                                const rect = (e.target as HTMLElement).getBoundingClientRect();
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                                 setDialogInfo({
                                   data: {
                                     dia_chi_bao_hanh: p.dia_chi_cnc || '-',
@@ -1312,30 +1351,45 @@ export default function KhoHangPage() {
 
 
       {/* Dialog thông tin CNC dạng box nhỏ, fixed trên màn hình, chỉ hiển thị 1 lần */}
-      {dialogInfo && (
-        <div
-          style={{
-            position: 'fixed',
-            left: dialogInfo.pos.x,
-            top: dialogInfo.pos.y,
-            zIndex: 9999,
-            minWidth: '200px',
-            background: 'white',
-            border: '1px solid #e2e8f0',
-            borderRadius: '12px',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
-            padding: '16px',
-            fontSize: '13px',
-            color: '#334155',
-          }}
-        >
-          <div style={{ fontWeight: 700, color: '#2563eb', marginBottom: 6 }}>Thông tin CNC</div>
-          <div><b>Địa chỉ CNC:</b> {dialogInfo.data.dia_chi_bao_hanh}</div>
-          <div><b>Khách:</b> {dialogInfo.data.ten_khach_hang}</div>
-          <div><b>ĐT:</b> {dialogInfo.data.so_dien_thoai}</div>
-          <button onClick={() => setDialogInfo(null)} style={{ marginTop: 10, padding: '4px 12px', borderRadius: 6, background: '#eff6ff', color: '#2563eb', fontWeight: 600, fontSize: 12, border: 'none', cursor: 'pointer' }}>Đóng</button>
-        </div>
-      )}
+      {dialogInfo && (() => {
+        // compute safe position so popup never overflows viewport
+        const modalMinWidth = 200;
+        let left = dialogInfo.pos.x;
+        let top = dialogInfo.pos.y;
+        if (typeof window !== 'undefined') {
+          const margin = 12;
+          const maxLeft = Math.max(margin, window.innerWidth - modalMinWidth - margin);
+          left = Math.min(left, maxLeft);
+          left = Math.max(margin, left);
+          const maxTop = Math.max(margin, window.innerHeight - 80);
+          top = Math.min(top, maxTop);
+          top = Math.max(margin, top);
+        }
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              left,
+              top,
+              zIndex: 9999,
+              minWidth: modalMinWidth + 'px',
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+              padding: '16px',
+              fontSize: '13px',
+              color: '#334155',
+            }}
+          >
+            <div style={{ fontWeight: 700, color: '#2563eb', marginBottom: 6 }}>Thông tin CNC</div>
+            <div><b>Địa chỉ CNC:</b> {dialogInfo.data.dia_chi_bao_hanh}</div>
+            <div><b>Khách:</b> {dialogInfo.data.ten_khach_hang}</div>
+            <div><b>ĐT:</b> {dialogInfo.data.so_dien_thoai}</div>
+            <button onClick={() => setDialogInfo(null)} style={{ marginTop: 10, padding: '4px 12px', borderRadius: 6, background: '#eff6ff', color: '#2563eb', fontWeight: 600, fontSize: 12, border: 'none', cursor: 'pointer' }}>Đóng</button>
+          </div>
+        )
+      })()}
                 </TableBody>
                 </Table>
                 )}
@@ -1417,11 +1471,57 @@ export default function KhoHangPage() {
                   className="w-full"
                 />
               </div>
-              {isMobile && filteredBaoHanh.length === 0 ? (
-                <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">
-                  <div className="text-3xl mb-2">🧰</div>
-                  <div className="font-medium">Không có sản phẩm bảo hành nào</div>
-                </div>
+              {isMobile ? (
+                isLoading ? (
+                  <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">
+                    <div className="text-slate-400">Đang tải...</div>
+                  </div>
+                ) : filteredBaoHanh.length === 0 ? (
+                  <div className="p-8 flex flex-col items-center justify-center text-center text-slate-500">
+                    <div className="text-3xl mb-2">🧰</div>
+                    <div className="font-medium">Không có sản phẩm bảo hành nào</div>
+                  </div>
+                ) : (
+                  <div className="px-1 pt-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {filteredBaoHanh.map((p: any, idx: number) => {
+                      const key = p["IMEI"] || p.imei || idx;
+                      return (
+                        <div
+                          key={key}
+                          className={`relative rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition ${isEditBaoHanhMode ? "cursor-pointer" : ""}`}
+                          onClick={() => {
+                            if (isEditBaoHanhMode) {
+                              handleSelectBaoHanh(key)
+                            } else {
+                              setViewCustomer({ dia_chi_bao_hanh: p["Địa chỉ Bảo hành"] || '-', ten_khach_hang: p["Tên khách hàng"] || '-', so_dien_thoai: p["Số điện thoại"] || '-', imei: p["IMEI"] || p.imei || '' })
+                            }
+                          }}
+                        >
+                          {isEditBaoHanhMode && (
+                            <div className="absolute top-3 left-3">
+                              <input type="checkbox" checked={selectedBaoHanhIds.includes(key)} readOnly />
+                            </div>
+                          )}
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="font-semibold text-slate-800">{p["Tên Sản Phẩm"] || '-'}</div>
+                              <div className="text-xs text-slate-500 mt-0.5">{p["Loại Máy"] || '-'}</div>
+                              <div className="mt-1 text-sm text-slate-700">IMEI: <span className="font-medium">{p["IMEI"] || p.imei || '-'}</span></div>
+                              <div className="mt-1 text-xs text-slate-500">Nguồn: {p["Nguồn"] || '-'}</div>
+                              {p["Lỗi"] && <div className="mt-2 text-sm text-red-600">Lỗi: {p["Lỗi"]}</div>}
+                            </div>
+                            <div className="text-right">
+                              <Badge className={getTrangThaiColor(p["Trạng Thái"] || '-') + " rounded-full px-2 py-0.5 text-[10px] font-semibold"}>{getTrangThaiText(p["Trạng Thái"] || '-')}</Badge>
+                              {/* Eye icon removed per request - details available by tapping the card */}
+                            </div>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">Ngày gửi: {p["Ngày gửi"] || '-'}</div>
+                          <div className="mt-1 text-xs text-slate-500">Ngày nhận lại: {p["Ngày nhận lại"] || '-'}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
               ) : (
               <Table>
                 <TableHeader>
@@ -1480,9 +1580,10 @@ export default function KhoHangPage() {
                           <TableCell>
                             <div className="flex items-center">
                               <button
+                                type="button"
                                 className="p-1 rounded hover:bg-blue-50 cursor-pointer"
                                 onClick={e => {
-                                  const rect = (e.target as HTMLElement).getBoundingClientRect();
+                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                                   setDialogInfo({
                                     data: {
                                       dia_chi_bao_hanh: p["Địa chỉ Bảo hành"] || '-',
@@ -1499,30 +1600,44 @@ export default function KhoHangPage() {
                             </div>
                           </TableCell>
       {/* Dialog thông tin bảo hành dạng box nhỏ, fixed trên màn hình, chỉ hiển thị 1 lần */}
-      {dialogInfo && (
-        <div
-          style={{
-            position: 'fixed',
-            left: dialogInfo.pos.x,
-            top: dialogInfo.pos.y,
-            zIndex: 9999,
-            minWidth: '200px',
-            background: 'white',
-            border: '1px solid #e2e8f0',
-            borderRadius: '12px',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
-            padding: '16px',
-            fontSize: '13px',
-            color: '#334155',
-          }}
-        >
-          <div style={{ fontWeight: 700, color: '#2563eb', marginBottom: 6 }}>Thông tin bảo hành</div>
-          <div><b>Địa chỉ:</b> {dialogInfo.data.dia_chi_bao_hanh}</div>
-          <div><b>Khách:</b> {dialogInfo.data.ten_khach_hang}</div>
-          <div><b>ĐT:</b> {dialogInfo.data.so_dien_thoai}</div>
-          <button onClick={() => setDialogInfo(null)} style={{ marginTop: 10, padding: '4px 12px', borderRadius: 6, background: '#eff6ff', color: '#2563eb', fontWeight: 600, fontSize: 12, border: 'none', cursor: 'pointer' }}>Đóng</button>
-        </div>
-      )}
+      {dialogInfo && (() => {
+        const modalMinWidth = 200;
+        let left = dialogInfo.pos.x;
+        let top = dialogInfo.pos.y;
+        if (typeof window !== 'undefined') {
+          const margin = 12;
+          const maxLeft = Math.max(margin, window.innerWidth - modalMinWidth - margin);
+          left = Math.min(left, maxLeft);
+          left = Math.max(margin, left);
+          const maxTop = Math.max(margin, window.innerHeight - 80);
+          top = Math.min(top, maxTop);
+          top = Math.max(margin, top);
+        }
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              left,
+              top,
+              zIndex: 9999,
+              minWidth: modalMinWidth + 'px',
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+              padding: '16px',
+              fontSize: '13px',
+              color: '#334155',
+            }}
+          >
+            <div style={{ fontWeight: 700, color: '#2563eb', marginBottom: 6 }}>Thông tin bảo hành</div>
+            <div><b>Địa chỉ:</b> {dialogInfo.data.dia_chi_bao_hanh}</div>
+            <div><b>Khách:</b> {dialogInfo.data.ten_khach_hang}</div>
+            <div><b>ĐT:</b> {dialogInfo.data.so_dien_thoai}</div>
+            <button onClick={() => setDialogInfo(null)} style={{ marginTop: 10, padding: '4px 12px', borderRadius: 6, background: '#eff6ff', color: '#2563eb', fontWeight: 600, fontSize: 12, border: 'none', cursor: 'pointer' }}>Đóng</button>
+          </div>
+        )
+      })()}
                         </TableRow>
                       )
                     })
@@ -1568,6 +1683,25 @@ export default function KhoHangPage() {
       onClose={() => setIsAddBaoHanhMachineOpen(false)}
       onSuccess={fetchBaoHanhHistory}
     />
+    {/* Dialog chi tiết khi click card (CNC / Bảo hành) */}
+    <Dialog open={!!viewCustomer} onOpenChange={(open) => { if (!open) setViewCustomer(null) }}>
+      <DialogContent className="rounded-xl">
+        <DialogHeader>
+          <DialogTitle>Chi tiết</DialogTitle>
+        </DialogHeader>
+        {viewCustomer ? (
+          <div className="space-y-3">
+            <div><b>IMEI:</b> {viewCustomer.imei || '-'}</div>
+            <div><b>Khách:</b> {viewCustomer.ten_khach_hang || '-'}</div>
+            <div><b>ĐT:</b> {viewCustomer.so_dien_thoai || '-'}</div>
+            <div><b>Địa chỉ bảo hành / CNC:</b> {viewCustomer.dia_chi_bao_hanh || '-'}</div>
+          </div>
+        ) : null}
+        <DialogFooter>
+          <Button onClick={() => setViewCustomer(null)}>Đóng</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   {/* Kết thúc UI chính */}
   </div>
   )

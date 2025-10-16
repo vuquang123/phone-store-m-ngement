@@ -1,0 +1,9 @@
+{
+  "files.associations": {
+    "**/app/globals.css": "postcss"
+  },
+  "tailwindCSS.includeLanguages": {
+    "postcss": "css",
+    "css": "css"
+  }
+}

@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Edit, Eye } from "lucide-react"
+import { Search, Edit } from "lucide-react"
 import { useState, useEffect } from "react"
+import { Eye } from "lucide-react"
+import CustomerPurchasesDialog from "@/components/khach-hang/CustomerPurchasesDialog"
 import { useIsMobile } from "@/hooks/use-mobile"
 
 interface Customer {
@@ -24,6 +26,8 @@ export default function KhachHangPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [selectedCustomer, setSelectedCustomer] = useState<Customer|null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogPhone, setDialogPhone] = useState<string>("")
   const isMobile = useIsMobile()
 
   const fetchCustomers = async () => {
@@ -121,6 +125,15 @@ export default function KhachHangPage() {
                         {customer.ghi_chu ? (
                           <div className="mt-2 text-xs text-slate-600 line-clamp-2">{customer.ghi_chu}</div>
                         ) : null}
+                        <div className="mt-3 flex items-center justify-end gap-2">
+                          <button
+                            className="p-1 rounded hover:bg-slate-100"
+                            onClick={() => { setDialogPhone(customer.so_dien_thoai); setDialogOpen(true) }}
+                            aria-label={`Xem chi tiết mua hàng ${customer.so_dien_thoai}`}
+                          >
+                            <Eye className="h-4 w-4 text-slate-700" />
+                          </button>
+                        </div>
                       </div>
                     )
                   })}
@@ -137,6 +150,7 @@ export default function KhachHangPage() {
                         <TableHead>Tổng Mua</TableHead>
                         <TableHead>Lần Mua Cuối</TableHead>
                         <TableHead>Ghi Chú</TableHead>
+                        <TableHead>Chi tiết</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -150,6 +164,15 @@ export default function KhachHangPage() {
                           <TableCell>{customer.tong_mua || ""}</TableCell>
                           <TableCell>{customer.lan_mua_cuoi || ""}</TableCell>
                           <TableCell>{customer.ghi_chu || ""}</TableCell>
+                          <TableCell>
+                            <button
+                              className="p-1 rounded hover:bg-slate-100"
+                              onClick={() => { setDialogPhone(customer.so_dien_thoai); setDialogOpen(true) }}
+                              aria-label={`Xem chi tiết mua hàng ${customer.so_dien_thoai}`}
+                            >
+                              <Eye className="h-4 w-4 text-slate-700" />
+                            </button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -160,6 +183,7 @@ export default function KhachHangPage() {
           </CardContent>
         </Card>
       </div>
+      <CustomerPurchasesDialog isOpen={dialogOpen} onClose={() => setDialogOpen(false)} phone={dialogPhone} />
     </ProtectedRoute>
   )
 }

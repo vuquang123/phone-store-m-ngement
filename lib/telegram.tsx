@@ -42,7 +42,15 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
 
 export function formatOrderMessage(order: any, type: "new" | "return") {
   const emoji = type === "new" ? "🛒" : "↩️"
-  const action = type === "new" ? "TẠO ĐƠN HÀNG MỚI" : "HOÀN TRẢ ĐƠN HÀNG"
+  // Detect deposit (cọc) presence
+  const rawCoc = order.so_tien_coc ?? order.sotiencoc ?? order.deposit ?? 0
+  const cocNum = (() => {
+    const v = rawCoc == null ? 0 : rawCoc;
+    const n = typeof v === 'number' ? v : Number(String(v).replace(/[^\d.-]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  })();
+  const isDeposit = type === "new" && cocNum > 0
+  const action = isDeposit ? "ĐƠN ĐẶT CỌC MỚI" : (type === "new" ? "TẠO ĐƠN HÀNG MỚI" : "HOÀN TRẢ ĐƠN HÀNG")
 
   // Chuẩn hóa danh sách sản phẩm (nếu có)
   const products = Array.isArray(order.products)
@@ -196,7 +204,11 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     `\n <b>Mã đơn hàng:</b> ${order.ma_don_hang}`,
     ` <b>Nhân viên:</b> ${order.nhan_vien_ban || order.employeeName || order.employeeId || "N/A"}`,
     ` <b>Khách hàng:</b> ${order.khach_hang?.ten || order.khach_hang?.ho_ten || order.customerName || "Khách lẻ"}`,
-    ` <b>SĐT:</b> ${order.khach_hang?.so_dien_thoai || order.khach_hang?.sdt || order.customerPhone || "N/A"}`,
+  ` <b>SĐT:</b> ${order.khach_hang?.so_dien_thoai || order.khach_hang?.sdt || order.customerPhone || "N/A"}`,
+  // Loại đơn (nếu có)
+  ...(order.loai_don || order.order_type || order.type || order.loai_don_ban ? [` <b>Loại đơn:</b> ${order.loai_don || order.order_type || order.type || order.loai_don_ban}`] : []),
+  // Hạn thanh toán (nếu có)
+  ...(order.han_thanh_toan || order.hanThanhToan || order.due_date ? [` <b>Hạn thanh toán:</b> ${order.han_thanh_toan || order.hanThanhToan || order.due_date}`] : []),
     shippingSection,
     productSection,
     accessoriesSection,

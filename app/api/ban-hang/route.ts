@@ -325,6 +325,8 @@ export async function POST(request: NextRequest) {
   const idxGoiBH = header.indexOf('Gói BH')
   const idxGiaBanCol = header.indexOf('Giá Bán')
   const idxChiTietPK = colIndex(header, 'Chi Tiết PK', 'Chi Tiết Phụ Kiện', 'Chi Tiet PK', 'Accessory Detail')
+  const idxDiaChiNhanCol = colIndex(header, 'Địa Chỉ Nhận', 'Dia Chi Nhan', 'Dia_Chi_Nhan', 'Địa chỉ nhận', 'Địa chỉ')
+  const idxHinhThucVanChuyenCol = colIndex(header, 'Hình Thức Vận Chuyển', 'Hình thức vận chuyển', 'Hinh Thuc Van Chuyen', 'hinh_thuc_van_chuyen')
     // Tự động sinh ID đơn hàng DH00001-DH99999
     let idDonHang = ""
     const idxIdDon = header.indexOf("ID Đơn Hàng")
@@ -345,9 +347,20 @@ export async function POST(request: NextRequest) {
     // Logic chuẩn: tách nhiều máy thành nhiều đơn, cùng mã đơn hàng
     let mayList = []
     if (Array.isArray(body.products) && body.products.length > 0) {
-      mayList = body.products
+      mayList = body.products.map((prod: any) => {
+        // Nếu không có imei, có serial, và không có id_may, tự động lấy 5 ký tự cuối serial làm id_may
+        if (!prod.imei && prod.serial && !prod.id_may) {
+          return { ...prod, id_may: String(prod.serial).slice(-5) }
+        }
+        return prod
+      })
     } else if (body.id_may) {
-      mayList = [{ ...body, id_may: body.id_may }]
+      // Nếu không có imei, có serial, và không có id_may, tự động lấy 5 ký tự cuối serial làm id_may
+      if (!body.imei && body.serial && !body.id_may) {
+        mayList = [{ ...body, id_may: String(body.serial).slice(-5) }]
+      } else {
+        mayList = [{ ...body, id_may: body.id_may }]
+      }
     } else if (normalizedAccessories.length > 0) {
       // Nếu chỉ có phụ kiện, vẫn ghi một dòng vào sheet
       mayList = [{
@@ -511,6 +524,14 @@ export async function POST(request: NextRequest) {
             gia_ban: pk.gia_ban ?? undefined
           }))
           try { newRow[idxChiTietPK] = JSON.stringify(detail) } catch { newRow[idxChiTietPK] = '' }
+        }
+        // Ensure Địa Chỉ Nhận and Hình Thức Vận Chuyển from payload are recorded even if header names vary
+        if (idxDiaChiNhanCol !== -1) {
+          // prefer explicit fields in body
+          newRow[idxDiaChiNhanCol] = body['Địa Chỉ Nhận'] || body.dia_chi_nhan || body.address || body.address_receipt || ''
+        }
+        if (idxHinhThucVanChuyenCol !== -1) {
+          newRow[idxHinhThucVanChuyenCol] = body['Hình Thức Vận Chuyển'] || body.hinh_thuc_van_chuyen || body.hinh_thuc_van_chuyen || body.shippingMethod || ''
         }
       }
       const result = await appendToGoogleSheets(SHEETS.BAN_HANG, newRow)

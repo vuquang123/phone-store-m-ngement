@@ -1614,11 +1614,13 @@ export default function BanHangPage() {
                             }))
                           }}
                         />
+                        {/* Hiệu ứng động khi xác nhận IMEI */}
                         <button
                           type="button"
                           className={`inline-flex items-center gap-1 text-[12px] ${item.imei ? 'text-slate-700' : 'text-slate-400 cursor-not-allowed'}`}
                           onClick={async ()=>{
                             if(!item.imei) return
+                            setCart(prev=> prev.map(p=> (p.id===item.id && p.type===item.type) ? { ...p, imei_loading: true } : p))
                             // Nếu là hàng Đối tác và có metadata sheet/row_index thì ghi IMEI vào sheet ngay khi xác nhận
                             const isPartner = String(item.nguon || item.source || '').toLowerCase().includes('đối tác')
                             const sheet = (item as any).partner_sheet || (item as any).sheet
@@ -1638,7 +1640,7 @@ export default function BanHangPage() {
                                   } catch {}
                                   setCart(prev=> prev.map(p=> {
                                     if (p.id===item.id && p.type===item.type) {
-                                      const next: any = { ...p, imei_confirmed: !(p as any).imei_confirmed }
+                                      const next: any = { ...p, imei_confirmed: !(p as any).imei_confirmed, imei_loading: false }
                                       if (data?.id_may) next.id_may = data.id_may
                                       return next
                                     }
@@ -1656,17 +1658,24 @@ export default function BanHangPage() {
                                 } else {
                                   const msg = await res.text()
                                   toast({ title: 'Lỗi ghi IMEI vào sheet', description: msg, variant: 'destructive' as any })
+                                  setCart(prev=> prev.map(p=> (p.id===item.id && p.type===item.type) ? { ...p, imei_loading: false } : p))
                                 }
                               } catch (e: any) {
                                 toast({ title: 'Lỗi ghi IMEI vào sheet', description: e?.message || String(e), variant: 'destructive' as any })
+                                setCart(prev=> prev.map(p=> (p.id===item.id && p.type===item.type) ? { ...p, imei_loading: false } : p))
                               }
                             } else {
-                              setCart(prev=> prev.map(p=> (p.id===item.id && p.type===item.type) ? { ...p, imei_confirmed: !(p as any).imei_confirmed } : p))
+                              setCart(prev=> prev.map(p=> (p.id===item.id && p.type===item.type) ? { ...p, imei_confirmed: !(p as any).imei_confirmed, imei_loading: false } : p))
                             }
                           }}
                           title={(item.imei || item.serial) ? 'Xác nhận mã máy' : 'Nhập IMEI/Serial trước'}
+                          disabled={!!(item as any).imei_loading}
                         >
-                          <CheckCircle className={`h-4 w-4 ${ (item as any).imei_confirmed ? 'text-green-600' : 'text-slate-400' }`} />
+                          {(item as any).imei_loading ? (
+                            <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+                          ) : (
+                            <CheckCircle className={`h-4 w-4 ${ (item as any).imei_confirmed ? 'text-green-600' : 'text-slate-400' }`} />
+                          )}
                           <span></span>
                         </button>
                       </div>

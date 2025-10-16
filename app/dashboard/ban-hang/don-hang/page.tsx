@@ -12,6 +12,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { OrderDetailDialog } from "@/components/ban-hang/order-detail-dialog"
+import OrderProductsCell from "@/app/dashboard/ban-hang/OrderProductsCell"
 
 interface Order {
   id: string
@@ -364,6 +365,13 @@ export default function DonHangPage() {
                             )}
                           </div>
                         </div>
+                        <div className="mt-2">
+                          <div className="text-sm font-medium">Sản phẩm</div>
+                          <div className="text-sm text-muted-foreground">
+                            <OrderProductsCell orderId={order.ma_don_hang || order.id} />
+                          </div>
+                        </div>
+
                         <div className="mt-3 flex items-center justify-end gap-2">
                           <Button variant="outline" size="sm" onClick={() => handleViewOrder(order.ma_don_hang || order.id)}>
                             <Eye className="h-4 w-4 mr-1" /> Xem
@@ -383,6 +391,7 @@ export default function DonHangPage() {
                     <TableRow>
                       <TableHead>Mã đơn hàng</TableHead>
                       <TableHead>Khách hàng</TableHead>
+                      <TableHead>Sản phẩm</TableHead>
                       <TableHead>Nhân viên</TableHead>
                       <TableHead>Thanh toán</TableHead>
                       <TableHead>Phương thức</TableHead>
@@ -395,13 +404,13 @@ export default function DonHangPage() {
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-8">
+                        <TableCell colSpan={10} className="text-center py-8">
                           Đang tải...
                         </TableCell>
                       </TableRow>
                     ) : orders.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-8">
+                        <TableCell colSpan={10} className="text-center py-8">
                           Không có đơn hàng nào
                         </TableCell>
                       </TableRow>
@@ -449,6 +458,10 @@ export default function DonHangPage() {
                               ) : (
                                 "Khách lẻ"
                               )}
+                            </TableCell>
+                            {/* Sản phẩm máy đã mua */}
+                            <TableCell>
+                              <OrderProductsCell orderId={order.ma_don_hang || order.id} />
                             </TableCell>
                             <TableCell>{order.nhan_vien?.id || "N/A"}</TableCell>
                             {/* <TableCell>₫{Number(order.tong_tien || 0).toLocaleString()}</TableCell> */}

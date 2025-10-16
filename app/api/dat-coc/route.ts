@@ -191,7 +191,7 @@ export async function POST(req: Request) {
           ngay_tao: Date.now(),
           order_type: /onl|online/i.test(String(body.loai_don_ban || loai_don || '')) ? 'online' : 'offline'
         }
-        await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderInfo.order_type)
+  await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderInfo.order_type, { message_thread_id: 5747 })
       } catch (e) {
         console.warn("[TELE] Không thể gửi thông báo đặt cọc:", e)
       }
@@ -228,7 +228,7 @@ export async function POST(req: Request) {
           ngay_tao: Date.now(),
           order_type: /onl|online/i.test(String(body.loai_don_ban || loai_don || '')) ? 'online' : 'offline'
         }
-        await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderInfo.order_type)
+  await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderInfo.order_type, { message_thread_id: 5747 })
       } catch (e) {
         console.warn("[TELE] Không thể gửi thông báo đặt cọc:", e)
       }
