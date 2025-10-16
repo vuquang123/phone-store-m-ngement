@@ -145,6 +145,80 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
   }
 }
 
+// Send multiple photos as an album (media group). Accepts arrays of buffers and filenames.
+export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: string[], captions?: string[], orderType?: OrderType, options?: TelegramOptions) {
+  try {
+    const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
+    const chatId = -1002895849744
+    let messageThreadId = 9
+    if (orderType === "online") messageThreadId = 7
+    if (orderType === "return") messageThreadId = 5334
+    if (options?.message_thread_id) messageThreadId = options.message_thread_id
+
+    if (!botToken || !chatId) {
+      console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
+      return { success: false, error: "Thiếu cấu hình Telegram" }
+    }
+
+    if (!Array.isArray(buffers) || buffers.length === 0) return { success: false, error: 'No buffers' }
+
+    const boundary = '----telegramboundary' + Date.now()
+    const nl = '\r\n'
+    // Build media array referencing attached files as attach://file0 ...
+    const mediaArray: any[] = buffers.map((_, idx) => {
+      const item: any = { type: 'photo', media: `attach://file${idx}` }
+      // add caption for first item if provided
+      const cap = (captions && captions[idx]) || (captions && captions.length ? captions[0] : '')
+      if (cap && idx === 0) item.caption = cap
+      return item
+    })
+
+    const fieldsHead = Buffer.from(
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="chat_id"${nl}${nl}` +
+      `${String(chatId)}${nl}` +
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="message_thread_id"${nl}${nl}` +
+      `${String(messageThreadId)}${nl}` +
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="media"${nl}${nl}` +
+      `${JSON.stringify(mediaArray)}${nl}`
+    )
+
+    // For each buffer, append file part
+    const parts: Buffer[] = [fieldsHead]
+    for (let i = 0; i < buffers.length; i++) {
+      const fn = filenames[i] || `image_${i}.jpg`
+      const head = Buffer.from(
+        `--${boundary}${nl}` +
+        `Content-Disposition: form-data; name="file${i}"; filename="${fn}"${nl}` +
+        `Content-Type: application/octet-stream${nl}${nl}`
+      )
+      const tail = Buffer.from(nl)
+      parts.push(head)
+      parts.push(buffers[i])
+      parts.push(tail)
+    }
+    const closing = Buffer.from(`--${boundary}--${nl}`)
+    parts.push(closing)
+
+    const body = Buffer.concat(parts)
+
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMediaGroup`, {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+      body
+    })
+    const result = await res.json()
+    if (result.ok) return { success: true, result }
+    console.error('Lỗi gửi Telegram (media group):', result)
+    return { success: false, error: result.description, result }
+  } catch (error) {
+    console.error('Lỗi gửi Telegram (media group):', error)
+    return { success: false, error }
+  }
+}
+
 export function formatOrderMessage(order: any, type: "new" | "return") {
   const emoji = type === "new" ? "🛒" : "↩️"
   // Detect deposit (cọc) presence
