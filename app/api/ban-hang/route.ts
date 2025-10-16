@@ -327,6 +327,38 @@ export async function POST(request: NextRequest) {
   const idxChiTietPK = colIndex(header, 'Chi Tiết PK', 'Chi Tiết Phụ Kiện', 'Chi Tiet PK', 'Accessory Detail')
   const idxDiaChiNhanCol = colIndex(header, 'Địa Chỉ Nhận', 'Dia Chi Nhan', 'Dia_Chi_Nhan', 'Địa chỉ nhận', 'Địa chỉ')
   const idxHinhThucVanChuyenCol = colIndex(header, 'Hình Thức Vận Chuyển', 'Hình thức vận chuyển', 'Hinh Thuc Van Chuyen', 'hinh_thuc_van_chuyen')
+  // Optional column to store a reference to the uploaded receipt image (Telegram file_id or similar)
+  const idxReceiptImageCol = colIndex(
+    header,
+    'Ảnh Biên Nhận',
+    'Receipt File ID',
+    'Receipt',
+    'Ảnh',
+    'Ảnh Biên Nhận (Telegram)',
+    'Telegram File ID',
+    'receipt_file_id',
+  )
+
+  // If client included receipt_image (Telegram upload response), try to extract a stable file identifier
+  const rawReceiptPayload = body.receipt_image || body.receiptImage || body.receipt || null
+  const getReceiptFileId = (p: any) => {
+    if (!p) return ''
+    try {
+      if (typeof p === 'string') return p
+      // Telegram sendPhoto result: { ok: true, result: { photo: [{...}, {...}] } }
+      const maybe = p.result || p
+      if (maybe && Array.isArray(maybe.photo) && maybe.photo.length) {
+        const last = maybe.photo[maybe.photo.length - 1]
+        if (last && last.file_id) return last.file_id
+      }
+      if (maybe && maybe.file_id) return maybe.file_id
+      // fallback: attempt stringify
+      return JSON.stringify(p)
+    } catch (e) {
+      return ''
+    }
+  }
+  const receiptFileId = getReceiptFileId(rawReceiptPayload)
     // Tự động sinh ID đơn hàng DH00001-DH99999
     let idDonHang = ""
     const idxIdDon = header.indexOf("ID Đơn Hàng")
@@ -532,6 +564,10 @@ export async function POST(request: NextRequest) {
         }
         if (idxHinhThucVanChuyenCol !== -1) {
           newRow[idxHinhThucVanChuyenCol] = body['Hình Thức Vận Chuyển'] || body.hinh_thuc_van_chuyen || body.hinh_thuc_van_chuyen || body.shippingMethod || ''
+        }
+        // If there's a dedicated receipt/image column and we have a Telegram file id, persist it
+        if (idxReceiptImageCol !== -1 && receiptFileId) {
+          newRow[idxReceiptImageCol] = receiptFileId
         }
       }
       const result = await appendToGoogleSheets(SHEETS.BAN_HANG, newRow)

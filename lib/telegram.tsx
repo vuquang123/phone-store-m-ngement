@@ -40,6 +40,111 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
   }
 }
 
+// Send photo from base64 string. Builds a multipart/form-data body and uploads directly to Telegram.
+export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
+  try {
+    const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
+    const chatId = -1002895849744
+    // choose thread like sendTelegramMessage
+    let messageThreadId = 9
+    if (orderType === "online") messageThreadId = 7
+    if (orderType === "return") messageThreadId = 5334
+    if (options?.message_thread_id) messageThreadId = options.message_thread_id
+
+    if (!botToken || !chatId) {
+      console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
+      return { success: false, error: "Thiếu cấu hình Telegram" }
+    }
+
+    // normalize base64
+    const cleaned = imageBase64.replace(/^data:[^;]+;base64,/, "")
+    const buffer = Buffer.from(cleaned, 'base64')
+
+    const boundary = '----telegramboundary' + Date.now()
+    const nl = '\r\n'
+    const head = Buffer.from(
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="chat_id"${nl}${nl}` +
+      `${String(chatId)}${nl}` +
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="caption"${nl}${nl}` +
+      `${caption}${nl}` +
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="parse_mode"${nl}${nl}` +
+      `HTML${nl}` +
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="message_thread_id"${nl}${nl}` +
+      `${String(messageThreadId)}${nl}` +
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="photo"; filename="${filename}"${nl}` +
+      `Content-Type: application/octet-stream${nl}${nl}`
+    )
+    const tail = Buffer.from(`${nl}--${boundary}--${nl}`)
+
+    const body = Buffer.concat([head, buffer, tail])
+
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`
+      },
+      body
+    })
+    const result = await res.json()
+    if (result.ok) return { success: true, result }
+    console.error('Lỗi gửi Telegram (photo):', result)
+    return { success: false, error: result.description, result }
+  } catch (error) {
+    console.error('Lỗi gửi Telegram (photo):', error)
+    return { success: false, error }
+  }
+}
+
+// Send photo from raw Buffer (server-side file). Accepts filename and returns Telegram result.
+export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
+  try {
+    const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
+    const chatId = -1002895849744
+    let messageThreadId = 9
+    if (orderType === "online") messageThreadId = 7
+    if (orderType === "return") messageThreadId = 5334
+    if (options?.message_thread_id) messageThreadId = options.message_thread_id
+
+    const boundary = '----telegramboundary' + Date.now()
+    const nl = '\r\n'
+    const head = Buffer.from(
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="chat_id"${nl}${nl}` +
+      `${String(chatId)}${nl}` +
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="caption"${nl}${nl}` +
+      `${caption}${nl}` +
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="parse_mode"${nl}${nl}` +
+      `HTML${nl}` +
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="message_thread_id"${nl}${nl}` +
+      `${String(messageThreadId)}${nl}` +
+      `--${boundary}${nl}` +
+      `Content-Disposition: form-data; name="photo"; filename="${filename}"${nl}` +
+      `Content-Type: application/octet-stream${nl}${nl}`
+    )
+    const tail = Buffer.from(`${nl}--${boundary}--${nl}`)
+    const body = Buffer.concat([head, buffer, tail])
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+      body
+    })
+    const result = await res.json()
+    if (result.ok) return { success: true, result }
+    return { success: false, error: result.description, result }
+  } catch (error) {
+    console.error('Lỗi gửi Telegram (buffer):', error)
+    return { success: false, error }
+  }
+}
+
 export function formatOrderMessage(order: any, type: "new" | "return") {
   const emoji = type === "new" ? "🛒" : "↩️"
   // Detect deposit (cọc) presence

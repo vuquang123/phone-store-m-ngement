@@ -18,6 +18,7 @@ import dayjs from "dayjs"
 import customParseFormat from "dayjs/plugin/customParseFormat"
 dayjs.extend(customParseFormat)
 import { useIsMobile } from "@/hooks/use-mobile"
+import ImagePicker from '@/components/tele/ImagePicker'
 
 interface CartItem {
   id: string
@@ -234,6 +235,10 @@ export default function BanHangPage() {
   const [loaiThanhToan, setLoaiThanhToan] = useState("Thanh toán đủ")
   const [soTienCoc, setSoTienCoc] = useState(0)
   const [ngayHenTraDu, setNgayHenTraDu] = useState("")
+  const [uploadedReceipt, setUploadedReceipt] = useState<any>(null)
+  const [receiptBase64, setReceiptBase64] = useState<string | null>(null)
+  const [receiptBlob, setReceiptBlob] = useState<Blob | null>(null)
+  const [receiptBlobs, setReceiptBlobs] = useState<Blob[] | null>(null)
   /* ===== Warranty state ===== */
   const [warrantyPackages, setWarrantyPackages] = useState<WarrantyPackageUI[]>([])
   const [warrantyPkgLoading, setWarrantyPkgLoading] = useState(false)
@@ -861,6 +866,67 @@ export default function BanHangPage() {
         employeeId = localStorage.getItem("employeeId") || "";
       }
 
+      // If user selected receipt images but didn't upload immediately, upload now (FormData / multipart)
+      let uploadedReceiptLocal: any = uploadedReceipt || null
+      if (receiptBlobs && receiptBlobs.length > 0) {
+        try {
+          const form = new FormData()
+          receiptBlobs.forEach((b, idx) => {
+            const file = b instanceof File ? b : new File([b], `receipt_${idx + 1}.jpg`, { type: (b as any).type || 'image/jpeg' })
+            form.append('photo', file, file.name)
+          })
+          const upRes = await fetch('/api/telegram/send-photo', {
+            method: 'POST',
+            body: form
+          })
+          if (!upRes.ok) throw new Error('Upload ảnh thất bại: ' + (await upRes.text()))
+          const upJson = await upRes.json()
+          // Expecting upJson.results as an array for multipart uploads
+          const results = upJson?.results || (upJson?.result ? [upJson.result] : upJson || null)
+          uploadedReceiptLocal = results
+          setUploadedReceipt(uploadedReceiptLocal)
+        } catch (err: any) {
+          toast({ title: 'Lỗi tải ảnh', description: String(err), variant: 'destructive' as any })
+          setIsLoading(false)
+          return
+        }
+      } else if (receiptBlob) {
+        try {
+          const form = new FormData()
+          const file = receiptBlob instanceof File ? receiptBlob : new File([receiptBlob], 'receipt.jpg', { type: (receiptBlob as any).type || 'image/jpeg' })
+          form.append('photo', file, file.name)
+          const upRes = await fetch('/api/telegram/send-photo', {
+            method: 'POST',
+            body: form
+          })
+          if (!upRes.ok) throw new Error('Upload ảnh thất bại: ' + (await upRes.text()))
+          const upJson = await upRes.json()
+          uploadedReceiptLocal = upJson?.result || upJson || null
+          setUploadedReceipt(uploadedReceiptLocal)
+        } catch (err: any) {
+          toast({ title: 'Lỗi tải ảnh', description: String(err), variant: 'destructive' as any })
+          setIsLoading(false)
+          return
+        }
+      } else if (receiptBase64 && !uploadedReceiptLocal) {
+        // Fallback: older flow where ImagePicker provided base64
+        try {
+          const upRes = await fetch('/api/telegram/send-photo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: receiptBase64, filename: 'receipt.jpg' })
+          })
+          if (!upRes.ok) throw new Error('Upload ảnh thất bại: ' + (await upRes.text()))
+          const upJson = await upRes.json()
+          uploadedReceiptLocal = upJson?.result || upJson || null
+          setUploadedReceipt(uploadedReceiptLocal)
+        } catch (err: any) {
+          toast({ title: 'Lỗi tải ảnh', description: String(err), variant: 'destructive' as any })
+          setIsLoading(false)
+          return
+        }
+      }
+
       if (loaiThanhToan === "Đặt cọc") {
         // Flow Đặt cọc: chỉ đổi trạng thái → 'Đã đặt cọc' (hàng nội bộ), KHÔNG xóa khỏi kho, ghi vào sheet Đặt Cọc
         try {
@@ -1050,6 +1116,7 @@ export default function BanHangPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               ...orderData,
+              receipt_image: uploadedReceiptLocal || uploadedReceipt || null,
               nguon_hang: products.some(p => String(p.nguon || p.source || '').toLowerCase().includes('đối tác')) ? 'Đối tác' : '',
               coreTotal: thanhToan,
               warrantyTotal: warrantyTotal,
@@ -1093,6 +1160,8 @@ export default function BanHangPage() {
           toast({ title: 'Tạo đơn thành công', description: `Mã: ${order.id_don_hang || order.ma_don_hang || ''}` })
           try { localStorage.removeItem('cart_draft_v1'); localStorage.removeItem('cart_warranty_sel_v1') } catch{}
           setReloadFlag(f => f + 1);
+          // clear receipt selection after success
+          try { setReceiptBlob(null); setReceiptBase64(null); setReceiptBlobs(null); setUploadedReceipt(null) } catch {}
         } catch (err) {
           toast({ title: 'Lỗi tạo đơn hàng', description: String(err), variant: 'destructive' as any })
         }
@@ -2200,6 +2269,20 @@ export default function BanHangPage() {
               </div>
             </div>
           )}
+
+          {/* Image attachment for receipt / proof (desktop) */}
+          <div className="mt-4">
+            <label className="text-sm font-medium">Đính kèm ảnh (hóa đơn / biên nhận)</label>
+            <div className="mt-2">
+              <ImagePicker
+                immediateUpload={false}
+                onUploaded={(res) => { if (res?.ok) setUploadedReceipt(res) }}
+                onSelectFile={(dataUrl)=> setReceiptBase64(dataUrl as string)}
+                onSelectBlob={(blob, file) => { setReceiptBlob(blob) }}
+                onSelectBlobs={(blobs, files) => { setReceiptBlobs(blobs) }}
+              />
+            </div>
+          </div>
 
           {/* Nút thanh toán: hiển thị trên desktop; mobile sẽ có thanh toán cố định dưới */}
           <Button
