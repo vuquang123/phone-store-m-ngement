@@ -330,12 +330,27 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
       return arr.slice(0, 20).map((a: any) => {
         const ten = (a.ten_phu_kien || a.ten || a.name || '').toString().trim()
         const loaiRaw = (a.loai || a.type || '').toString().trim()
-        // Format: LOẠI TÊN (uppercase LOẠI then name), fallback to name or 'Phụ kiện'
-        const loai = loaiRaw ? loaiRaw.toUpperCase() : ''
+        // If loai is missing, try to infer from the name by taking the leading phrase
+        const inferredLoai = (() => {
+          if (loaiRaw) return loaiRaw
+          if (!ten) return ''
+          const m = ten.match(/^([^\d\/\-–:]+)\s+(.*)$/)
+          if (m && m[1]) return m[1].toString().trim()
+          return ''
+        })()
+        const loai = inferredLoai ? inferredLoai.toUpperCase() : ''
+        // If we inferred a loai, strip it from the displayed name to avoid duplication
+        const displayName = (() => {
+          if (loai && ten) {
+            const regex = new RegExp('^' + loai.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\s*', 'i')
+            return ten.replace(regex, '').trim() || ten
+          }
+          return ten
+        })()
         const slRaw = a.sl ?? a.so_luong ?? a.quantity
         const sl = Number.isFinite(slRaw) ? Number(slRaw) : (typeof slRaw === 'string' ? Number(slRaw.replace(/[^\d.-]/g,'')) : 0)
         const qty = sl && sl > 1 ? ` x${sl}` : ''
-        const display = loai ? `${loai} ${ten || ''}`.trim() : (ten || 'Phụ kiện')
+        const display = loai ? `${loai} ${displayName || ''}`.trim() : (displayName || 'Phụ kiện')
         return `• ${display}${qty}`
       })
     }
@@ -397,8 +412,25 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   // Địa chỉ nhận & vận chuyển (chỉ render khi là đơn online)
   const orderType = order.order_type || order.type || order.loai_don || ''
   const isOnline = /onl|online/i.test(String(orderType))
-  const address = order.khach_hang?.dia_chi || order.dia_chi_nhan || order["Địa Chỉ Nhận"] || order.address
-  const shipMethod = order.hinh_thuc_van_chuyen || order["Hình Thức Vận Chuyển"]
+  // broaden fallback keys for address and shipping method to capture different payload shapes
+  const address = order.khach_hang?.dia_chi
+    || order.khach_hang?.dia_chi_nhan
+    || order.dia_chi_nhan
+    || order["Địa Chỉ Nhận"]
+    || order.address
+    || order.shippingAddress
+    || order.ship_address
+    || order.receiver_address
+    || order.to_address
+    || ''
+  const shipMethod = order.hinh_thuc_van_chuyen
+    || order["Hình Thức Vận Chuyển"]
+    || order.shipping_method
+    || order.ship_method
+    || order.transport
+    || order.van_chuyen
+    || order.vc
+    || ''
   const shippingSection = isOnline && (address || shipMethod)
     ? `\n <b>Địa chỉ nhận:</b> ${address || '-'}${shipMethod ? `\n <b>Vận chuyển:</b> ${shipMethod}` : ''}`
     : ''
