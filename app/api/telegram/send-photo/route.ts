@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
       const form = await request.formData()
       const entries: any[] = []
       // optional params
-      const orderType = form.get('orderType') as string | null
+  const orderType = form.get('orderType') as string | null
       const messageThreadRaw = form.get('message_thread_id') as string | File | null
       const message_thread_id = messageThreadRaw && typeof messageThreadRaw === 'string' ? Number(messageThreadRaw) : undefined
       for (const [key, value] of form.entries()) {

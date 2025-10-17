@@ -886,11 +886,13 @@ export default function BanHangPage() {
 
       // 1) Send telegram text first to notify team. Capture any thread id returned or implied.
       let messageThreadId: number | undefined = undefined
+      // derive orderType once so photo uploads can reuse the same logical routing
+      const derivedOrderType = loaiDon?.toLowerCase?.() ? (loaiDon.toLowerCase().includes('onl') ? 'online' : 'offline') : undefined
       try {
         const msgRes = await fetch('/api/telegram/send-message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderInfo: orderInfoForMsg, orderType: loaiDon?.toLowerCase?.() ? (loaiDon.toLowerCase().includes('onl') ? 'online' : 'offline') : undefined })
+          body: JSON.stringify({ orderInfo: orderInfoForMsg, orderType: derivedOrderType })
         })
         if (msgRes.ok) {
           // Telegram sendMessage doesn't return message_thread_id in our helper; nothing to parse here.
@@ -914,6 +916,8 @@ export default function BanHangPage() {
             form.append('photo', file, file.name)
           })
           if (messageThreadId) form.append('message_thread_id', String(messageThreadId))
+          // include logical order type so server chooses the correct Telegram group
+          if (derivedOrderType) form.append('orderType', derivedOrderType)
           const upRes = await fetch('/api/telegram/send-photo', {
             method: 'POST',
             body: form
@@ -2316,8 +2320,9 @@ export default function BanHangPage() {
           {/* Image attachment for receipt / proof (desktop) */}
           <div className="mt-4">
             <label className="text-sm font-medium">Đính kèm ảnh (hóa đơn / biên nhận)</label>
-            <div className="mt-2">
+              <div className="mt-2">
               <ImagePicker
+                orderType={loaiDon?.toLowerCase?.() ? (loaiDon.toLowerCase().includes('onl') ? 'online' : 'offline') : undefined}
                 immediateUpload={false}
                 onUploaded={(res) => { if (res?.ok) setUploadedReceipt(res) }}
                 onSelectFile={(dataUrl)=> setReceiptBase64(dataUrl as string)}

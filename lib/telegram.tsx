@@ -1,15 +1,41 @@
-type OrderType = "online" | "offline" | "return"
+type OrderType = "online" | "offline" | "return" | "deposit" | string
 interface TelegramOptions { message_thread_id?: number }
+
+// Map logical order types to Telegram chat IDs (groups).
+// Prefer reading chat IDs from environment variables so different deployments can
+// route messages to different groups. Set these env vars on the server:
+// TELEGRAM_CHAT_OFFLINE, TELEGRAM_CHAT_ONLINE, TELEGRAM_CHAT_RETURN, TELEGRAM_CHAT_DEPOSIT
+// Values should be numeric chat IDs (e.g. -1001234567890).
+function parseEnvChat(envName: string, fallback: number) {
+  try {
+    const v = process.env[envName]
+    if (!v) return fallback
+    const n = Number(v)
+    return Number.isFinite(n) ? n : fallback
+  } catch {
+    return fallback
+  }
+}
+
+const DEFAULT_CHAT = -1002895849744
+const ORDER_TYPE_CHAT_MAP: Record<string, number> = {
+  offline: parseEnvChat('TELEGRAM_CHAT_OFFLINE', DEFAULT_CHAT),
+  online: parseEnvChat('TELEGRAM_CHAT_ONLINE', DEFAULT_CHAT),
+  return: parseEnvChat('TELEGRAM_CHAT_RETURN', DEFAULT_CHAT),
+  deposit: parseEnvChat('TELEGRAM_CHAT_DEPOSIT', DEFAULT_CHAT),
+}
 
 export async function sendTelegramMessage(message: string, orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
-    const chatId = -1002895849744 // id nhóm lớn
-  // Chọn topic theo loại đơn hàng, có thể override bằng options.message_thread_id
-  let messageThreadId = 9 // mặc định đơn off
-  if (orderType === "online") messageThreadId = 7
-  if (orderType === "return") messageThreadId = 5334
-  if (options?.message_thread_id) messageThreadId = options.message_thread_id
+    // choose chat id from mapping, fallback to default
+    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
+    // choose topic/thread id based on orderType defaults, can be overridden by options.message_thread_id
+    let messageThreadId = 9 // default thread for offline
+    if (orderType === "online") messageThreadId = 7
+    if (orderType === "return") messageThreadId = 5334
+    if (orderType === "deposit") messageThreadId = 9
+    if (options?.message_thread_id) messageThreadId = options.message_thread_id
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
       return { success: false, error: "Thiếu cấu hình Telegram" }
@@ -44,11 +70,12 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
 export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
-    const chatId = -1002895849744
-    // choose thread like sendTelegramMessage
+    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
+    // choose thread id defaults
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
+    if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
 
     if (!botToken || !chatId) {
@@ -104,10 +131,11 @@ export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'i
 export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
-    const chatId = -1002895849744
+    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
+    if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
 
     const boundary = '----telegramboundary' + Date.now()
@@ -149,10 +177,11 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
 export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: string[], captions?: string[], orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
-    const chatId = -1002895849744
+    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
+    if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
 
     if (!botToken || !chatId) {

@@ -1,7 +1,7 @@
 "use client"
 import React, { useCallback, useState } from 'react'
 
-export default function ImagePicker({ onUploaded, onSelectFile, onSelectBlob, onSelectBlobs, immediateUpload = false }: { onUploaded?: (res: any) => void, onSelectFile?: (dataUrl: string|null, files?: File[])=>void, onSelectBlob?: (blob: Blob|null, file?: File)=>void, onSelectBlobs?: (blobs: Blob[]|null, files?: File[])=>void, immediateUpload?: boolean }) {
+export default function ImagePicker({ onUploaded, onSelectFile, onSelectBlob, onSelectBlobs, immediateUpload = false, orderType }: { onUploaded?: (res: any) => void, onSelectFile?: (dataUrl: string|null, files?: File[])=>void, onSelectBlob?: (blob: Blob|null, file?: File)=>void, onSelectBlobs?: (blobs: Blob[]|null, files?: File[])=>void, immediateUpload?: boolean, orderType?: string }) {
   const [preview, setPreview] = useState<string | null>(null)
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
@@ -110,7 +110,7 @@ export default function ImagePicker({ onUploaded, onSelectFile, onSelectBlob, on
       const res = await fetch('/api/telegram/send-photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: data, filename: f.name, caption: '', orderType: undefined })
+        body: JSON.stringify({ image: data, filename: f.name, caption: '', orderType: orderType || undefined })
       })
       const json = await res.json()
       onUploaded?.(json)
@@ -128,7 +128,8 @@ export default function ImagePicker({ onUploaded, onSelectFile, onSelectBlob, on
     try {
       const form = new FormData()
       for (const f of filesToUpload) form.append('photo', f, f.name)
-      const res = await fetch('/api/telegram/send-photo', { method: 'POST', body: form })
+  if (orderType) form.append('orderType', orderType)
+  const res = await fetch('/api/telegram/send-photo', { method: 'POST', body: form })
       const json = await res.json()
       // call onUploaded for backward compat per file
       if (Array.isArray(json?.results)) {
