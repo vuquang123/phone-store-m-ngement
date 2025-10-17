@@ -328,13 +328,15 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     const arr = accessoriesArr as any[]
     if (Array.isArray(arr) && arr.length) {
       return arr.slice(0, 20).map((a: any) => {
-        const ten = a.ten_phu_kien || a.ten || a.name || ''
-        const loai = a.loai || a.type || ''
+        const ten = (a.ten_phu_kien || a.ten || a.name || '').toString().trim()
+        const loaiRaw = (a.loai || a.type || '').toString().trim()
+        // Format: LOẠI TÊN (uppercase LOẠI then name), fallback to name or 'Phụ kiện'
+        const loai = loaiRaw ? loaiRaw.toUpperCase() : ''
         const slRaw = a.sl ?? a.so_luong ?? a.quantity
         const sl = Number.isFinite(slRaw) ? Number(slRaw) : (typeof slRaw === 'string' ? Number(slRaw.replace(/[^\d.-]/g,'')) : 0)
         const qty = sl && sl > 1 ? ` x${sl}` : ''
-        const nameWithType = loai ? `${loai} ${ten}` : (ten || 'Phụ kiện')
-        return `• ${nameWithType}${qty}`
+        const display = loai ? `${loai} ${ten || ''}`.trim() : (ten || 'Phụ kiện')
+        return `• ${display}${qty}`
       })
     }
     if (accessoriesStr) return [accessoriesStr]
