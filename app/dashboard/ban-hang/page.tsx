@@ -1081,11 +1081,35 @@ export default function BanHangPage() {
           if (!res.ok) throw new Error("API ban-hang lỗi: " + (await res.text()));
           const order = await res.json();
           // Sau khi đã có mã đơn hàng, gửi thông báo Telegram với mã đơn hàng thực tế
-          if (order && (order.id_don_hang || order.ma_don_hang)) {
+          if (order && (order.id_don_hang || order.ma_don_hang) && loaiThanhToan !== "Đặt cọc") {
             // Only declare these once
             const orderInfoForMsg = {
               ...orderData,
               ma_don_hang: order.id_don_hang || order.ma_don_hang,
+              // Bổ sung các key phổ biến để formatOrderMessage luôn lấy đúng
+              employeeName: employeeId,
+              nhan_vien_ban: employeeId,
+              final_total: finalThanhToan,
+              tong_tien: finalThanhToan,
+              total: finalThanhToan,
+              dia_chi_nhan: loaiDon === 'Đơn onl' ? diaChiNhan : '',
+              address: loaiDon === 'Đơn onl' ? diaChiNhan : '',
+              shippingAddress: loaiDon === 'Đơn onl' ? diaChiNhan : '',
+              hinh_thuc_van_chuyen: loaiDon === 'Đơn onl' ? hinhThucVanChuyen : '',
+              shipping_method: loaiDon === 'Đơn onl' ? hinhThucVanChuyen : '',
+              phuong_thuc_thanh_toan: paymentSummary,
+              paymentMethod: paymentSummary,
+              payments: paymentsArray,
+              customerName: selectedCustomer?.ho_ten || 'Khách lẻ',
+              customerPhone: selectedCustomer?.so_dien_thoai || '',
+              // Đảm bảo khach_hang có đầy đủ thông tin
+              khach_hang: {
+                ten: selectedCustomer?.ho_ten || 'Khách lẻ',
+                ho_ten: selectedCustomer?.ho_ten || 'Khách lẻ',
+                so_dien_thoai: selectedCustomer?.so_dien_thoai || '',
+                sdt: selectedCustomer?.so_dien_thoai || '',
+                dia_chi: loaiDon === 'Đơn onl' ? diaChiNhan : ''
+              }
             };
             const derivedOrderType = loaiDon?.toLowerCase?.() ? (loaiDon.toLowerCase().includes('onl') ? 'online' : 'offline') : undefined;
             try {
