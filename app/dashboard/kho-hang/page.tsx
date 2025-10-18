@@ -50,6 +50,7 @@ interface Product {
   mau_sac: string;
   pin: string;
   imei: string;
+  serial?: string;
   tinh_trang: string;
   gia_nhap: number;
   gia_ban: number;
@@ -992,7 +993,7 @@ export default function KhoHangPage() {
                             <Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-2 py-0.5 text-[10px] font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge>
                           </div>
                           <div className="mt-2 text-sm text-slate-700">
-                            <div>IMEI: <span className="font-medium">{p.imei}</span></div>
+                            <div>IMEI/Serial: <span className="font-medium">{p.imei || p.serial || "-"}</span></div>
                             <div className="text-xs text-slate-500">Pin: {p.pin || "-"} • {p.tinh_trang}</div>
                           </div>
                           <div className="mt-3 flex items-baseline gap-3">
@@ -1019,7 +1020,7 @@ export default function KhoHangPage() {
                           </TableHead>
                         )}
                         <TableHead className="font-semibold">Sản phẩm</TableHead>
-                        <TableHead className="font-semibold">IMEI</TableHead>
+                            <TableHead className="font-semibold">IMEI/Serial</TableHead>
                         <TableHead className="font-semibold">Pin</TableHead>
                         <TableHead className="font-semibold">Tình trạng</TableHead>
                         <TableHead className="font-semibold">Trạng thái</TableHead>
@@ -1055,7 +1056,7 @@ export default function KhoHangPage() {
                                 {p.mau_sac}{p.mau_sac && p.dung_luong ? ' - ' : ''}{p.dung_luong}
                               </div>
                             </TableCell>
-                            <TableCell className="text-sm text-slate-700">{p.imei}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.imei || p.serial || "-"}</TableCell>
                             <TableCell className="text-sm text-slate-700">{p.pin || "-"}</TableCell>
                             <TableCell className="text-sm text-slate-700">{p.tinh_trang}</TableCell>
                             <TableCell><Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-3 py-1 text-xs font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge></TableCell>
