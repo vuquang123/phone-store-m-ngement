@@ -1162,7 +1162,6 @@ export default function BanHangPage() {
             body: JSON.stringify({
               ...orderData,
               receipt_image: uploadedReceiptLocal || uploadedReceipt || null,
-              // already sent notification from client, avoid duplicate on server
               skipTelegram: true,
               nguon_hang: products.some(p => String(p.nguon || p.source || '').toLowerCase().includes('đối tác')) ? 'Đối tác' : '',
               coreTotal: thanhToan,
@@ -1170,7 +1169,6 @@ export default function BanHangPage() {
               finalThanhToan: finalThanhToan,
               hinh_thuc_thanh_toan: paymentSummary,
               payments: paymentsArray,
-              // Thông tin giao hàng (đơn online)
               dia_chi_nhan: loaiDon === 'Đơn onl' ? diaChiNhan : '',
               "Địa Chỉ Nhận": loaiDon === 'Đơn onl' ? diaChiNhan : '',
               khach_hang: {
@@ -1185,15 +1183,27 @@ export default function BanHangPage() {
           });
           if (!res.ok) throw new Error("API ban-hang lỗi: " + (await res.text()));
           const order = await res.json();
+          // Sau khi đã có mã đơn hàng, gửi thông báo Telegram với mã đơn hàng thực tế
+          if (order && (order.id_don_hang || order.ma_don_hang)) {
+            const orderInfoForMsg = {
+              ...orderData,
+              ma_don_hang: order.id_don_hang || order.ma_don_hang,
+              // cập nhật lại các trường khác nếu cần
+            }
+            const derivedOrderType = loaiDon?.toLowerCase?.() ? (loaiDon.toLowerCase().includes('onl') ? 'online' : 'offline') : undefined
+            await fetch('/api/telegram/send-message', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderInfo: orderInfoForMsg, orderType: derivedOrderType })
+            })
+          }
           setCart([]);
           setSelectedCustomer(null);
           setGiamGia(0);
           setGhiChu("");
           setDiaChiNhan("");
-          // Reset payment inputs
           setCashAmount(0); setTransferAmount(0); setCardAmount(0);
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0);
-          // Nếu là tiếp tục thanh toán từ đơn đặt cọc, cập nhật trạng thái đơn đặt cọc
           try {
             if (currentDepositOrderId) {
               await fetch('/api/dat-coc', {
@@ -1207,7 +1217,6 @@ export default function BanHangPage() {
           toast({ title: 'Tạo đơn thành công', description: `Mã: ${order.id_don_hang || order.ma_don_hang || ''}` })
           try { localStorage.removeItem('cart_draft_v1'); localStorage.removeItem('cart_warranty_sel_v1') } catch{}
           setReloadFlag(f => f + 1);
-          // clear receipt selection after success
           try { setReceiptBlob(null); setReceiptBase64(null); setReceiptBlobs(null); setUploadedReceipt(null) } catch {}
         } catch (err) {
           toast({ title: 'Lỗi tạo đơn hàng', description: String(err), variant: 'destructive' as any })

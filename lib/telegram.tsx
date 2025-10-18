@@ -279,11 +279,13 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
       : []
 
   const productLines = enrichedProducts.slice(0, 10).map((p: any, idx: number) => {
-    const parts = [
-      p.ten_san_pham || p.ten || p.name || "Sản phẩm",
-      [p.loai_may || p.loai, p.dung_luong || p.dungLuong, p.mau_sac || p.mauSac].filter(Boolean).join("/")
-    ].filter(Boolean)
-    const head = parts.join(" ")
+    // Thêm trường màu sắc vào thông tin sản phẩm
+    const tenSanPham = p.ten_san_pham || p.ten || p.name || "Sản phẩm"
+    const loaiMay = p.loai_may || p.loai
+    const dungLuong = p.dung_luong || p.dungLuong
+    const mauSac = p.mau_sac || p.mauSac
+    const thongSo = [loaiMay, dungLuong, mauSac].filter(Boolean).join("/")
+    const head = thongSo ? `${tenSanPham} (${thongSo})` : tenSanPham
     const idLine = (() => {
       const imei = p.imei || p.IMEI
       const serial = p.serial || p.Serial
@@ -315,15 +317,32 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   const reasonLine = reason ? `\n <b>Lý do hoàn:</b> ${reason}` : ""
 
   // Phụ kiện: ưu tiên mảng accessories; fallback từ "Chi Tiết PK" (JSON) hoặc chuỗi phu_kien
+  // Nếu không có Chi Tiết PK (JSON), lấy từ cột Phụ Kiện (chuỗi, phân tách bằng dấu phẩy)
   const accessoriesArr = (() => {
     if (Array.isArray(order.accessories)) return order.accessories
     const rawDetail = order["Chi Tiết PK"] || order["Chi Tiết Phụ Kiện"] || order.chi_tiet_pk
     if (typeof rawDetail === 'string' && rawDetail.trim()) {
       try { const parsed = JSON.parse(rawDetail); if (Array.isArray(parsed)) return parsed } catch {}
     }
+    // Nếu không có JSON, lấy từ cột Phụ Kiện dạng chuỗi, phân tách từng phụ kiện
+    const accessoriesStr = (order.phu_kien || order["Phụ Kiện"] || '').toString().trim()
+    if (accessoriesStr) {
+      // Tách từng phụ kiện, loại bỏ khoảng trắng thừa
+      return accessoriesStr.split(',').map((s: string) => {
+        const ten = s.trim()
+        // Cố gắng tách loại nếu có (lấy từ đầu chuỗi đến khoảng trắng đầu tiên)
+        const m = ten.match(/^([A-ZÀ-Ỹa-zà-ỹ0-9\s\-]+)\s+(.*)$/)
+        let loai = ''
+        let name = ten
+        if (m && m[1] && m[2]) {
+          loai = m[1].trim()
+          name = m[2].trim()
+        }
+        return { ten_phu_kien: name, loai: loai }
+      })
+    }
     return []
   })()
-  const accessoriesStr = (order.phu_kien || order["Phụ Kiện"] || '').toString().trim()
   const accessoryLines = (() => {
     const arr = accessoriesArr as any[]
     if (Array.isArray(arr) && arr.length) {
@@ -354,7 +373,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
         return `• ${display}${qty}`
       })
     }
-    if (accessoriesStr) return [accessoriesStr]
+  // Đã xử lý accessoriesStr ở trên, không cần kiểm tra lại ở đây
     return []
   })()
   // Chỉ render phụ kiện nếu thực sự có phụ kiện, không render dòng thừa
@@ -381,6 +400,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
 
   // Chi tiết thanh toán: nếu có mảng payments thì render đầy đủ; nếu không, dùng chuỗi tóm tắt có sẵn
   const paymentLines = (() => {
+    // Đảm bảo lấy tất cả phương thức thanh toán và số tiền từng phương thức
     const payments = Array.isArray(order.payments) ? order.payments : []
     if (!payments.length) return [] as string[]
     const label = (m: string) => m === 'cash' ? 'Tiền mặt' : m === 'transfer' ? 'Chuyển khoản' : m === 'card' ? 'Thẻ' : m === 'installment' ? 'Trả góp' : m
@@ -401,18 +421,16 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
         const suffix = subs.length ? `: ${subs.join(', ')}` : ''
         lines.push(`• ${method}${provider ? ` (${provider})` : ''}${suffix}`)
       } else {
+        // Sửa: luôn hiện số tiền từng phương thức, nếu có
         const amt = typeof p.amount === 'number' ? p.amount : Number(String(p.amount || '').replace(/[^\d.-]/g, ''))
-        const amtStr = Number.isFinite(amt) && amt > 0 ? ` ₫${amt.toLocaleString('vi-VN')}` : ''
+        const amtStr = Number.isFinite(amt) ? ` ₫${amt.toLocaleString('vi-VN')}` : ''
         lines.push(`• ${method}${amtStr}`)
       }
     }
     return lines
   })()
 
-  // Địa chỉ nhận & vận chuyển (chỉ render khi là đơn online)
-  const orderType = order.order_type || order.type || order.loai_don || ''
-  const isOnline = /onl|online/i.test(String(orderType))
-  // broaden fallback keys for address and shipping method to capture different payload shapes
+  // Địa chỉ nhận & vận chuyển: luôn hiển thị nếu có
   const address = order.khach_hang?.dia_chi
     || order.khach_hang?.dia_chi_nhan
     || order.dia_chi_nhan
@@ -431,7 +449,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     || order.van_chuyen
     || order.vc
     || ''
-  const shippingSection = isOnline && (address || shipMethod)
+  const shippingSection = (address || shipMethod)
     ? `\n <b>Địa chỉ nhận:</b> ${address || '-'}${shipMethod ? `\n <b>Vận chuyển:</b> ${shipMethod}` : ''}`
     : ''
 
@@ -441,17 +459,27 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   const noteLine = noteText ? `\n <b>Ghi chú:</b> ${noteText}` : ''
 
   // Gom các section, loại bỏ dòng trống nếu không có phụ kiện hoặc sản phẩm
+  // Always include ma_don_hang (fallback to idDonHang, id, or order.id if missing)
+  // Luôn hiển thị mã đơn hàng, nếu không có thì ghi rõ "(chưa có)"
+  const maDonHang = (typeof order.ma_don_hang === 'string' && order.ma_don_hang.trim())
+    ? order.ma_don_hang.trim()
+    : (order.idDonHang || order.id || order.maDonHang || '(chưa có)')
+  // Luôn hiển thị địa chỉ nhận & vận chuyển nếu có
+  const addressFull = address
+  const shipMethodFull = shipMethod
+  const shippingSectionFull = (addressFull || shipMethodFull)
+    ? `\n <b>Địa chỉ nhận:</b> ${addressFull || '-'}${shipMethodFull ? `\n <b>Vận chuyển:</b> ${shipMethodFull}` : ''}`
+    : ''
+
   let messageSections = [
     `${emoji} <b>${action}</b>`,
-    `\n <b>Mã đơn hàng:</b> ${order.ma_don_hang}`,
+  `\n <b>Mã đơn hàng:</b> ${maDonHang}`,
     ` <b>Nhân viên:</b> ${order.nhan_vien_ban || order.employeeName || order.employeeId || "N/A"}`,
     ` <b>Khách hàng:</b> ${order.khach_hang?.ten || order.khach_hang?.ho_ten || order.customerName || "Khách lẻ"}`,
-  ` <b>SĐT:</b> ${order.khach_hang?.so_dien_thoai || order.khach_hang?.sdt || order.customerPhone || "N/A"}`,
-  // Loại đơn (nếu có)
-  ...(order.loai_don || order.order_type || order.type || order.loai_don_ban ? [` <b>Loại đơn:</b> ${order.loai_don || order.order_type || order.type || order.loai_don_ban}`] : []),
-  // Hạn thanh toán (nếu có)
-  ...(order.han_thanh_toan || order.hanThanhToan || order.due_date ? [` <b>Hạn thanh toán:</b> ${order.han_thanh_toan || order.hanThanhToan || order.due_date}`] : []),
-    shippingSection,
+    ` <b>SĐT:</b> ${order.khach_hang?.so_dien_thoai || order.khach_hang?.sdt || order.customerPhone || "N/A"}`,
+    ...(order.loai_don || order.order_type || order.type || order.loai_don_ban ? [` <b>Loại đơn:</b> ${order.loai_don || order.order_type || order.type || order.loai_don_ban}`] : []),
+    ...(order.han_thanh_toan || order.hanThanhToan || order.due_date ? [` <b>Hạn thanh toán:</b> ${order.han_thanh_toan || order.hanThanhToan || order.due_date}`] : []),
+    shippingSectionFull,
     productSection,
     accessoriesSection,
     warrantyLine,
@@ -459,14 +487,12 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     noteLine,
     totalLine,
     depositLine,
-    // Nếu có paymentLines chi tiết thì chỉ hiển thị các dòng chi tiết, không lặp lại tổng hợp
     !paymentLines.length
       ? ` <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || 'N/A'}`
       : '',
     paymentLines.length ? `\n${paymentLines.join('\n')}` : '',
     `\n <b>Thời gian:</b> ${new Date(order.ngay_tao || Date.now()).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })}`
   ]
-  // Xóa các section rỗng hoặc chỉ có khoảng trắng
   messageSections = messageSections.filter(s => typeof s === 'string' && s.trim())
   return messageSections.join('\n')
 }
