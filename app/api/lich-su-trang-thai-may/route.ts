@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { appendToGoogleSheets, readFromGoogleSheets } from "@/lib/google-sheets"
+import dayjs from "dayjs"
+import utc from "dayjs/plugin/utc"
+import timezone from "dayjs/plugin/timezone"
+dayjs.extend(utc)
+dayjs.extend(timezone)
 
 const SHEET = "Lich_Su_Trang_Thai_May"
 
@@ -41,13 +46,14 @@ export async function POST(request: NextRequest) {
       // ignore errors and fall back to body.nguoi_thay_doi
     }
 
+    const nowVN = dayjs().tz('Asia/Ho_Chi_Minh').format('HH:mm:ss DD/MM/YYYY')
     const newRow = [
       body.id_may || "",
       body.imei || "",
       body.ten_san_pham || "",
       body.trang_thai_cu || "",
       body.trang_thai_moi || "",
-      body.thoi_gian || new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
+      body.thoi_gian || nowVN,
       editor || ""
     ]
     const result = await appendToGoogleSheets(SHEET, newRow)

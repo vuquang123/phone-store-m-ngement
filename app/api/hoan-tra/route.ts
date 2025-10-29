@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets } from "@/lib/google-sheets"
+import dayjs from "dayjs"
+import utc from "dayjs/plugin/utc"
+import timezone from "dayjs/plugin/timezone"
+dayjs.extend(utc)
+dayjs.extend(timezone)
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { addNotification } from "@/lib/notifications"
 import { cancelContractsByIMEIs } from "@/lib/warranty"
@@ -74,8 +79,8 @@ async function adjustCustomerTotal(phoneRaw: string | undefined, amountDelta: nu
     await updateRangeValues(`${KHACH_HANG_SHEET}!${toColumnLetter(idx.tongMua + 1)}${rowNum}`, [[next]])
   }
   if (idx.lanMuaCuoi !== -1) {
-    const nowVN = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
-    await updateRangeValues(`${KHACH_HANG_SHEET}!${toColumnLetter(idx.lanMuaCuoi + 1)}${rowNum}`, [[nowVN]])
+  const nowVN = dayjs().tz('Asia/Ho_Chi_Minh').format('HH:mm:ss DD/MM/YYYY')
+  await updateRangeValues(`${KHACH_HANG_SHEET}!${toColumnLetter(idx.lanMuaCuoi + 1)}${rowNum}`, [[nowVN]])
   }
   return { adjusted: true, newTotal: next }
 }
@@ -154,7 +159,7 @@ export async function POST(req: NextRequest) {
 
     const line = Array(header.length).fill("")
     if (H.id !== -1) line[H.id] = newId
-    if (H.ngayYC !== -1) line[H.ngayYC] = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+  if (H.ngayYC !== -1) line[H.ngayYC] = dayjs().tz('Asia/Ho_Chi_Minh').format('HH:mm:ss DD/MM/YYYY')
     if (H.khach !== -1) line[H.khach] = khach_hang || ""
     if (H.sdt !== -1) line[H.sdt] = so_dien_thoai ? normalizePhone(String(so_dien_thoai)) : ""
     if (H.sp !== -1) line[H.sp] = san_pham || ""
