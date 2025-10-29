@@ -182,6 +182,11 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
   const nowVNDate = now.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
   const nowVNFull = now.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) + ' ' + now.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 
+  // DEBUG LOG: kiểm tra giá trị tổng mua cũ
+  let debugCurrentTotalRaw = null;
+  let debugCurrentTotalCleaned = null;
+  let debugCurrentTotalNum = null;
+
   if (foundIdx === -1) {
     // Thêm KH mới
     const row = Array(header.length).fill("")
@@ -199,12 +204,19 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
     let currentTotal = 0
     if (K.tongMua !== -1) {
       const raw = rows[foundIdx][K.tongMua]
-      if (typeof raw === "number") currentTotal = raw
-      else if (raw) {
-        const cleaned = String(raw).replace(/[^\d.-]/g, "")
-        const num = Number(cleaned)
-        if (Number.isFinite(num)) currentTotal = num
+      debugCurrentTotalRaw = raw;
+      if (typeof raw === "number") {
+        currentTotal = raw;
+        debugCurrentTotalNum = raw;
+      } else if (raw) {
+        const cleaned = String(raw).replace(/[^\d.-]/g, "");
+        debugCurrentTotalCleaned = cleaned;
+        const num = Number(cleaned);
+        debugCurrentTotalNum = num;
+        if (Number.isFinite(num)) currentTotal = num;
       }
+      // Log giá trị debug
+      console.log("[DEBUG][upsertCustomerByPhone] Tổng Mua cũ raw:", debugCurrentTotalRaw, "| cleaned:", debugCurrentTotalCleaned, "| num:", debugCurrentTotalNum, "| currentTotal:", currentTotal);
     }
     const newTotal = currentTotal + (Number(amountToAdd) || 0)
 

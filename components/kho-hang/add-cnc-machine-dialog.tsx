@@ -38,8 +38,12 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
     if (typeof window !== 'undefined') {
       window.cncAddresses = window.cncAddresses || [];
       const defaultAddress = 'Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)';
+      const qhStoreAddress = 'QH store (53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình)';
       if (!window.cncAddresses.some(a => a.value === defaultAddress)) {
         window.cncAddresses.unshift({ label: defaultAddress, value: defaultAddress });
+      }
+      if (!window.cncAddresses.some(a => a.value === qhStoreAddress)) {
+        window.cncAddresses.push({ label: qhStoreAddress, value: qhStoreAddress });
       }
     }
   }, []);

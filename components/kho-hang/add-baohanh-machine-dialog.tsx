@@ -60,8 +60,12 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
     if (typeof window !== 'undefined') {
       window.baoHanhAddresses = window.baoHanhAddresses || [];
       const defaultAddress = 'Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)';
+      const qhStoreAddress = 'QH store (53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình)';
       if (!window.baoHanhAddresses.some(a => a.value === defaultAddress)) {
         window.baoHanhAddresses.unshift({ label: defaultAddress, value: defaultAddress });
+      }
+      if (!window.baoHanhAddresses.some(a => a.value === qhStoreAddress)) {
+        window.baoHanhAddresses.push({ label: qhStoreAddress, value: qhStoreAddress });
       }
       // Nếu chưa chọn thì chọn mặc định
       if (!diaChiBaoHanh) setDiaChiBaoHanh(defaultAddress);

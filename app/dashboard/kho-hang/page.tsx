@@ -77,8 +77,9 @@ export default function KhoHangPage() {
   const [dialogInfo, setDialogInfo] = useState<{data: ViewCustomer, pos: {x: number, y: number}} | null>(null)
   // State địa chỉ bảo hành chung cho dialog
   const BAOHANH_DEFAULT = { label: "Tâm Táo", value: "Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)", desc: "9A Đường số 6, KP5, Linh Tây, Thủ Đức" };
+  const QH_STORE = { label: "QH store", value: "QH store (53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình)", desc: "53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình" };
   const [diaChiBaoHanh, setDiaChiBaoHanh] = useState(BAOHANH_DEFAULT.value)
-  const [baoHanhAddresses, setBaoHanhAddresses] = useState([BAOHANH_DEFAULT])
+  const [baoHanhAddresses, setBaoHanhAddresses] = useState([BAOHANH_DEFAULT, QH_STORE])
   const [isAddingBaoHanhAddress, setIsAddingBaoHanhAddress] = useState(false)
   const [newBaoHanhAddress, setNewBaoHanhAddress] = useState("")
   // Chế độ chỉnh sửa tab CNC
@@ -271,8 +272,9 @@ export default function KhoHangPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedCNCProductId, setSelectedCNCProductId] = useState("")
   const CNC_DEFAULT = { label: "Tâm Táo", value: "Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)", desc: "9A Đường số 6, KP5, Linh Tây, Thủ Đức" };
+  const CNC_QH_STORE = { label: "QH store", value: "QH store (53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình)", desc: "53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình" };
   const [cncAddress, setCNCAddress] = useState(CNC_DEFAULT.value)
-  const [cncAddresses, setCNCAddresses] = useState([CNC_DEFAULT])
+  const [cncAddresses, setCNCAddresses] = useState([CNC_DEFAULT, CNC_QH_STORE])
   const [isAddingCNCAddress, setIsAddingCNCAddress] = useState(false)
   const [newCNCAddress, setNewCNCAddress] = useState("")
   const [isCNCLoading, setIsCNCLoading] = useState(false)
@@ -728,7 +730,7 @@ export default function KhoHangPage() {
                         </h2>
                         <div className="mb-6">
                           <div className="text-base font-medium mb-2 text-slate-700">Bạn có chắc chắn muốn gửi CNC cho các sản phẩm sau?</div>
-                          <div className="space-y-4">
+                          <div className="space-y-4" style={{maxHeight: '320px', overflowY: 'auto'}}>
                             {filteredProducts.filter(p => selectedProductIds.includes(p.id)).map((p) => (
                               <div key={p.id} className="bg-slate-50 rounded-xl p-4 shadow flex flex-col gap-2 border border-slate-100">
                                 <div className="font-semibold text-blue-700 mb-1 flex items-center gap-2">
