@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets } from "@/lib/google-sheets"
-import dayjs from "dayjs"
-import utc from "dayjs/plugin/utc"
-import timezone from "dayjs/plugin/timezone"
-dayjs.extend(utc)
-dayjs.extend(timezone)
+import { DateTime } from "luxon"
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { addNotification } from "@/lib/notifications"
 import { cancelContractsByIMEIs } from "@/lib/warranty"
@@ -79,8 +75,8 @@ async function adjustCustomerTotal(phoneRaw: string | undefined, amountDelta: nu
     await updateRangeValues(`${KHACH_HANG_SHEET}!${toColumnLetter(idx.tongMua + 1)}${rowNum}`, [[next]])
   }
   if (idx.lanMuaCuoi !== -1) {
-  const nowVN = dayjs().tz('Asia/Ho_Chi_Minh').format('HH:mm:ss DD/MM/YYYY')
-  await updateRangeValues(`${KHACH_HANG_SHEET}!${toColumnLetter(idx.lanMuaCuoi + 1)}${rowNum}`, [[nowVN]])
+    const nowVN = DateTime.now().setZone('Asia/Ho_Chi_Minh').toFormat('HH:mm:ss dd/MM/yyyy')
+    await updateRangeValues(`${KHACH_HANG_SHEET}!${toColumnLetter(idx.lanMuaCuoi + 1)}${rowNum}`, [[nowVN]])
   }
   return { adjusted: true, newTotal: next }
 }
@@ -159,11 +155,11 @@ export async function POST(req: NextRequest) {
 
     const line = Array(header.length).fill("")
     if (H.id !== -1) line[H.id] = newId
-  if (H.ngayYC !== -1) line[H.ngayYC] = dayjs().tz('Asia/Ho_Chi_Minh').format('HH:mm:ss DD/MM/YYYY')
+    if (H.ngayYC !== -1) line[H.ngayYC] = DateTime.now().setZone('Asia/Ho_Chi_Minh').toFormat('HH:mm:ss dd/MM/yyyy')
     if (H.khach !== -1) line[H.khach] = khach_hang || ""
     if (H.sdt !== -1) line[H.sdt] = so_dien_thoai ? normalizePhone(String(so_dien_thoai)) : ""
     if (H.sp !== -1) line[H.sp] = san_pham || ""
-  if (H.imei !== -1) line[H.imei] = imei || ""
+    if (H.imei !== -1) line[H.imei] = imei || ""
     if (H.lyDo !== -1) line[H.lyDo] = ly_do || ""
     if (H.trangThai !== -1) line[H.trangThai] = trang_thai || "Đang xử lý"
     if (H.nguoiXL !== -1) line[H.nguoiXL] = nguoi_xu_ly || ""
@@ -198,7 +194,7 @@ export async function POST(req: NextRequest) {
     try {
       if (ma_don_hang || imei) {
         const { header: BH, rows: BR } = await readFromGoogleSheets('Ban_Hang')
-      const bIdx = {
+        const bIdx = {
           idDon: BH.indexOf('ID Đơn Hàng'),
           tenSP: BH.indexOf('Tên Sản Phẩm'),
           loaiMay: BH.indexOf('Loại Máy'),
@@ -206,7 +202,7 @@ export async function POST(req: NextRequest) {
           pin: BH.indexOf('Pin (%)'),
           mauSac: BH.indexOf('Màu Sắc'),
           imei: BH.indexOf('IMEI'),
-        serial: BH.indexOf('Serial'),
+          serial: BH.indexOf('Serial'),
           tinhTrang: BH.indexOf('Tình Trạng Máy'),
           giaNhap: BH.indexOf('Giá Nhập'),
           giaBan: BH.indexOf('Giá Bán'),
@@ -384,7 +380,7 @@ export async function PATCH(req: NextRequest) {
     const rowIndex = rows.findIndex(r => String(r[idCol] || '') === String(id))
     if (rowIndex === -1) return NextResponse.json({ error: 'Không tìm thấy yêu cầu hoàn trả' }, { status: 404 })
 
-    const nowVN = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+    const nowVN = DateTime.now().setZone('Asia/Ho_Chi_Minh').toFormat('HH:mm:ss dd/MM/yyyy')
     const updates: Array<{ range: string; values: any[][] }> = []
 
     const rowNum = rowIndex + 2 // header at row 1

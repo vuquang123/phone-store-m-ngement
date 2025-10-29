@@ -2,6 +2,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets } from "@/lib/google-sheets"
+import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
 
@@ -178,9 +179,9 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
   const target = normalizePhone(phone)
   const foundIdx = rows.findIndex((r) => normalizePhone(String(r[K.sdt] || "")) === target)
   // Ngày tạo chỉ ngày, lần mua cuối đầy đủ thời gian
-  const now = new Date();
-  const nowVNDate = now.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
-  const nowVNFull = now.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) + ' ' + now.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  const nowVN = DateTime.now().setZone('Asia/Ho_Chi_Minh')
+  const nowVNDate = nowVN.toFormat('dd/MM/yyyy')
+  const nowVNFull = nowVN.toFormat('HH:mm:ss dd/MM/yyyy')
 
   // DEBUG LOG: kiểm tra giá trị tổng mua cũ
   let debugCurrentTotalRaw = null;
@@ -194,7 +195,7 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
     row[K.sdt] = target
     if (K.tongMua !== -1) row[K.tongMua] = Number(amountToAdd) || 0
     if (K.lanMuaCuoi !== -1) row[K.lanMuaCuoi] = nowVNFull
-    if (K.ngayTao !== -1) row[K.ngayTao] = nowVNDate
+  if (K.ngayTao !== -1) row[K.ngayTao] = nowVNFull
     await appendToGoogleSheets("Khach_Hang", row)
     return { ten: row[K.ten] || "Khách lẻ", sdt: target, tongMua: row[K.tongMua] || amountToAdd }
   } else {

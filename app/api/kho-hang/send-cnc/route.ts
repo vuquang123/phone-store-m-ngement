@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     if (!moveResult.success) {
       return NextResponse.json({ error: moveResult.error || "Lỗi khi chuyển sản phẩm sang CNC." }, { status: 500 })
     }
-  const logResult = await logProductHistory(idsToMove, "Đang CNC", employeeId || "", trangThaiCuArr)
+  const logResult = await logProductHistory(idsToMove, "Đang CNC", employeeId || "", trangThaiCuArr);
     if (!logResult.success) {
       return NextResponse.json({ error: "Chuyển sản phẩm thành công nhưng ghi lịch sử thất bại." }, { status: 500 })
     }

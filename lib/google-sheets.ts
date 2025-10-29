@@ -1,3 +1,6 @@
+import { DateTime } from "luxon"
+import { google } from "googleapis"
+
 // Cập nhật trạng thái bảo hành cho nhiều sản phẩm trong sheet Bao_Hanh
 export async function updateBaoHanhStatus(imeis: string[], employeeId: string) {
   const { header, rows } = await readFromGoogleSheets("Bao_Hanh")
@@ -5,8 +8,8 @@ export async function updateBaoHanhStatus(imeis: string[], employeeId: string) {
   const idxTrangThai = header.findIndex(h => h.trim().toLowerCase() === "trạng thái")
   const idxNgayNhanLai = header.findIndex(h => h.trim().toLowerCase() === "ngày nhận lại")
   if (idxIMEI === -1 || idxTrangThai === -1) return { success: false, error: "Không tìm thấy cột IMEI hoặc Trạng Thái" }
-  const now = new Date()
-  const ngayNhanLai = now.toLocaleTimeString("vi-VN") + " " + now.toLocaleDateString("vi-VN")
+  const nowVN = DateTime.now().setZone('Asia/Ho_Chi_Minh').toFormat('HH:mm:ss dd/MM/yyyy')
+  const ngayNhanLai = nowVN
   const updatedRows = rows.map(row => {
     if (imeis.includes(row[idxIMEI])) {
       row[idxTrangThai] = "Hoàn thành bảo hành"
@@ -41,11 +44,7 @@ export async function getBaoHanhProducts() {
     return obj
   })
 }
-import { google } from "googleapis"
 
-// Hỗ trợ cả hai bộ tên biến môi trường để tránh nhầm lẫn:
-//  - Cũ: GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, GOOGLE_SHEETS_SPREADSHEET_ID
-//  - Khuyến nghị / Bạn đã tạo: GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_KEY, GOOGLE_SHEETS_ID
 const GOOGLE_SHEETS_CLIENT_EMAIL =
   process.env.GOOGLE_CLIENT_EMAIL ||
   process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
@@ -66,7 +65,7 @@ function normalizePrivateKey(raw: string) {
   // Một số copy có thoát dấu gạch ngang \- (hiếm) → chuẩn hoá nhẹ
   key = key.replace(/-----BEGIN[ -]PRIVATE KEY-----/, '-----BEGIN PRIVATE KEY-----')
   key = key.replace(/-----END[ -]PRIVATE KEY-----/, '-----END PRIVATE KEY-----')
-  // Nếu thiếu BEGIN nhưng là base64 thuần → thử decode
+      const nowVN = DateTime.now().setZone('Asia/Ho_Chi_Minh').toFormat('HH:mm:ss dd/MM/yyyy')
   if (!key.includes('BEGIN') && /^[A-Za-z0-9+/=]+$/.test(key)) {
     try {
       const decoded = Buffer.from(key, 'base64').toString('utf8')
@@ -452,6 +451,7 @@ export async function logProductHistory(productIds: string[], newStatus: string,
   const idxId = header.indexOf("ID Máy")
   const idxTenSP = header.indexOf("Tên Sản Phẩm")
   const now = new Date()
+  const nowVN = DateTime.now().setZone('Asia/Ho_Chi_Minh').toFormat('HH:mm:ss dd/MM/yyyy')
   // Đọc thêm sheet CNC để lấy tên sản phẩm nếu không có ở kho
   const { header: cncHeader, rows: cncRows } = await readFromGoogleSheets("CNC")
   const idxCncId = cncHeader.indexOf("ID Máy")
@@ -483,7 +483,7 @@ export async function logProductHistory(productIds: string[], newStatus: string,
       tenSP,
       trangThaiCu,
       newStatus,
-      now.toLocaleTimeString("vi-VN") + " " + now.toLocaleDateString("vi-VN"),
+      nowVN,
       employeeId
     ]);
   }

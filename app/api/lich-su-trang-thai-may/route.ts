@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { appendToGoogleSheets, readFromGoogleSheets } from "@/lib/google-sheets"
-import dayjs from "dayjs"
-import utc from "dayjs/plugin/utc"
-import timezone from "dayjs/plugin/timezone"
-dayjs.extend(utc)
-dayjs.extend(timezone)
+import { DateTime } from "luxon"
 
 const SHEET = "Lich_Su_Trang_Thai_May"
 
@@ -46,7 +42,7 @@ export async function POST(request: NextRequest) {
       // ignore errors and fall back to body.nguoi_thay_doi
     }
 
-    const nowVN = dayjs().tz('Asia/Ho_Chi_Minh').format('HH:mm:ss DD/MM/YYYY')
+  const nowVN = DateTime.now().setZone('Asia/Ho_Chi_Minh').toFormat('HH:mm:ss dd/MM/yyyy')
     const newRow = [
       body.id_may || "",
       body.imei || "",
