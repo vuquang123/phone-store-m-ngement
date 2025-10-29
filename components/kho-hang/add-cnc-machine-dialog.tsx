@@ -17,6 +17,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
   const [form, setForm] = useState({
     ten_san_pham: "",
     imei: "",
+    mau_sac: "",
     nguon: "Khách ngoài",
     tinh_trang: "",
     loai_may: "Lock",
@@ -119,6 +120,10 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-slate-700">IMEI</Label>
             <Input name="imei" value={form.imei} onChange={handleChange} required placeholder="Nhập IMEI" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label className="font-medium text-slate-700">Màu Sắc</Label>
+            <Input name="mau_sac" value={form.mau_sac} onChange={handleChange} placeholder="Nhập màu sắc" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-slate-700">Tình trạng</Label>

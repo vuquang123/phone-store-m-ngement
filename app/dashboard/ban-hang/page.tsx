@@ -2438,7 +2438,21 @@ export default function BanHangPage() {
                                 {isOverdue && <Badge className="bg-red-600 text-white">Quá hạn</Badge>}
                                 {isPaid && <Badge className="bg-emerald-600 text-white">Đã tất toán</Badge>}
                               </div>
-                              <div className="mt-2 text-sm line-clamp-2">{(order._products || []).join(', ')}</div>
+                              <div className="mt-2 text-sm line-clamp-2">
+                                {depositOrders.filter((o: any) => {
+                                  const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
+                                  return m === maDon;
+                                }).map((o: any, i: number) => (
+                                  <span key={i}>
+                                    {o["Tên Sản Phẩm"] || o["ten_san_pham"]}
+                                    {o["Màu Sắc"] ? ` (${o["Màu Sắc"]})` : ""}
+                                    {i < depositOrders.filter((oo: any) => {
+                                      const m = oo["Mã Đơn Hàng"] || oo["ID Đơn Hàng"] || oo["ma_don_hang"];
+                                      return m === maDon;
+                                    }).length - 1 ? ", " : ""}
+                                  </span>
+                                ))}
+                              </div>
                               <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                                 <div>
                                   <div className="text-slate-500">Đã cọc</div>
@@ -2542,7 +2556,21 @@ export default function BanHangPage() {
                                   <div className="font-semibold text-slate-800">{order["Tên Khách Hàng"] || order["ten_khach_hang"] || "-"}</div>
                                   <div className="text-xs text-muted-foreground">{order["Số Điện Thoại"] || order["so_dien_thoai"] || "-"}</div>
                                 </td>
-                                <td className="align-middle text-left px-3 py-2">{(order._products || []).join(", ")}</td>
+                                <td className="align-middle text-left px-3 py-2">
+                                  {depositOrders.filter((o: any) => {
+                                    const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
+                                    return m === maDon;
+                                  }).map((o: any, i: number) => (
+                                    <span key={i}>
+                                      {o["Tên Sản Phẩm"] || o["ten_san_pham"]}
+                                      {o["Màu Sắc"] ? ` (${o["Màu Sắc"]})` : ""}
+                                      {i < depositOrders.filter((oo: any) => {
+                                        const m = oo["Mã Đơn Hàng"] || oo["ID Đơn Hàng"] || oo["ma_don_hang"];
+                                        return m === maDon;
+                                      }).length - 1 ? ", " : ""}
+                                    </span>
+                                  ))}
+                                </td>
                                 <td className="align-middle text-left px-3 py-2 font-semibold text-blue-700">₫{tongCoc.toLocaleString()}</td>
                                 <td className="align-middle text-left px-3 py-2 font-semibold text-green-700">₫{tongConLai.toLocaleString()}</td>
                                 <td className="align-middle text-left px-3 py-2">{ngayDatCoc && ngayDatCoc.isValid() ? ngayDatCoc.format("DD/MM/YYYY") : "-"}</td>

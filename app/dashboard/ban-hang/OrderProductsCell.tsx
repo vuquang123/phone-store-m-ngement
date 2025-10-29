@@ -36,6 +36,7 @@ export default function OrderProductsCell({ orderId }: Props) {
         <div key={p.id || p.san_pham?.imei || i} className="text-xs whitespace-nowrap">
           <span className="font-medium">{p.san_pham?.ten_san_pham || p.san_pham?.model || 'Thiết bị'}</span>
           {p.san_pham?.imei && <span className="ml-1 text-muted-foreground font-mono">[{p.san_pham.imei}]</span>}
+          {p.san_pham?.mau_sac && <span className="ml-2 text-slate-500">({p.san_pham.mau_sac})</span>}
         </div>
       ))}
       {showCompact && products.length > visibleCount && (

@@ -32,7 +32,11 @@ export async function getBaoHanhProducts() {
   return filteredRows.map(row => {
     const obj: any = {}
     header.forEach((col, idx) => {
-      obj[col.trim()] = row[idx] || ""
+      if (col.trim() === "Màu Sắc") {
+        obj["Màu Sắc"] = row[idx] || ""
+      } else {
+        obj[col.trim()] = row[idx] || ""
+      }
     })
     return obj
   })
@@ -398,6 +402,10 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
       if (col === "IMEI" || col === "Imei") return imei
       if (col === "Nguồn") return nguon
       if (col === "Tình trạng") return tinh_trang
+      if (col === "Màu Sắc" || col === "mau_sac") {
+        const idxMau = khoHeader.indexOf("Màu Sắc") !== -1 ? khoHeader.indexOf("Màu Sắc") : khoHeader.indexOf("mau_sac")
+        return idxMau !== -1 ? row[idxMau] : ""
+      }
       const idxInKho = khoHeader.indexOf(col)
       if (idxInKho !== -1) {
         return row[idxInKho]
@@ -428,7 +436,11 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
     return rows.map(row => {
       const obj: any = {}
       header.forEach((col, idx) => {
-        obj[col] = row[idx] || ""
+        if (col === "Màu Sắc" || col === "mau_sac") {
+          obj["Màu Sắc"] = row[idx] || ""
+        } else {
+          obj[col] = row[idx] || ""
+        }
       })
       return obj
     })

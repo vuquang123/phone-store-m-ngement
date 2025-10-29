@@ -45,6 +45,7 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
 
   const [tenSanPham, setTenSanPham] = useState("")
   const [imei, setImei] = useState("")
+  const [mauSac, setMauSac] = useState("")
   const [loaiMay, setLoaiMay] = useState("")
   const [tinhTrang, setTinhTrang] = useState("")
   const [tenKhachHang, setTenKhachHang] = useState("")
@@ -80,6 +81,7 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
       body: JSON.stringify({
         ten_san_pham: tenSanPham,
         imei,
+        mau_sac: mauSac,
         loai_may: loaiMay,
         tinh_trang: tinhTrang,
         khach_hang: tenKhachHang,
@@ -128,6 +130,10 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-slate-700">IMEI</Label>
             <Input value={imei} onChange={e => setImei(e.target.value)} required placeholder="Nhập IMEI" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label className="font-medium text-slate-700">Màu Sắc</Label>
+            <Input value={mauSac} onChange={e => setMauSac(e.target.value)} placeholder="Nhập màu sắc" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-slate-700">Loại máy</Label>

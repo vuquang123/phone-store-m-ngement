@@ -31,6 +31,8 @@ interface CNCProduct {
   id: string;
   ten_san_pham: string;
   imei: string;
+  mau_sac?: string;
+  [key: string]: any; // Cho phép truy cập động các trường như "Màu Sắc"
   nguon: string;
   tinh_trang: string;
   loai_may: string;
@@ -1268,7 +1270,9 @@ export default function KhoHangPage() {
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <div className="font-semibold text-slate-800">{p.ten_san_pham}</div>
-                              <div className="text-xs text-slate-500 mt-0.5">{p.loai_may || '-'}</div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {(p.loai_may || '-') + (p["Màu Sắc"] || p.mau_sac ? ` - ${p["Màu Sắc"] || p.mau_sac}` : '')}
+                              </div>
                               <div className="mt-1 text-sm text-slate-700">IMEI: <span className="font-medium">{p.imei || '-'}</span></div>
                               <div className="mt-1 text-xs text-slate-500">Nguồn: {p.nguon || '-'}</div>
                             </div>
@@ -1294,6 +1298,7 @@ export default function KhoHangPage() {
                       )}
                       <TableHead className="font-semibold">Tên Sản phẩm</TableHead>
                       <TableHead className="font-semibold">IMEI</TableHead>
+                      <TableHead className="font-semibold">Màu Sắc</TableHead>
                       <TableHead className="font-semibold">Nguồn</TableHead>
                       <TableHead className="font-semibold">Tình trạng</TableHead>
                       <TableHead className="font-semibold">Loại máy</TableHead>
@@ -1308,21 +1313,22 @@ export default function KhoHangPage() {
                       <TableRow><TableCell colSpan={isEditCNCMode ? 10 : 9} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào Đang CNC</TableCell></TableRow>
                     ) : (
                       filteredCNC.map((p, idx) => (
-                        <TableRow key={`${p.id}-${p.imei}`} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                          {isEditCNCMode && (
+                          <TableRow key={`${p.id}-${p.imei}`} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                            {isEditCNCMode && (
+                              <TableCell>
+                                <input type="checkbox" checked={selectedCNCImeis.includes(p.imei)} onChange={() => handleSelectCNCProduct(p.imei)} />
+                              </TableCell>
+                            )}
+                            <TableCell className="text-sm text-slate-800">{p.ten_san_pham}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.imei}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p["Màu Sắc"] || p.mau_sac || "-"}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.nguon}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.tinh_trang}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.loai_may}</TableCell>
+                            <TableCell><Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-3 py-1 text-xs font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge></TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.ngay_gui}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p.ngay_nhan_lai}</TableCell>
                             <TableCell>
-                              <input type="checkbox" checked={selectedCNCImeis.includes(p.imei)} onChange={() => handleSelectCNCProduct(p.imei)} />
-                            </TableCell>
-                          )}
-                          <TableCell className="text-sm text-slate-800">{p.ten_san_pham}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.imei}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.nguon}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.tinh_trang}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.loai_may}</TableCell>
-                          <TableCell><Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-3 py-1 text-xs font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge></TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.ngay_gui}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p.ngay_nhan_lai}</TableCell>
-                          <TableCell>
                             <button
                               type="button"
                               className="p-1 rounded hover:bg-blue-50 cursor-pointer"
@@ -1397,6 +1403,45 @@ export default function KhoHangPage() {
                 </Table>
                 )}
             </div>
+            {/* Di chuyển dialogInfo ra ngoài Table/TableBody để tránh lỗi hydration */}
+            {dialogInfo && (() => {
+              const modalMinWidth = 200;
+              let left = dialogInfo.pos.x;
+              let top = dialogInfo.pos.y;
+              if (typeof window !== 'undefined') {
+                const margin = 12;
+                const maxLeft = Math.max(margin, window.innerWidth - modalMinWidth - margin);
+                left = Math.min(left, maxLeft);
+                left = Math.max(margin, left);
+                const maxTop = Math.max(margin, window.innerHeight - 80);
+                top = Math.min(top, maxTop);
+                top = Math.max(margin, top);
+              }
+              return (
+                <div
+                  style={{
+                    position: 'fixed',
+                    left,
+                    top,
+                    zIndex: 9999,
+                    minWidth: modalMinWidth + 'px',
+                    background: 'white',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+                    padding: '16px',
+                    fontSize: '13px',
+                    color: '#334155',
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#2563eb', marginBottom: 6 }}>Thông tin CNC</div>
+                  <div><b>Địa chỉ CNC:</b> {dialogInfo.data.dia_chi_bao_hanh}</div>
+                  <div><b>Khách:</b> {dialogInfo.data.ten_khach_hang}</div>
+                  <div><b>ĐT:</b> {dialogInfo.data.so_dien_thoai}</div>
+                  <button onClick={() => setDialogInfo(null)} style={{ marginTop: 10, padding: '4px 12px', borderRadius: 6, background: '#eff6ff', color: '#2563eb', fontWeight: 600, fontSize: 12, border: 'none', cursor: 'pointer' }}>Đóng</button>
+                </div>
+              )
+            })()}
           </CardContent>
         </Card>
         <AddCNCMachineDialog
@@ -1508,7 +1553,9 @@ export default function KhoHangPage() {
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <div className="font-semibold text-slate-800">{p["Tên Sản Phẩm"] || '-'}</div>
-                              <div className="text-xs text-slate-500 mt-0.5">{p["Loại Máy"] || '-'}</div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {(p["Loại Máy"] || '-') + (p["Màu Sắc"] || p.mau_sac ? ` - ${p["Màu Sắc"] || p.mau_sac}` : '')}
+                              </div>
                               <div className="mt-1 text-sm text-slate-700">IMEI: <span className="font-medium">{p["IMEI"] || p.imei || '-'}</span></div>
                               <div className="mt-1 text-xs text-slate-500">Nguồn: {p["Nguồn"] || '-'}</div>
                               {p["Lỗi"] && <div className="mt-2 text-sm text-red-600">Lỗi: {p["Lỗi"]}</div>}
@@ -1541,6 +1588,7 @@ export default function KhoHangPage() {
                     <TableHead className="font-semibold">Tên Sản Phẩm</TableHead>
                     <TableHead className="font-semibold">Loại Máy</TableHead>
                     <TableHead className="font-semibold">IMEI</TableHead>
+                    <TableHead className="font-semibold">Màu Sắc</TableHead>
                     <TableHead className="font-semibold">Nguồn</TableHead>
                     <TableHead className="font-semibold">Tình trạng</TableHead>
                     <TableHead className="font-semibold">Lỗi</TableHead>
@@ -1559,28 +1607,29 @@ export default function KhoHangPage() {
                     filteredBaoHanh.map((p: any, idx: number) => {
                       const key = p["IMEI"] || p.imei || idx;
                       return (
-                        <TableRow key={key} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                          {isEditBaoHanhMode && (
-                            <TableCell>
-                              <input
-                                type="checkbox"
-                                checked={selectedBaoHanhIds.includes(key)}
-                                onChange={() => handleSelectBaoHanh(key)}
-                              />
+                          <TableRow key={key} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                            {isEditBaoHanhMode && (
+                              <TableCell>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedBaoHanhIds.includes(key)}
+                                  onChange={() => handleSelectBaoHanh(key)}
+                                />
+                              </TableCell>
+                            )}
+                            <TableCell className="font-medium text-slate-800 flex items-center gap-2">
+                              {p["Tên Sản Phẩm"] || '-'}
                             </TableCell>
-                          )}
-                          <TableCell className="font-medium text-slate-800 flex items-center gap-2">
-                            {p["Tên Sản Phẩm"] || '-'}
-                          </TableCell>
-                          <TableCell className="text-sm text-slate-700">{p["Loại Máy"] || '-'}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p["IMEI"] || '-'}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p["Nguồn"] || '-'}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p["Tình trạng"] || '-'}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p["Lỗi"] || '-'}</TableCell>
-                          <TableCell><Badge className={getTrangThaiColor(p["Trạng Thái"] || '-') + " rounded-full px-3 py-1 text-xs font-semibold"}>{getTrangThaiText(p["Trạng Thái"] || '-')}</Badge></TableCell>
-                          <TableCell className="text-sm text-slate-700">{p["Ngày gửi"] || '-'}</TableCell>
-                          <TableCell className="text-sm text-slate-700">{p["Ngày nhận lại"] || '-'}</TableCell>
-                          <TableCell>
+                            <TableCell className="text-sm text-slate-700">{p["Loại Máy"] || '-'}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p["IMEI"] || '-'}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p["Màu Sắc"] || p.mau_sac || '-'}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p["Nguồn"] || '-'}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p["Tình trạng"] || '-'}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p["Lỗi"] || '-'}</TableCell>
+                            <TableCell><Badge className={getTrangThaiColor(p["Trạng Thái"] || '-') + " rounded-full px-3 py-1 text-xs font-semibold"}>{getTrangThaiText(p["Trạng Thái"] || '-')}</Badge></TableCell>
+                            <TableCell className="text-sm text-slate-700">{p["Ngày gửi"] || '-'}</TableCell>
+                            <TableCell className="text-sm text-slate-700">{p["Ngày nhận lại"] || '-'}</TableCell>
+                            <TableCell>
                             <div className="flex items-center">
                               <button
                                 type="button"
