@@ -51,7 +51,16 @@ export async function DELETE(req: Request) {
     }
     // Đổi trạng thái thành 'Hủy đặt cọc' cho các dòng có IMEI nằm trong productIds
     const idxTrangThai = header.findIndex(h => h.trim().toLowerCase() === "trạng thái");
+    const idxTrangThaiMay = header.findIndex(h => h.trim().toLowerCase() === "trạng thái máy");
     const imeiSet = new Set(productIds.map(i => String(i).trim()));
+    // Lưu trạng thái máy hiện tại từ Dat_Coc
+    const imeiToStatus: Record<string, string> = {};
+    rows.forEach(row => {
+      const imei = String(row[idxIMEI]).trim();
+      if (imeiSet.has(imei) && idxTrangThaiMay !== -1) {
+        imeiToStatus[imei] = row[idxTrangThaiMay] || "Còn hàng";
+      }
+    });
     const updatedRows = rows.map(row => {
       if (imeiSet.has(String(row[idxIMEI]).trim())) {
         if (idxTrangThai !== -1) row[idxTrangThai] = "Hủy đặt cọc";
@@ -61,6 +70,23 @@ export async function DELETE(req: Request) {
     // Ghi lại sheet: giữ header, ghi lại header + updatedRows
     const allRows = [header, ...updatedRows];
     await updateRangeValues("Dat_Coc!A1", allRows);
+
+    // --- Cập nhật trạng thái máy về kho ---
+    // Đọc sheet Kho_Hang
+    const { header: khoHeader, rows: khoRows } = await readFromGoogleSheets("Kho_Hang");
+    const idxKhoIMEI = khoHeader.findIndex(h => h.trim().toLowerCase() === "imei");
+    const idxKhoTrangThai = khoHeader.findIndex(h => h.trim().toLowerCase() === "trạng thái");
+    if (idxKhoIMEI !== -1 && idxKhoTrangThai !== -1) {
+      const updatedKhoRows = khoRows.map(row => {
+        const imei = String(row[idxKhoIMEI]).trim();
+        if (imeiSet.has(imei) && imeiToStatus[imei]) {
+          row[idxKhoTrangThai] = imeiToStatus[imei];
+        }
+        return row;
+      });
+      await updateRangeValues("Kho_Hang!A1", [khoHeader, ...updatedKhoRows]);
+    }
+
     return NextResponse.json({ ok: true, deleted: productIds.length }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

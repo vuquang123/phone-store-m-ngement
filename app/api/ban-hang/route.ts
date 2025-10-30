@@ -1,3 +1,4 @@
+
 // app/api/ban-hang/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
@@ -190,52 +191,58 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
 
   if (foundIdx === -1) {
     // Thêm KH mới
-    const row = Array(header.length).fill("")
-    if (K.ten !== -1) row[K.ten] = name || "Khách lẻ"
-    row[K.sdt] = target
-    if (K.tongMua !== -1) row[K.tongMua] = Number(amountToAdd) || 0
-    if (K.lanMuaCuoi !== -1) row[K.lanMuaCuoi] = nowVNFull
-  if (K.ngayTao !== -1) row[K.ngayTao] = nowVNFull
-    await appendToGoogleSheets("Khach_Hang", row)
-    return { ten: row[K.ten] || "Khách lẻ", sdt: target, tongMua: row[K.tongMua] || amountToAdd }
+    // Tìm tất cả đơn đã mua trước đó của khách này trong sheet Ban_Hang
+    let totalOld = 0;
+    try {
+      const { header: bhHeader, rows: bhRows } = await readFromGoogleSheets("Ban_Hang");
+      const idxSdtBH = bhHeader.findIndex(h => h.trim().toLowerCase() === "số điện thoại");
+      const idxTongBH = bhHeader.findIndex(h => h.trim().toLowerCase() === "tổng tiền");
+      if (idxSdtBH !== -1 && idxTongBH !== -1) {
+        totalOld = bhRows.filter(r => normalizePhone(String(r[idxSdtBH] || "")) === target)
+          .reduce((sum, r) => sum + (Number(String(r[idxTongBH]).replace(/[^\d.-]/g, "")) || 0), 0);
+      }
+    } catch {}
+    const totalToWrite = totalOld + (Number(amountToAdd) || 0);
+    const row = Array(header.length).fill("");
+    if (K.ten !== -1) row[K.ten] = name || "Khách lẻ";
+    row[K.sdt] = target;
+    if (K.tongMua !== -1) row[K.tongMua] = totalToWrite;
+    if (K.lanMuaCuoi !== -1) row[K.lanMuaCuoi] = nowVNFull;
+    if (K.ngayTao !== -1) row[K.ngayTao] = nowVNFull;
+    await appendToGoogleSheets("Khach_Hang", row);
+    return { ten: row[K.ten] || "Khách lẻ", sdt: target, tongMua: row[K.tongMua] || totalToWrite };
   } else {
     // Cập nhật KH cũ
-    const rowNumber = foundIdx + 2
-    // Chuẩn hoá tổng mua hiện tại (có thể đang là chuỗi định dạng: 16.000.001 đ)
-    let currentTotal = 0
+    const rowNumber = foundIdx + 2;
+    // Đọc tổng mua hiện tại từ sheet Khach_Hang
+    let currentTotal = 0;
     if (K.tongMua !== -1) {
-      const raw = rows[foundIdx][K.tongMua]
-      debugCurrentTotalRaw = raw;
+      const raw = rows[foundIdx][K.tongMua];
       if (typeof raw === "number") {
         currentTotal = raw;
-        debugCurrentTotalNum = raw;
       } else if (raw) {
         const cleaned = String(raw).replace(/[^\d.-]/g, "");
-        debugCurrentTotalCleaned = cleaned;
         const num = Number(cleaned);
-        debugCurrentTotalNum = num;
         if (Number.isFinite(num)) currentTotal = num;
       }
-      // Log giá trị debug
-      console.log("[DEBUG][upsertCustomerByPhone] Tổng Mua cũ raw:", debugCurrentTotalRaw, "| cleaned:", debugCurrentTotalCleaned, "| num:", debugCurrentTotalNum, "| currentTotal:", currentTotal);
     }
-    const newTotal = currentTotal + (Number(amountToAdd) || 0)
+    const newTotal = currentTotal + (Number(amountToAdd) || 0);
 
     if (K.ten !== -1 && name && !rows[foundIdx][K.ten]) {
-      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.ten + 1)}${rowNumber}`, [[name]])
+      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.ten + 1)}${rowNumber}`, [[name]]);
     }
     if (K.tongMua !== -1) {
-      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.tongMua + 1)}${rowNumber}`, [[newTotal]])
+      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.tongMua + 1)}${rowNumber}`, [[newTotal]]);
     }
     if (K.lanMuaCuoi !== -1) {
-      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.lanMuaCuoi + 1)}${rowNumber}`, [[nowVNFull]])
+      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.lanMuaCuoi + 1)}${rowNumber}`, [[nowVNFull]]);
     }
     // Nếu ô Ngày tạo đang trống thì bổ sung (chỉ ngày)
     if (K.ngayTao !== -1 && !rows[foundIdx][K.ngayTao]) {
-      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.ngayTao + 1)}${rowNumber}`, [[nowVNDate]])
+      await updateRangeValues(`Khach_Hang!${toColumnLetter(K.ngayTao + 1)}${rowNumber}`, [[nowVNDate]]);
     }
 
-    return { ten: (K.ten !== -1 ? rows[foundIdx][K.ten] : "") || name || "Khách lẻ", sdt: target, tongMua: newTotal }
+    return { ten: (K.ten !== -1 ? rows[foundIdx][K.ten] : "") || name || "Khách lẻ", sdt: target, tongMua: newTotal };
   }
 }
 
@@ -393,21 +400,18 @@ export async function POST(request: NextRequest) {
     let mayList = []
     if (Array.isArray(body.products) && body.products.length > 0) {
       mayList = body.products.map((prod: any) => {
-        // Nếu không có imei, có serial, và không có id_may, tự động lấy 5 ký tự cuối serial làm id_may
         if (!prod.imei && prod.serial && !prod.id_may) {
           return { ...prod, id_may: String(prod.serial).slice(-5) }
         }
         return prod
       })
     } else if (body.id_may) {
-      // Nếu không có imei, có serial, và không có id_may, tự động lấy 5 ký tự cuối serial làm id_may
       if (!body.imei && body.serial && !body.id_may) {
         mayList = [{ ...body, id_may: String(body.serial).slice(-5) }]
       } else {
         mayList = [{ ...body, id_may: body.id_may }]
       }
     } else if (normalizedAccessories.length > 0) {
-      // Nếu chỉ có phụ kiện, vẫn ghi một dòng vào sheet
       mayList = [{
         ...body,
         ten_san_pham: '',
@@ -422,6 +426,26 @@ export async function POST(request: NextRequest) {
         so_luong: '',
       }]
     }
+
+    // Đọc trạng thái máy từ sheet Kho_Hang cho từng máy (nếu có id_may)
+    let khoHangHeader = null, khoHangRows = null, idxTrangThaiKhoHang = -1, idxIdMayKhoHang = -1;
+    try {
+      const khoHangData = await readFromGoogleSheets(SHEETS.KHO_HANG)
+      khoHangHeader = khoHangData.header
+      khoHangRows = khoHangData.rows
+      idxTrangThaiKhoHang = colIndex(khoHangHeader, "Trạng Thái")
+      idxIdMayKhoHang = colIndex(khoHangHeader, "ID Máy")
+    } catch {}
+
+    // Map trạng thái máy cho từng máy trong mayList
+    mayList = mayList.map((may: any) => {
+      let trangThaiMay = ""
+      if (may.id_may && khoHangRows && idxTrangThaiKhoHang !== -1 && idxIdMayKhoHang !== -1) {
+        const found = khoHangRows.find((r) => r[idxIdMayKhoHang] === may.id_may)
+        if (found) trangThaiMay = found[idxTrangThaiKhoHang] || ""
+      }
+      return { ...may, trang_thai_may: trangThaiMay }
+    })
 
     let allResults = []
     let errorFlag = false
@@ -490,13 +514,10 @@ export async function POST(request: NextRequest) {
           return rounded > 0 ? rounded : ""
         }
         if (k === "Địa Chỉ Nhận") {
-          // chỉ set cho dòng đầu tiên, các dòng sau để trống để tránh lặp lại nhiều lần
           return i === 0 ? (body["Địa Chỉ Nhận"] || body.dia_chi_nhan || "") : ""
         }
         if (k === "Nguồn Hàng" || k === "Nguồn") {
-          // Nếu là hàng đối tác bán như bình thường → ghi chú rõ ràng
           if (isPartner) return "Đối tác (mua lại)"
-          // Nếu FE có gửi nguồn khác thì ghi, còn lại để trống
           return may["Nguồn Hàng"] || may.nguon || body["Nguồn Hàng"] || body["nguon_hang"] || ""
         }
         if (k === "Tên Đối Tác" || k === "Đối Tác") {
@@ -506,9 +527,7 @@ export async function POST(request: NextRequest) {
           return doiTacSDT
         }
         if (k === "Giá Bán") {
-          // Giá Bán = chỉ tiền hàng (không gồm bảo hành) ở dòng máy (hoặc phụ kiện-only)
           let base = 0
-          // Nếu FE đã gửi coreTotal thì dùng coreTotal chia đều theo máy? => Giữ đơn giản: vẫn đọc theo may.gia_ban từng máy
           if (may["gia_ban"] !== undefined && may["gia_ban"] !== "") {
             base = Number(String(may["gia_ban"]).replace(/\D/g, "")) * (may["so_luong"] || 1)
           } else if (isOnlyPhuKien && body["Thanh Toan"]) {
@@ -517,13 +536,14 @@ export async function POST(request: NextRequest) {
           return base > 0 ? base : ""
         }
         if (k === "Lãi") {
-          // Lãi = Giá Bán (core) - Giá Nhập (không cộng bảo hành)
           let coreGiaBan = 0
           if (may["gia_ban"] !== undefined && may["gia_ban"] !== "") {
             coreGiaBan = Number(String(may["gia_ban"]).replace(/\D/g, "")) * (may["so_luong"] || 1)
           }
-          const lai = coreGiaBan - Math.round(tongGiaNhap)
-          return lai > 0 ? lai : 0
+          const giamGia = Number(body["Giảm giá"] || body["giam_gia"] || 0);
+          const tongThu = Number(body["Thanh Toan"] || body["finalThanhToan"] || coreGiaBan);
+          const lai = (tongThu - giamGia) - Math.round(tongGiaNhap);
+          return lai
         }
         if (k === "Loại Đơn") {
           return body["Loại Đơn"] || body["loai_don"] || may["Loại Đơn"] || may["loai_don"] || ""
@@ -532,7 +552,6 @@ export async function POST(request: NextRequest) {
           return body["Hình Thức Vận Chuyển"] || body["hinh_thuc_van_chuyen"] || may["Hình Thức Vận Chuyển"] || may["hinh_thuc_van_chuyen"] || ""
         }
         if (k === "Người Bán") {
-          // Ưu tiên lấy từ body['employeeId'] nếu có
           return body["employeeId"] || may["Người Bán"] || body["Người Bán"] || ""
         }
         // Map từng trường sản phẩm máy
@@ -543,6 +562,8 @@ export async function POST(request: NextRequest) {
         if (k === "Màu Sắc") return may.mau_sac || may["Màu Sắc"] || ""
         if (k === "Pin (%)") return may.pin || may["Pin (%)"] || ""
         if (k === "Tình Trạng Máy") return may.tinh_trang_may || may["Tình Trạng Máy"] || ""
+        // Ghi trạng thái máy vào cột "Trạng Thái Máy" nếu có
+        if (k === "Trạng Thái Máy") return may.trang_thai_may || ""
         return may[k] || body[k] || ""
       })
       // Cộng dồn coreTotalServer từ cột Giá Bán của mỗi dòng (nếu có)

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateProductsStatus, logProductHistory, readFromGoogleSheets, updateRowInGoogleSheets } from "@/lib/google-sheets";
+import { updateProductsStatus, logProductHistory, readFromGoogleSheets, updateRowInGoogleSheets, updateRangeValues } from "@/lib/google-sheets";
 import { addNotification } from "@/lib/notifications";
 
 export async function POST(req: Request) {
@@ -73,6 +73,28 @@ export async function POST(req: Request) {
       return row;
     });
     await import("@/lib/google-sheets").then(m => m.syncToGoogleSheets("Kho_Hang", updatedKhoRows));
+
+    // --- Đồng bộ trạng thái máy về Dat_Coc ---
+    try {
+      // Đọc sheet Dat_Coc
+      const { header: datCocHeader, rows: datCocRows } = await readFromGoogleSheets("Dat_Coc");
+      const idxIMEI_DC = datCocHeader.findIndex(h => h.trim().toLowerCase() === "imei");
+      const idxTrangThaiMay_DC = datCocHeader.findIndex(h => h.trim().toLowerCase() === "trạng thái máy");
+      if (idxIMEI_DC !== -1 && idxTrangThaiMay_DC !== -1) {
+        const imeiSet = new Set(imeisToProcess.map(i => String(i).trim()));
+        const updatedDatCocRows = datCocRows.map(row => {
+          if (imeiSet.has(String(row[idxIMEI_DC]).trim())) {
+            row[idxTrangThaiMay_DC] = "Còn hàng";
+          }
+          return row;
+        });
+        // Ghi lại sheet Dat_Coc (giữ header)
+        const allRows = [datCocHeader, ...updatedDatCocRows];
+        await updateRangeValues("Dat_Coc!A1", allRows);
+      }
+    } catch (e) {
+      console.warn("[SYNC CNC→Dat_Coc] Không thể đồng bộ trạng thái máy:", e);
+    }
 
     // Ghi lịch sử trạng thái
   await logProductHistory(productIds5, "Hoàn thành CNC", employeeId, trangThaiCuArr);

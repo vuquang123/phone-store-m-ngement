@@ -406,7 +406,7 @@ export default function BanHangPage() {
           const data = await resKho.json()
           const products = Array.isArray(data) ? data : data.data || []
           mappedKho = products
-            .filter((p: any) => p.trang_thai === 'Còn hàng')
+            .filter((p: any) => p.trang_thai === 'Còn hàng' || p.trang_thai === 'Đang CNC')
             .map((p: any) => ({
               ...p,
               id: p['ID Máy'] || p.id_may || p.id,
@@ -1576,6 +1576,7 @@ export default function BanHangPage() {
                           <TableCell className="px-3 py-2 text-sm whitespace-nowrap">
                             <Badge className={
                               product.trang_thai === 'Đã đặt cọc' ? 'bg-orange-100 text-orange-800' :
+                              product.trang_thai === 'Đang CNC' ? 'bg-orange-100 text-orange-800' :
                               product.trang_thai === 'Đã bán' ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-800'
                             }>
                               {product.trang_thai || 'Còn hàng'}
@@ -1875,6 +1876,8 @@ export default function BanHangPage() {
                     <Badge
                       className={
                         item.trang_thai === "Đã đặt cọc"
+                          ? "bg-orange-100 text-orange-800"
+                          : item.trang_thai === "Đang CNC"
                           ? "bg-orange-100 text-orange-800"
                           : item.trang_thai === "Hết hàng"
                           ? "bg-gray-200 text-gray-600"
@@ -2435,8 +2438,27 @@ export default function BanHangPage() {
                                   <div className="text-sm text-slate-600">{order["Tên Khách Hàng"] || order["ten_khach_hang"] || "-"}</div>
                                   <div className="text-xs text-muted-foreground">{order["Số Điện Thoại"] || order["so_dien_thoai"] || "-"}</div>
                                 </div>
-                                {isOverdue && <Badge className="bg-red-600 text-white">Quá hạn</Badge>}
-                                {isPaid && <Badge className="bg-emerald-600 text-white">Đã tất toán</Badge>}
+                                <div className="flex flex-col items-end gap-1 min-w-[80px]">
+                                  {/* Device status badge (first product only) */}
+                                  {(() => {
+                                    const firstProduct = depositOrders.find((o: any) => {
+                                      const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
+                                      return m === maDon;
+                                    });
+                                    if (!firstProduct) return null;
+                                    const status = firstProduct["Trạng Thái Máy"] || firstProduct["tinh_trang_may"] || "";
+                                    let badgeClass = "px-2 py-0.5 rounded-full text-xs font-medium inline-block mb-1";
+                                    if (status === "Còn hàng") badgeClass += " bg-green-100 text-green-800";
+                                    else if (status === "Đang CNC") badgeClass += " bg-orange-100 text-orange-800";
+                                    else if (status === "Hết hàng") badgeClass += " bg-gray-200 text-gray-600";
+                                    else if (status) badgeClass += " bg-blue-100 text-blue-800";
+                                    return status ? (
+                                      <span className={badgeClass}>{status}</span>
+                                    ) : null;
+                                  })()}
+                                  {isOverdue && <Badge className="bg-red-600 text-white">Quá hạn</Badge>}
+                                  {isPaid && <Badge className="bg-emerald-600 text-white">Đã tất toán</Badge>}
+                                </div>
                               </div>
                               <div className="mt-2 text-sm line-clamp-2">
                                 {depositOrders.filter((o: any) => {
@@ -2453,6 +2475,7 @@ export default function BanHangPage() {
                                   </span>
                                 ))}
                               </div>
+                              {/* Device status badges moved to top right, see above */}
                               <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                                 <div>
                                   <div className="text-slate-500">Đã cọc</div>
@@ -2493,6 +2516,8 @@ export default function BanHangPage() {
                             <th className="text-left px-3 py-2 font-semibold text-slate-700">Mã Đơn Hàng</th>
                             <th className="text-left px-3 py-2 font-semibold text-slate-700">Khách</th>
                             <th className="text-left px-3 py-2 font-semibold text-slate-700">Sản phẩm</th>
+                            <th className="text-left px-3 py-2 font-semibold text-slate-700">IMEI</th>
+                            <th className="text-left px-3 py-2 font-semibold text-slate-700">Trạng thái máy</th>
                             <th className="text-left px-3 py-2 font-semibold text-slate-700">Tổng đã cọc</th>
                             <th className="text-left px-3 py-2 font-semibold text-slate-700">Tổng còn lại</th>
                             <th className="text-left px-3 py-2 font-semibold text-slate-700">Ngày cọc</th>
@@ -2570,6 +2595,41 @@ export default function BanHangPage() {
                                       }).length - 1 ? ", " : ""}
                                     </span>
                                   ))}
+                                </td>
+                                <td className="align-middle text-left px-3 py-2">
+                                  {depositOrders.filter((o: any) => {
+                                    const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
+                                    return m === maDon;
+                                  }).map((o: any, i: number) => (
+                                    <span key={i}>
+                                      {o["IMEI"] || o["imei"] || "-"}
+                                      {i < depositOrders.filter((oo: any) => {
+                                        const m = oo["Mã Đơn Hàng"] || oo["ID Đơn Hàng"] || oo["ma_don_hang"];
+                                        return m === maDon;
+                                      }).length - 1 ? ", " : ""}
+                                    </span>
+                                  ))}
+                                </td>
+                                <td className="align-middle text-left px-3 py-2">
+                                  {depositOrders.filter((o: any) => {
+                                    const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
+                                    return m === maDon;
+                                  }).map((o: any, i: number) => {
+                                    const status = o["Trạng Thái Máy"] || o["tinh_trang_may"] || "-";
+                                    let badgeClass = "px-2 py-0.5 rounded-full text-sm font-medium inline-block";
+                                    if (status === "Còn hàng") badgeClass += " bg-green-100 text-green-800";
+                                    else if (status === "Đang CNC") badgeClass += " bg-orange-100 text-orange-800";
+                                    else badgeClass += " bg-slate-100 text-slate-700";
+                                    return (
+                                      <span key={i} className={badgeClass} style={{marginRight: 4}}>
+                                        {status}
+                                        {i < depositOrders.filter((oo: any) => {
+                                          const m = oo["Mã Đơn Hàng"] || oo["ID Đơn Hàng"] || oo["ma_don_hang"];
+                                          return m === maDon;
+                                        }).length - 1 ? ", " : ""}
+                                      </span>
+                                    );
+                                  })}
                                 </td>
                                 <td className="align-middle text-left px-3 py-2 font-semibold text-blue-700">₫{tongCoc.toLocaleString()}</td>
                                 <td className="align-middle text-left px-3 py-2 font-semibold text-green-700">₫{tongConLai.toLocaleString()}</td>
