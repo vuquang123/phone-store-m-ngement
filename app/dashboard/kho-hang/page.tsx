@@ -310,6 +310,11 @@ export default function KhoHangPage() {
   const [trangThai, setTrangThai] = useState("all")
   const [sourceFilter, setSourceFilter] = useState<"all" | "kho" | "doi_tac">("all")
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+  // Phân trang cho tab Sản phẩm
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const totalPages = Math.ceil(filteredProducts.length / pageSize);
+  const paginatedProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
   const [searchTerm, setSearchTerm] = useState("")
   const [cncSearch, setCncSearch] = useState("")
   const [baoHanhSearch, setBaoHanhSearch] = useState("")
@@ -491,7 +496,8 @@ export default function KhoHangPage() {
       })
     }
 
-    setFilteredProducts(filtered)
+  setFilteredProducts(filtered)
+  setPage(1) // Reset về trang đầu khi thay đổi filter/search
   }, [products, trangThai, sourceFilter, searchTerm])
 
   // Stats
@@ -968,10 +974,10 @@ export default function KhoHangPage() {
                   <div className="px-1 pt-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {isLoading ? (
                       <div className="text-center text-slate-400 col-span-full py-6">Đang tải...</div>
-                    ) : filteredProducts.length === 0 ? (
+                    ) : paginatedProducts.length === 0 ? (
                       <div className="text-center text-slate-400 col-span-full py-6">Chưa có sản phẩm nào</div>
                     ) : (
-                      filteredProducts.map((p) => (
+                      paginatedProducts.map((p) => (
                         <div
                           key={p.id}
                           className={`relative rounded-xl border border-slate-200 bg-white p-3 shadow-sm active:scale-[0.99] transition ${isEditMode ? "cursor-pointer" : ""} mx-[-2px]"`}
@@ -1037,10 +1043,10 @@ export default function KhoHangPage() {
                     <TableBody>
                       {isLoading ? (
                         <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 10 : 9) : (isEditMode ? 9 : 8))} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
-                      ) : filteredProducts.length === 0 ? (
+                      ) : paginatedProducts.length === 0 ? (
                         <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 10 : 9) : (isEditMode ? 9 : 8))} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào</TableCell></TableRow>
                       ) : (
-                        filteredProducts.map((p, idx) => (
+                        paginatedProducts.map((p, idx) => (
                           <TableRow key={p.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
                             {isEditMode && (
                               <TableCell>
@@ -1072,10 +1078,65 @@ export default function KhoHangPage() {
                         ))
                       )}
                     </TableBody>
+                  {/* ...existing code... */}
                   </Table>
                 )}
               </div>
             </CardContent>
+            {/* Compact Pagination Bar - moved outside Table to avoid hydration error */}
+            {totalPages > 1 && (
+              <div className="flex justify-center mt-6">
+                <nav className="flex gap-1">
+                  {/* Compact pagination: first, last, current, neighbors, ellipsis */}
+                  {(() => {
+                    const items = [];
+                    const maxPages = 7;
+                    if (totalPages <= maxPages) {
+                      for (let i = 1; i <= totalPages; i++) {
+                        items.push(
+                          <button
+                            key={i}
+                            className={`px-3 py-1 rounded ${page === i ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
+                            onClick={() => setPage(i)}
+                          >{i}</button>
+                        );
+                      }
+                    } else {
+                      items.push(
+                        <button
+                          key={1}
+                          className={`px-3 py-1 rounded ${page === 1 ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
+                          onClick={() => setPage(1)}
+                        >1</button>
+                      );
+                      if (page > 4) {
+                        items.push(<span key="left-ellipsis" className="px-2">...</span>);
+                      }
+                      for (let i = Math.max(2, page - 2); i <= Math.min(totalPages - 1, page + 2); i++) {
+                        items.push(
+                          <button
+                            key={i}
+                            className={`px-3 py-1 rounded ${page === i ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
+                            onClick={() => setPage(i)}
+                          >{i}</button>
+                        );
+                      }
+                      if (page < totalPages - 3) {
+                        items.push(<span key="right-ellipsis" className="px-2">...</span>);
+                      }
+                      items.push(
+                        <button
+                          key={totalPages}
+                          className={`px-3 py-1 rounded ${page === totalPages ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
+                          onClick={() => setPage(totalPages)}
+                        >{totalPages}</button>
+                      );
+                    }
+                    return items;
+                  })()}
+                </nav>
+              </div>
+            )}
           </Card>
         </TabsContent>
 

@@ -41,14 +41,8 @@ const handleLogin = async (e: React.FormEvent) => {
       localStorage.removeItem("employeeId")
     }
 
-    // Điều hướng theo role
-    if (data.user.role === "quan_ly") {
-      router.push("/dashboard")
-    } else if (data.user.role === "nhan_vien") {
-      router.push("/dashboard/ban-hang")
-    } else {
-      router.push("/")
-    }
+    // Điều hướng: luôn vào kho hàng sau đăng nhập
+    router.push("/dashboard/kho-hang")
   } catch (error: unknown) {
     setError(error instanceof Error ? error.message : "Đã xảy ra lỗi")
   } finally {

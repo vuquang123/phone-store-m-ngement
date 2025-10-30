@@ -507,43 +507,52 @@ export async function POST(request: NextRequest) {
       const doiTacSDT = may.sdt_doi_tac || body.sdt_doi_tac || may["SĐT Đối Tác"] || body["SĐT Đối Tác"] || ""
 
       const newRow = header.map((k) => {
-        if (k === "ID Đơn Hàng") return idDonHang
-        if (k === "Phụ Kiện") return i === 0 ? phuKien : ""
+        if (k === "ID Đơn Hàng") return idDonHang;
+        if (k === "Phụ Kiện") return i === 0 ? phuKien : "";
         if (k === "Giá Nhập") {
-          const rounded = Math.round(tongGiaNhap)
-          return rounded > 0 ? rounded : ""
+          const rounded = Math.round(tongGiaNhap);
+          return rounded > 0 ? rounded : "";
         }
         if (k === "Địa Chỉ Nhận") {
-          return i === 0 ? (body["Địa Chỉ Nhận"] || body.dia_chi_nhan || "") : ""
+          return i === 0 ? (body["Địa Chỉ Nhận"] || body.dia_chi_nhan || "") : "";
         }
         if (k === "Nguồn Hàng" || k === "Nguồn") {
-          if (isPartner) return "Đối tác (mua lại)"
-          return may["Nguồn Hàng"] || may.nguon || body["Nguồn Hàng"] || body["nguon_hang"] || ""
+          if (isPartner) return "Đối tác (mua lại)";
+          return may["Nguồn Hàng"] || may.nguon || body["Nguồn Hàng"] || body["nguon_hang"] || "";
         }
         if (k === "Tên Đối Tác" || k === "Đối Tác") {
-          return doiTacTen
+          return doiTacTen;
         }
         if (k === "SĐT Đối Tác" || k === "SĐT" || k === "SDT Đối Tác") {
-          return doiTacSDT
+          return doiTacSDT;
         }
         if (k === "Giá Bán") {
-          let base = 0
+          let base = 0;
           if (may["gia_ban"] !== undefined && may["gia_ban"] !== "") {
-            base = Number(String(may["gia_ban"]).replace(/\D/g, "")) * (may["so_luong"] || 1)
+            base = Number(String(may["gia_ban"]).replace(/\D/g, "")) * (may["so_luong"] || 1);
           } else if (isOnlyPhuKien && body["Thanh Toan"]) {
-            base = Number(String(body["Thanh Toan"]).replace(/\D/g, ""))
+            base = Number(String(body["Thanh Toan"]).replace(/\D/g, ""));
           }
-          return base > 0 ? base : ""
+          return base > 0 ? base : "";
+        }
+        if (k === "Tổng Thu") {
+          // Máy đầu tiên ghi tổng thu, các máy sau ghi 0
+          if (i === 0) {
+            const baseThanhToan = finalTotalFromClient || body["Thanh Toan"] || body["finalThanhToan"];
+            return baseThanhToan || 0;
+          } else {
+            return 0;
+          }
         }
         if (k === "Lãi") {
-          let coreGiaBan = 0
-          if (may["gia_ban"] !== undefined && may["gia_ban"] !== "") {
-            coreGiaBan = Number(String(may["gia_ban"]).replace(/\D/g, "")) * (may["so_luong"] || 1)
+          // Máy đầu tiên: lãi = tổng thu - giá nhập máy 1
+          // Máy sau: lãi = 0 - giá nhập máy tương ứng
+          let tongThu = 0;
+          if (i === 0) {
+            tongThu = Number(finalTotalFromClient || body["Thanh Toan"] || body["finalThanhToan"] || 0);
           }
-          const giamGia = Number(body["Giảm giá"] || body["giam_gia"] || 0);
-          const tongThu = Number(body["Thanh Toan"] || body["finalThanhToan"] || coreGiaBan);
-          const lai = (tongThu - giamGia) - Math.round(tongGiaNhap);
-          return lai
+          const lai = tongThu - Math.round(tongGiaNhap);
+          return lai;
         }
         if (k === "Loại Đơn") {
           return body["Loại Đơn"] || body["loai_don"] || may["Loại Đơn"] || may["loai_don"] || ""

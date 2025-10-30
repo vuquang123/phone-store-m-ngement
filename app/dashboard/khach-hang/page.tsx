@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from "@/components/ui/pagination"
 import { Search, Edit } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Eye } from "lucide-react"
@@ -28,6 +29,8 @@ export default function KhachHangPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer|null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogPhone, setDialogPhone] = useState<string>("")
+  const [page, setPage] = useState(1)
+  const pageSize = 10
   const isMobile = useIsMobile()
 
   const fetchCustomers = async () => {
@@ -59,6 +62,10 @@ export default function KhachHangPage() {
     fetchCustomers()
   }, [search])
 
+  // Pagination logic
+  const totalPages = Math.ceil(customers.length / pageSize)
+  const pagedCustomers = customers.slice((page - 1) * pageSize, page * pageSize)
+
   return (
     <ProtectedRoute>
       <div className="space-y-6">
@@ -82,7 +89,7 @@ export default function KhachHangPage() {
                   <Input
                     placeholder="Tìm kiếm theo tên, số điện thoại..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     className="pl-8"
                     inputMode="search"
                     enterKeyHint="search"
@@ -99,7 +106,7 @@ export default function KhachHangPage() {
             ) : (
               <>
                 <div className="md:hidden grid grid-cols-1 gap-3">
-                  {customers.map((customer) => {
+                  {pagedCustomers.map((customer) => {
                     const created = customer.ngay_tao
                       ? (() => { const d = new Date(customer.ngay_tao); return isNaN(d.getTime()) ? customer.ngay_tao : d.toLocaleDateString('vi-VN') })()
                       : ''
@@ -154,7 +161,7 @@ export default function KhachHangPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {customers.map((customer) => (
+                      {pagedCustomers.map((customer) => (
                         <TableRow key={customer.so_dien_thoai}>
                           <TableCell>
                             {customer.ngay_tao ? (() => { const d = new Date(customer.ngay_tao); return isNaN(d.getTime()) ? customer.ngay_tao : d.toLocaleDateString("vi-VN"); })() : ""}
@@ -178,6 +185,83 @@ export default function KhachHangPage() {
                     </TableBody>
                   </Table>
                 </div>
+                {/* Single pagination bar at bottom for all views */}
+                {totalPages > 1 && (
+                  <Pagination className="mt-4">
+                    <PaginationContent>
+                      {/* Remove Previous button */}
+                      {/* Compact pagination logic: show first, last, current, neighbors, ellipsis */}
+                      {(() => {
+                        const items = [];
+                        const maxPages = 7;
+                        if (totalPages <= maxPages) {
+                          for (let i = 1; i <= totalPages; i++) {
+                            items.push(
+                              <PaginationItem key={i}>
+                                <PaginationLink
+                                  href="#"
+                                  isActive={page === i}
+                                  onClick={e => { e.preventDefault(); setPage(i); }}
+                                >{i}</PaginationLink>
+                              </PaginationItem>
+                            );
+                          }
+                        } else {
+                          // Always show first page
+                          items.push(
+                            <PaginationItem key={1}>
+                              <PaginationLink
+                                href="#"
+                                isActive={page === 1}
+                                onClick={e => { e.preventDefault(); setPage(1); }}
+                              >1</PaginationLink>
+                            </PaginationItem>
+                          );
+                          // Show left ellipsis if needed
+                          if (page > 4) {
+                            items.push(
+                              <PaginationItem key="left-ellipsis">
+                                <span className="px-2">...</span>
+                              </PaginationItem>
+                            );
+                          }
+                          // Show up to 3 pages before/after current
+                          for (let i = Math.max(2, page - 2); i <= Math.min(totalPages - 1, page + 2); i++) {
+                            items.push(
+                              <PaginationItem key={i}>
+                                <PaginationLink
+                                  href="#"
+                                  isActive={page === i}
+                                  onClick={e => { e.preventDefault(); setPage(i); }}
+                                >{i}</PaginationLink>
+                              </PaginationItem>
+                            );
+                          }
+                          // Show right ellipsis if needed
+                          if (page < totalPages - 3) {
+                            items.push(
+                              <PaginationItem key="right-ellipsis">
+                                <span className="px-2">...</span>
+                              </PaginationItem>
+                            );
+                          }
+                          // Always show last page
+                          items.push(
+                            <PaginationItem key={totalPages}>
+                              <PaginationLink
+                                href="#"
+                                isActive={page === totalPages}
+                                onClick={e => { e.preventDefault(); setPage(totalPages); }}
+                              >{totalPages}</PaginationLink>
+                            </PaginationItem>
+                          );
+                        }
+                        return items;
+                      })()}
+                      {/* Remove Next button */}
+                    </PaginationContent>
+                  </Pagination>
+                )}
               </>
             )}
           </CardContent>
