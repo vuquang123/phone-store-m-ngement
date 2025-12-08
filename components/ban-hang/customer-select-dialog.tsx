@@ -41,9 +41,9 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
   const fetchCustomers = async () => {
     try {
       setIsLoading(true)
-      const digits = (search || "").replace(/\D/g, "")
+      const normalized = (search || "").trim()
       const params = new URLSearchParams()
-      if (digits) params.append("search", digits)
+      if (normalized) params.append("search", normalized)
 
       const response = await fetch(`/api/khach-hang?${params}`)
       if (response.ok) {
@@ -55,7 +55,12 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
               so_dien_thoai: item.sdt,
             }))
           : []
-        setCustomers(mapped)
+        const deduped = Array.from(
+          new Map(
+            mapped.map((c) => [c.id || c.so_dien_thoai || c.ho_ten, c])
+          ).values()
+        )
+        setCustomers(deduped)
       }
     } catch (error) {
       console.error("Error fetching customers:", error)
@@ -76,6 +81,17 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
   useEffect(() => {
     if (!isOpen) setSelectedCustomerId(null)
   }, [isOpen])
+
+  const displayCustomers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return customers
+    const digits = q.replace(/\D/g, "")
+    return customers.filter((c) => {
+      const name = (c.ho_ten || "").toLowerCase()
+      const phone = c.so_dien_thoai || ""
+      return name.includes(q) || phone.includes(digits)
+    })
+  }, [customers, search])
 
   const handleSelect = (customer: Customer) => {
     setSelectedCustomerId(customer.id)
@@ -111,20 +127,18 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
   <DialogContent className="sm:max-w-[600px] bg-white">
         <DialogHeader>
           <DialogTitle>Chọn khách hàng</DialogTitle>
-          <DialogDescription>Nhập số điện thoại để tìm khách; nếu không có sẽ hiện nút tạo mới.</DialogDescription>
+          <DialogDescription>Nhập tên hoặc số điện thoại để tìm khách; nếu không có sẽ hiện nút tạo mới.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Nhập SĐT khách hàng..."
-              inputMode="numeric"
+              placeholder="Nhập tên hoặc SĐT khách hàng..."
+              inputMode="text"
               value={search}
               onChange={(e) => {
-                // Chỉ cho phép số để ép tìm theo SĐT
-                const digits = e.target.value.replace(/\D/g, "")
-                setSearch(digits)
+                setSearch(e.target.value)
                 setHighlightIndex(-1)
               }}
               className="pl-8"
@@ -132,14 +146,14 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown") {
                   e.preventDefault()
-                  setHighlightIndex((i) => Math.min(i + 1, customers.length - 1))
+                  setHighlightIndex((i) => Math.min(i + 1, displayCustomers.length - 1))
                 } else if (e.key === "ArrowUp") {
                   e.preventDefault()
                   setHighlightIndex((i) => Math.max(i - 1, 0))
                 } else if (e.key === "Enter") {
-                  if (highlightIndex >= 0 && customers[highlightIndex]) {
-                    handleSelect(customers[highlightIndex])
-                  } else if (!isLoading && customers.length === 0 && search.trim().length >= 9) {
+                  if (highlightIndex >= 0 && displayCustomers[highlightIndex]) {
+                    handleSelect(displayCustomers[highlightIndex])
+                  } else if (!isLoading && displayCustomers.length === 0 && search.trim().length >= 3) {
                     setShowCreate(true)
                   }
                 }
@@ -168,19 +182,21 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
 
           <div className="max-h-60 overflow-y-auto space-y-1">
             {isLoading && <p className="text-center py-4">Đang tải...</p>}
-            {!isLoading && customers.length === 0 && (
+            {!isLoading && displayCustomers.length === 0 && (
               <div className="text-center py-4 space-y-2 text-muted-foreground">
                 <p>Không tìm thấy khách hàng</p>
-                {search.trim().length >= 9 && (
+                {search.trim().length >= 3 && (
                   <Button variant="default" size="sm" onClick={() => setShowCreate(true)}>
                     + Tạo khách mới với SĐT "{search.trim()}"
                   </Button>
                 )}
               </div>
             )}
-            {!isLoading && customers.length > 0 && customers.map((customer, idx) => (
+            {!isLoading && displayCustomers.length > 0 && displayCustomers.map((customer, idx) => {
+              const itemKey = `${customer.id || customer.so_dien_thoai || "customer"}-${idx}`
+              return (
               <div
-                key={customer.id}
+                key={itemKey}
                 className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${selectedCustomerId === customer.id ? 'bg-white border-primary' : 'hover:bg-muted/50 border-muted'} ${highlightIndex===idx ? 'ring-2 ring-primary' : ''}`}
                 onClick={() => handleSelect(customer)}
               >
@@ -192,7 +208,8 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
                   Chọn
                 </Button>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </DialogContent>

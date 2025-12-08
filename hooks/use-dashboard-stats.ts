@@ -33,6 +33,10 @@ interface DashboardStats {
     lowStock?: number
     lowStockThreshold?: number
   }
+  inventory?: {
+    inStock: number
+    totalCost: number
+  }
   customers: {
     total: number
     new?: number
@@ -179,6 +183,7 @@ export function useDashboardStats(selectedMonth?: number, selectedYear?: number)
     margin: { monthly: 0 },
     orders: { monthly: 0, today: 0 },
     products: { total: 0 },
+    inventory: { inStock: 0, totalCost: 0 },
     customers: { total: 0 },
   }
   return { stats: updatedStats, activities, isLoading, error }

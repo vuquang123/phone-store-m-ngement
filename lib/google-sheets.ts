@@ -394,7 +394,7 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
     const idMay = row[idxId]
     // Map các trường đặc biệt nếu thiếu
     const imei = row[khoHeader.indexOf("IMEI")] || ""
-    const nguon = row[khoHeader.indexOf("Nguồn")] || ((row[khoHeader.indexOf("Giá Nhập")] || row[khoHeader.indexOf("Giá Bán")]) ? "Kho shop" : "Khách ngoài")
+  const nguon = "Kho shop"
     const tinh_trang = row[khoHeader.indexOf("Tình Trạng Máy")] || row[khoHeader.indexOf("Tình trạng")] || ""
     // Tạo dòng mới đúng thứ tự cột CNC
     const newRow = cncHeader.map(col => {

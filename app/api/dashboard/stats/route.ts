@@ -87,6 +87,22 @@ export async function GET(_req: NextRequest) {
     const todayStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`
     const monthStr = `${now.getMonth() + 1}/${now.getFullYear()}`
 
+    // Đọc nhanh tồn kho & giá vốn từ sheet Kho_Hang (tính tất cả hàng trong sheet, không lọc trạng thái)
+    let inventoryInStock = 0
+    let inventoryCost = 0
+    try {
+      const { header: khoHeader, rows: khoRows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
+      const idxGiaNhap = colIndex(khoHeader, "Giá Nhập", "Gia Nhap", "GiaNhap")
+      for (const row of khoRows) {
+        inventoryInStock += 1
+        if (idxGiaNhap !== -1) {
+          inventoryCost += toNumber(row[idxGiaNhap])
+        }
+      }
+    } catch (e) {
+      console.warn("[dashboard] Không đọc được tồn kho:", e)
+    }
+
     // Vùng ngày: cột A-K (0-10)
     const idxNgay = 0
     const idxDonHangOnl = 1
@@ -195,9 +211,13 @@ export async function GET(_req: NextRequest) {
         offYear: totalOrdersOffYear,
       },
       products: {
-        total: 0,
+        total: inventoryInStock,
         lowStock: 0,
         lowStockThreshold: 5,
+      },
+      inventory: {
+        inStock: inventoryInStock,
+        totalCost: inventoryCost,
       },
       customers: {
         total: totalCustomersYear,

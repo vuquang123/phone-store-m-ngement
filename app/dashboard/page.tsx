@@ -17,6 +17,7 @@ type NormalizedStats = {
   customers: { total: number; new: number }
   orders: { monthly: number; today: number }
   revenue: { monthly: number; today: number }
+  inventory: { inStock: number; totalCost: number }
 }
 
 const DEFAULT_STATS: NormalizedStats = {
@@ -24,6 +25,7 @@ const DEFAULT_STATS: NormalizedStats = {
   customers: { total: 0, new: 0 },
   orders: { monthly: 0, today: 0 },
   revenue: { monthly: 0, today: 0 },
+  inventory: { inStock: 0, totalCost: 0 },
 }
 
 export default function DashboardPage() {
@@ -60,6 +62,10 @@ export default function DashboardPage() {
               monthly: Number(s?.revenue?.monthly ?? 0),
               today: Number(s?.revenue?.today ?? 0),
             },
+      inventory: {
+        inStock: Number(s?.inventory?.inStock ?? s?.products?.total ?? 0),
+        totalCost: Number(s?.inventory?.totalCost ?? 0),
+      },
       profit:
         typeof s?.profit === "number"
           ? { monthly: Number(s.profit), today: 0 }

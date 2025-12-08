@@ -1,7 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, ShoppingCart, Users } from "lucide-react"
+import { DollarSign, ShoppingCart, Users, Package, Wallet } from "lucide-react"
 
 interface StatsCardsProps {
   stats: {
@@ -11,6 +11,7 @@ interface StatsCardsProps {
     orders: { monthly: number; today: number }
     products: { total: number; lowStock: number }
     customers: { total: number; new: number }
+    inventory?: { inStock: number; totalCost: number }
   }
 }
 
@@ -25,6 +26,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
 
   // Hàm hiển thị số có dấu + nếu > 0, và định dạng tiền tệ nếu là số tiền
   const showPlusCurrency = (value: number) => value > 0 ? `+${formatCurrency(value)}` : formatCurrency(value)
+  const formatNumber = (value: number) => new Intl.NumberFormat("vi-VN").format(value)
 
   return (
     <Card className="w-full hover:shadow-md transition-shadow duration-200">
@@ -32,7 +34,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
         <CardTitle className="text-base font-semibold">Tổng hợp hôm nay</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-gray-200 text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-gray-200 text-center">
           {/* Doanh thu */}
           <div className="min-w-0 px-2 py-3 sm:py-4 flex flex-col items-center justify-center">
             <span className="min-w-0 break-words text-xs sm:text-sm text-muted-foreground flex items-center justify-center gap-1.5 leading-tight">
@@ -72,6 +74,26 @@ export function StatsCards({ stats }: StatsCardsProps) {
               </span>
             </span>
             <span className="text-lg sm:text-2xl font-bold text-purple-700 mt-1.5 sm:mt-2">{(stats.customers.new ?? 0) > 0 ? `+${stats.customers.new ?? 0}` : stats.customers.new ?? 0}</span>
+          </div>
+          {/* Tồn kho */}
+          <div className="min-w-0 px-2 py-3 sm:py-4 flex flex-col items-center justify-center">
+            <span className="min-w-0 break-words text-xs sm:text-sm text-muted-foreground flex items-center justify-center gap-1.5 leading-tight">
+              <span className="shrink-0">Tồn kho</span>
+              <span className="shrink-0 p-1 rounded bg-sky-100">
+                <Package className="h-4 w-4 text-sky-700" />
+              </span>
+            </span>
+            <span className="text-lg sm:text-2xl font-bold text-sky-700 mt-1.5 sm:mt-2">{formatNumber(stats.inventory?.inStock ?? 0)}</span>
+          </div>
+          {/* Giá vốn tồn */}
+          <div className="min-w-0 px-2 py-3 sm:py-4 flex flex-col items-center justify-center">
+            <span className="min-w-0 break-words text-xs sm:text-sm text-muted-foreground flex items-center justify-center gap-1.5 leading-tight">
+              <span className="shrink-0">Giá vốn tồn</span>
+              <span className="shrink-0 p-1 rounded bg-amber-100">
+                <Wallet className="h-4 w-4 text-amber-700" />
+              </span>
+            </span>
+            <span className="text-lg sm:text-2xl font-bold text-amber-700 mt-1.5 sm:mt-2">{formatCurrency(stats.inventory?.totalCost ?? 0)}</span>
           </div>
         </div>
       </CardContent>

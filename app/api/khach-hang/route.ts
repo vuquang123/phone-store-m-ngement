@@ -69,10 +69,17 @@ export async function GET(request: NextRequest) {
       })
       return obj
     })
-    const q = request.nextUrl.searchParams.get('search') || ''
-    const qDigits = (q || '').replace(/\D/g, '')
-    if (qDigits) {
-      mapped = mapped.filter((it: any) => ((it.sdt || '').replace(/\D/g, '')).includes(qDigits))
+    const q = request.nextUrl.searchParams.get("search") || ""
+    const qDigits = (q || "").replace(/\D/g, "")
+    const qNorm = norm(q)
+    if (qDigits || qNorm) {
+      mapped = mapped.filter((it: any) => {
+        const phone = (it.sdt || "").replace(/\D/g, "")
+        const nameNorm = norm(it.ten_khach || "")
+        const matchPhone = qDigits ? phone.includes(qDigits) : false
+        const matchName = qNorm ? nameNorm.includes(qNorm) : false
+        return matchPhone || matchName
+      })
     }
     return NextResponse.json(mapped)
   } catch (error) {

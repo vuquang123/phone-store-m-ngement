@@ -75,83 +75,75 @@ interface Product {
 
 export default function KhoHangPage() {
   const isMobile = useIsMobile()
-  // State lưu IMEI sản phẩm đang mở dialog
-  const [dialogInfo, setDialogInfo] = useState<{data: ViewCustomer, pos: {x: number, y: number}} | null>(null)
-  // State địa chỉ bảo hành chung cho dialog
-  const BAOHANH_DEFAULT = { label: "Tâm Táo", value: "Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)", desc: "9A Đường số 6, KP5, Linh Tây, Thủ Đức" };
-  const QH_STORE = { label: "QH store", value: "QH store (53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình)", desc: "53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình" };
+  const [viewCustomer, setViewCustomer] = useState<ViewCustomer | null>(null)
+  const [dialogInfo, setDialogInfo] = useState<{
+    data: { dia_chi_bao_hanh?: string; ten_khach_hang?: string; so_dien_thoai?: string; imei?: string }
+    pos: { x: number; y: number }
+  } | null>(null)
+
+  // CNC selection and completion
+  const [isEditCNCMode, setIsEditCNCMode] = useState(false)
+  const [selectedCNCImeis, setSelectedCNCImeis] = useState<string[]>([])
+  const [confirmCNCAction, setConfirmCNCAction] = useState(false)
+
+  // Địa chỉ bảo hành mặc định và quản lý thêm mới
+  const BAOHANH_DEFAULT = {
+    label: "Tâm Táo",
+    value: "Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)",
+    desc: "9A Đường số 6, KP5, Linh Tây, Thủ Đức",
+  }
   const [diaChiBaoHanh, setDiaChiBaoHanh] = useState(BAOHANH_DEFAULT.value)
-  const [baoHanhAddresses, setBaoHanhAddresses] = useState([BAOHANH_DEFAULT, QH_STORE])
+  const [baoHanhAddresses, setBaoHanhAddresses] = useState([BAOHANH_DEFAULT])
   const [isAddingBaoHanhAddress, setIsAddingBaoHanhAddress] = useState(false)
   const [newBaoHanhAddress, setNewBaoHanhAddress] = useState("")
-  // Chế độ chỉnh sửa tab CNC
-  const [isEditCNCMode, setIsEditCNCMode] = useState(false)
-  const [selectedCNCImeis, setselectedCNCImeis] = useState<string[]>([])
-  const [confirmCNCAction, setConfirmCNCAction] = useState(false)
-  // Dialog xem thông tin bảo hành
-  const [viewCustomer, setViewCustomer] = useState<ViewCustomer | null>(null)
-  // Xử lý khi khách ngoài đã nhận sản phẩm CNC
-  function handleCustomerReceived(imei: string) {
-    setIsLoading(true);
-    fetch("/api/kho-hang/customer-received-cnc", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imei, employeeId: "NV001" })
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          alert("Đã cập nhật trạng thái: Khách đã nhận sản phẩm CNC!");
-          fetchCNCProducts();
-        } else {
-          alert("Lỗi: " + data.error);
-        }
-      })
-      .catch(e => alert("Lỗi: " + e.message))
-      .finally(() => setIsLoading(false));
-  }
 
   function handleSelectCNCProduct(imei: string) {
-    setselectedCNCImeis(prev => prev.includes(imei) ? prev.filter(pid => pid !== imei) : [...prev, imei])
+    setSelectedCNCImeis(prev => prev.includes(imei) ? prev.filter(id => id !== imei) : [...prev, imei])
   }
+
   function handleSelectAllCNCProducts() {
-    const imeis = filteredCNC.map(p => p.imei)
-    if (selectedCNCImeis.length === imeis.length) {
-      setselectedCNCImeis([])
+    const allImeis = filteredCNC.map(p => p.imei)
+    if (selectedCNCImeis.length === allImeis.length) {
+      setSelectedCNCImeis([])
     } else {
-      setselectedCNCImeis(imeis)
+      setSelectedCNCImeis(allImeis)
     }
   }
+
   function handleCompleteCNC() {
     setConfirmCNCAction(true)
   }
-  function handleConfirmCompleteCNC() {
-    setConfirmCNCAction(false)
-    setIsLoading(true)
-    fetch("/api/kho-hang/complete-cnc", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ productIds: selectedCNCImeis, employeeId: "NV001" })
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          alert("Đã hoàn thành CNC cho " + selectedCNCImeis.length + " sản phẩm")
-          fetchCNCProducts()
-        } else {
-          alert("Lỗi: " + data.error)
-        }
-      })
-      .finally(() => setIsLoading(false))
-  }
-  // ==========================
-  // Render
-  // ==========================
-  // (Removed duplicate return and opening <div>)
 
   function handleCancelCompleteCNC() {
     setConfirmCNCAction(false)
   }
+
+  async function handleConfirmCompleteCNC() {
+    setConfirmCNCAction(false)
+    setIsLoading(true)
+    try {
+      const res = await fetch("/api/kho-hang/complete-cnc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productIds: selectedCNCImeis, employeeId: "NV001" }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        alert(`Đã hoàn thành CNC cho ${selectedCNCImeis.length} sản phẩm`)
+        fetchCNCProducts()
+        setSelectedCNCImeis([])
+        setIsEditCNCMode(false)
+      } else {
+        alert("Lỗi: " + (data.error || ""))
+      }
+    } catch (e) {
+      const errMsg = typeof e === "object" && e && "message" in e ? (e as any).message : String(e)
+      alert("Lỗi: " + errMsg)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Dialog xác nhận thao tác
   const [confirmAction, setConfirmAction] = useState<null | "cnc" | "baohanh">(null)
 
@@ -310,11 +302,12 @@ export default function KhoHangPage() {
   const [trangThai, setTrangThai] = useState("all")
   const [sourceFilter, setSourceFilter] = useState<"all" | "kho" | "doi_tac">("all")
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
-  // Phân trang cho tab Sản phẩm
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
-  const totalPages = Math.ceil(filteredProducts.length / pageSize);
-  const paginatedProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
+  // Phân trang cho các tab
+  const [page, setPage] = useState(1)
+  const [pageAccessory, setPageAccessory] = useState(1)
+  const [pageCNC, setPageCNC] = useState(1)
+  const [pageBaoHanh, setPageBaoHanh] = useState(1)
+  const pageSize = 10
   const [searchTerm, setSearchTerm] = useState("")
   const [cncSearch, setCncSearch] = useState("")
   const [baoHanhSearch, setBaoHanhSearch] = useState("")
@@ -526,6 +519,12 @@ export default function KhoHangPage() {
     setIsCNCDialogOpen(false)
   }
 
+  // TODO: wire to backend when ready
+  function handleCustomerReceived(imei: string) {
+    console.log("Mark customer received for IMEI", imei)
+    alert(`Đánh dấu khách đã nhận cho IMEI ${imei} chưa được triển khai.`)
+  }
+
   // Tính toán số lượng từng trạng thái sản phẩm
   // Sản phẩm còn hàng: chỉ lấy từ sheet Kho_Hang
   const soSanPhamCon = products.filter(p => p.trang_thai === "Còn hàng").length
@@ -568,6 +567,76 @@ export default function KhoHangPage() {
       .join("|")
       .includes(q))
   }, [accessories, accessorySearch])
+
+  // Phân trang cho các tab (10 mục/trang)
+  const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize))
+  const currentProductPage = Math.min(page, productTotalPages)
+  const paginatedProducts = filteredProducts.slice((currentProductPage - 1) * pageSize, currentProductPage * pageSize)
+
+  const accessoryTotalPages = Math.max(1, Math.ceil(filteredAccessories.length / pageSize))
+  const currentAccessoryPage = Math.min(pageAccessory, accessoryTotalPages)
+  const paginatedAccessories = filteredAccessories.slice((currentAccessoryPage - 1) * pageSize, currentAccessoryPage * pageSize)
+
+  const cncTotalPages = Math.max(1, Math.ceil(filteredCNC.length / pageSize))
+  const currentCNCPage = Math.min(pageCNC, cncTotalPages)
+  const paginatedCNC = filteredCNC.slice((currentCNCPage - 1) * pageSize, currentCNCPage * pageSize)
+
+  const baoHanhTotalPages = Math.max(1, Math.ceil(filteredBaoHanh.length / pageSize))
+  const currentBaoHanhPage = Math.min(pageBaoHanh, baoHanhTotalPages)
+  const paginatedBaoHanh = filteredBaoHanh.slice((currentBaoHanhPage - 1) * pageSize, currentBaoHanhPage * pageSize)
+
+  const renderPagination = (current: number, total: number, onChange: (p: number) => void) => {
+    if (total <= 1) return null
+    const items: JSX.Element[] = []
+    const maxPages = 7
+    if (total <= maxPages) {
+      for (let i = 1; i <= total; i++) {
+        items.push(
+          <button
+            key={i}
+            className={`px-3 py-1 rounded ${current === i ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
+            onClick={() => onChange(i)}
+          >{i}</button>
+        )
+      }
+    } else {
+      items.push(
+        <button
+          key={1}
+          className={`px-3 py-1 rounded ${current === 1 ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
+          onClick={() => onChange(1)}
+        >1</button>
+      )
+      if (current > 4) {
+        items.push(<span key="left-ellipsis" className="px-2">...</span>)
+      }
+      for (let i = Math.max(2, current - 2); i <= Math.min(total - 1, current + 2); i++) {
+        items.push(
+          <button
+            key={i}
+            className={`px-3 py-1 rounded ${current === i ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
+            onClick={() => onChange(i)}
+          >{i}</button>
+        )
+      }
+      if (current < total - 3) {
+        items.push(<span key="right-ellipsis" className="px-2">...</span>)
+      }
+      items.push(
+        <button
+          key={total}
+          className={`px-3 py-1 rounded ${current === total ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
+          onClick={() => onChange(total)}
+        >{total}</button>
+      )
+    }
+
+    return (
+      <div className="flex justify-center mt-6">
+        <nav className="flex gap-1">{items}</nav>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8 px-4 pb-8">
@@ -1083,60 +1152,7 @@ export default function KhoHangPage() {
                 )}
               </div>
             </CardContent>
-            {/* Compact Pagination Bar - moved outside Table to avoid hydration error */}
-            {totalPages > 1 && (
-              <div className="flex justify-center mt-6">
-                <nav className="flex gap-1">
-                  {/* Compact pagination: first, last, current, neighbors, ellipsis */}
-                  {(() => {
-                    const items = [];
-                    const maxPages = 7;
-                    if (totalPages <= maxPages) {
-                      for (let i = 1; i <= totalPages; i++) {
-                        items.push(
-                          <button
-                            key={i}
-                            className={`px-3 py-1 rounded ${page === i ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
-                            onClick={() => setPage(i)}
-                          >{i}</button>
-                        );
-                      }
-                    } else {
-                      items.push(
-                        <button
-                          key={1}
-                          className={`px-3 py-1 rounded ${page === 1 ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
-                          onClick={() => setPage(1)}
-                        >1</button>
-                      );
-                      if (page > 4) {
-                        items.push(<span key="left-ellipsis" className="px-2">...</span>);
-                      }
-                      for (let i = Math.max(2, page - 2); i <= Math.min(totalPages - 1, page + 2); i++) {
-                        items.push(
-                          <button
-                            key={i}
-                            className={`px-3 py-1 rounded ${page === i ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
-                            onClick={() => setPage(i)}
-                          >{i}</button>
-                        );
-                      }
-                      if (page < totalPages - 3) {
-                        items.push(<span key="right-ellipsis" className="px-2">...</span>);
-                      }
-                      items.push(
-                        <button
-                          key={totalPages}
-                          className={`px-3 py-1 rounded ${page === totalPages ? "bg-blue-600 text-white font-bold" : "bg-white text-blue-700 border"}`}
-                          onClick={() => setPage(totalPages)}
-                        >{totalPages}</button>
-                      );
-                    }
-                    return items;
-                  })()}
-                </nav>
-              </div>
-            )}
+            {renderPagination(currentProductPage, productTotalPages, setPage)}
           </Card>
         </TabsContent>
 
@@ -1148,7 +1164,7 @@ export default function KhoHangPage() {
                 <div className="w-full md:w-80">
                   <Input
                     value={accessorySearch}
-                    onChange={(e) => setAccessorySearch(e.target.value)}
+                    onChange={(e) => { setAccessorySearch(e.target.value); setPageAccessory(1); }}
                     placeholder="Tìm phụ kiện theo tên, loại..."
                   />
                 </div>
@@ -1169,7 +1185,7 @@ export default function KhoHangPage() {
                       </div>
                     ) : (
                       <ul className="divide-y">
-                        {filteredAccessories.map((a, idx) => (
+                        {paginatedAccessories.map((a, idx) => (
                           <li key={a.id || idx} className="p-4 bg-white">
                             <div className="flex items-start justify-between gap-3">
                               <div>
@@ -1201,36 +1217,39 @@ export default function KhoHangPage() {
                     )}
                   </>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-blue-50/50 text-blue-700">
-                        <TableHead className="font-semibold">Tên phụ kiện</TableHead>
-                        <TableHead className="font-semibold">Loại</TableHead>
-                        <TableHead className="font-semibold">Số lượng tồn</TableHead>
-                        {isManager && <TableHead className="font-semibold">Giá nhập</TableHead>}
-                        <TableHead className="font-semibold">Giá bán</TableHead>
-                        <TableHead className="font-semibold">Ngày cập nhật</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {isLoadingAccessories ? (
-                        <TableRow><TableCell colSpan={isManager ? 6 : 5} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
-                      ) : filteredAccessories.length === 0 ? (
-                        <TableRow><TableCell colSpan={isManager ? 6 : 5} className="text-center py-8 text-slate-400">Chưa có phụ kiện nào</TableCell></TableRow>
-                      ) : (
-                        filteredAccessories.map((a, idx) => (
-                          <TableRow key={a.id || idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                            <TableCell className="font-medium text-slate-800">{a.ten_phu_kien}</TableCell>
-                            <TableCell className="text-sm text-slate-700">{a.loai_phu_kien}</TableCell>
-                            <TableCell className="text-sm text-slate-700">{a.so_luong_ton}</TableCell>
-                            {isManager && <TableCell className="text-sm text-blue-700 font-semibold">{a.gia_nhap?.toLocaleString("vi-VN")} VNĐ</TableCell>}
-                            <TableCell className="text-sm text-green-700 font-semibold">{a.gia_ban?.toLocaleString("vi-VN")} VNĐ</TableCell>
-                            <TableCell className="text-sm text-slate-700">{a.updated_at ? new Date(a.updated_at).toLocaleDateString("vi-VN") : "-"}</TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-blue-50/50 text-blue-700">
+                          <TableHead className="font-semibold">Tên phụ kiện</TableHead>
+                          <TableHead className="font-semibold">Loại</TableHead>
+                          <TableHead className="font-semibold">Số lượng tồn</TableHead>
+                          {isManager && <TableHead className="font-semibold">Giá nhập</TableHead>}
+                          <TableHead className="font-semibold">Giá bán</TableHead>
+                          <TableHead className="font-semibold">Ngày cập nhật</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {isLoadingAccessories ? (
+                          <TableRow><TableCell colSpan={isManager ? 6 : 5} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
+                        ) : filteredAccessories.length === 0 ? (
+                          <TableRow><TableCell colSpan={isManager ? 6 : 5} className="text-center py-8 text-slate-400">Chưa có phụ kiện nào</TableCell></TableRow>
+                        ) : (
+                          paginatedAccessories.map((a, idx) => (
+                            <TableRow key={a.id || idx} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                              <TableCell className="font-medium text-slate-800">{a.ten_phu_kien}</TableCell>
+                              <TableCell className="text-sm text-slate-700">{a.loai_phu_kien}</TableCell>
+                              <TableCell className="text-sm text-slate-700">{a.so_luong_ton}</TableCell>
+                              {isManager && <TableCell className="text-sm text-blue-700 font-semibold">{a.gia_nhap?.toLocaleString("vi-VN")} VNĐ</TableCell>}
+                              <TableCell className="text-sm text-green-700 font-semibold">{a.gia_ban?.toLocaleString("vi-VN")} VNĐ</TableCell>
+                              <TableCell className="text-sm text-slate-700">{a.updated_at ? new Date(a.updated_at).toLocaleDateString("vi-VN") : "-"}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                    {renderPagination(currentAccessoryPage, accessoryTotalPages, setPageAccessory)}
+                  </>
                 )}
               </div>
             </CardContent>
@@ -1288,7 +1307,7 @@ export default function KhoHangPage() {
                     <div className="hidden md:block w-80 max-w-sm">
                       <Input
                         value={cncSearch}
-                        onChange={(e) => setCncSearch(e.target.value)}
+                        onChange={(e) => { setCncSearch(e.target.value); setPageCNC(1); }}
                         placeholder="Tìm theo tên, IMEI, nguồn, tình trạng..."
                       />
                     </div>
@@ -1298,7 +1317,7 @@ export default function KhoHangPage() {
                 <div className="md:hidden px-4 py-3 bg-white border-b">
                   <Input
                     value={cncSearch}
-                    onChange={(e) => setCncSearch(e.target.value)}
+                    onChange={(e) => { setCncSearch(e.target.value); setPageCNC(1); }}
                     placeholder="Tìm theo tên, IMEI, nguồn, tình trạng..."
                     className="w-full"
                   />
@@ -1311,7 +1330,7 @@ export default function KhoHangPage() {
                     </div>
                   ) : (
                     <div className="px-1 pt-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {filteredCNC.map((p: any, idx: number) => (
+                      {paginatedCNC.map((p: any, idx: number) => (
                         <div
                           key={`${p.id || idx}-${p.imei}`}
                           className={`relative rounded-xl border border-slate-200 bg-white p-3 shadow-sm active:scale-[0.99] transition ${isEditCNCMode ? "cursor-pointer" : ""}`}
@@ -1373,7 +1392,7 @@ export default function KhoHangPage() {
                     {filteredCNC.length === 0 ? (
                       <TableRow><TableCell colSpan={isEditCNCMode ? 10 : 9} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào Đang CNC</TableCell></TableRow>
                     ) : (
-                      filteredCNC.map((p, idx) => (
+                      paginatedCNC.map((p, idx) => (
                           <TableRow key={`${p.id}-${p.imei}`} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
                             {isEditCNCMode && (
                               <TableCell>
@@ -1565,7 +1584,7 @@ export default function KhoHangPage() {
                   <div className="hidden md:block w-80 max-w-sm">
                     <Input
                       value={baoHanhSearch}
-                      onChange={(e) => setBaoHanhSearch(e.target.value)}
+                      onChange={(e) => { setBaoHanhSearch(e.target.value); setPageBaoHanh(1); }}
                       placeholder="Tìm theo tên, IMEI, nguồn, lỗi..."
                     />
                   </div>
@@ -1575,7 +1594,7 @@ export default function KhoHangPage() {
               <div className="md:hidden px-4 py-3 bg-white border-b">
                 <Input
                   value={baoHanhSearch}
-                  onChange={(e) => setBaoHanhSearch(e.target.value)}
+                  onChange={(e) => { setBaoHanhSearch(e.target.value); setPageBaoHanh(1); }}
                   placeholder="Tìm theo tên, IMEI, nguồn, lỗi..."
                   className="w-full"
                 />
@@ -1592,7 +1611,7 @@ export default function KhoHangPage() {
                   </div>
                 ) : (
                   <div className="px-1 pt-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {filteredBaoHanh.map((p: any, idx: number) => {
+                    {paginatedBaoHanh.map((p: any, idx: number) => {
                       const key = p["IMEI"] || p.imei || idx;
                       return (
                         <div
@@ -1665,7 +1684,7 @@ export default function KhoHangPage() {
                       <TableCell colSpan={isEditBaoHanhMode ? 12 : 11} className="text-center py-8 text-slate-400">Không có sản phẩm bảo hành nào</TableCell>
                     </TableRow>
                   ) : (
-                    filteredBaoHanh.map((p: any, idx: number) => {
+                    paginatedBaoHanh.map((p: any, idx: number) => {
                       const key = p["IMEI"] || p.imei || idx;
                       return (
                           <TableRow key={key} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
@@ -1712,57 +1731,75 @@ export default function KhoHangPage() {
                               </button>
                             </div>
                           </TableCell>
-      {/* Dialog thông tin bảo hành dạng box nhỏ, fixed trên màn hình, chỉ hiển thị 1 lần */}
-      {dialogInfo && (() => {
-        const modalMinWidth = 200;
-        let left = dialogInfo.pos.x;
-        let top = dialogInfo.pos.y;
-        if (typeof window !== 'undefined') {
-          const margin = 12;
-          const maxLeft = Math.max(margin, window.innerWidth - modalMinWidth - margin);
-          left = Math.min(left, maxLeft);
-          left = Math.max(margin, left);
-          const maxTop = Math.max(margin, window.innerHeight - 80);
-          top = Math.min(top, maxTop);
-          top = Math.max(margin, top);
-        }
-        return (
-          <div
-            style={{
-              position: 'fixed',
-              left,
-              top,
-              zIndex: 9999,
-              minWidth: modalMinWidth + 'px',
-              background: 'white',
-              border: '1px solid #e2e8f0',
-              borderRadius: '12px',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
-              padding: '16px',
-              fontSize: '13px',
-              color: '#334155',
-            }}
-          >
-            <div style={{ fontWeight: 700, color: '#2563eb', marginBottom: 6 }}>Thông tin bảo hành</div>
-            <div><b>Địa chỉ:</b> {dialogInfo.data.dia_chi_bao_hanh}</div>
-            <div><b>Khách:</b> {dialogInfo.data.ten_khach_hang}</div>
-            <div><b>ĐT:</b> {dialogInfo.data.so_dien_thoai}</div>
-            <button onClick={() => setDialogInfo(null)} style={{ marginTop: 10, padding: '4px 12px', borderRadius: 6, background: '#eff6ff', color: '#2563eb', fontWeight: 600, fontSize: 12, border: 'none', cursor: 'pointer' }}>Đóng</button>
-          </div>
-        )
-      })()}
                         </TableRow>
                       )
                     })
                   )}
                 </TableBody>
-              </Table>
+                </Table>
               )}
             </div>
+            {renderPagination(currentBaoHanhPage, baoHanhTotalPages, setPageBaoHanh)}
           </CardContent>
         </Card>
       </TabsContent>
     </Tabs>
+
+    {/* Dialog thông tin bảo hành dạng box nhỏ, fixed trên màn hình, chỉ hiển thị 1 lần */}
+    {dialogInfo && (() => {
+      const modalMinWidth = 200
+      let left = dialogInfo.pos.x
+      let top = dialogInfo.pos.y
+      if (typeof window !== "undefined") {
+        const margin = 12
+        const maxLeft = Math.max(margin, window.innerWidth - modalMinWidth - margin)
+        left = Math.min(left, maxLeft)
+        left = Math.max(margin, left)
+        const maxTop = Math.max(margin, window.innerHeight - 80)
+        top = Math.min(top, maxTop)
+        top = Math.max(margin, top)
+      }
+      return (
+        <div
+          style={{
+            position: "fixed",
+            left,
+            top,
+            zIndex: 9999,
+            minWidth: modalMinWidth + "px",
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
+            padding: "16px",
+            fontSize: "13px",
+            color: "#334155",
+          }}
+        >
+          <div style={{ fontWeight: 700, color: "#2563eb", marginBottom: 6 }}>Thông tin bảo hành</div>
+          <div><b>Địa chỉ:</b> {dialogInfo.data.dia_chi_bao_hanh}</div>
+          <div><b>Khách:</b> {dialogInfo.data.ten_khach_hang}</div>
+          <div><b>ĐT:</b> {dialogInfo.data.so_dien_thoai}</div>
+          <button
+            onClick={() => setDialogInfo(null)}
+            style={{
+              marginTop: 10,
+              padding: "4px 12px",
+              borderRadius: 6,
+              background: "#eff6ff",
+              color: "#2563eb",
+              fontWeight: 600,
+              fontSize: 12,
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            Đóng
+          </button>
+        </div>
+      )
+    })()}
+
     {/* Sticky bulk actions on mobile */}
     {isMobile && isEditMode && selectedProductIds.length > 0 && (
       <div className="fixed bottom-4 left-4 right-4 z-40">
