@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
-import { buildStockEventMessage, sendTelegramMessage } from "@/lib/telegram"
+import { sendStockEventNotification } from "@/lib/telegram"
 
 export const dynamic = "force-dynamic"
 
@@ -205,13 +205,12 @@ export async function POST(request: NextRequest) {
           imei: p.imei || p["IMEI"],
           serial: p.serial || p["Serial"],
         }))
-        const { text, threadId } = buildStockEventMessage({
+        await sendStockEventNotification({
           type: "import",
           total: count,
           devices,
           employee: body.employeeId,
         })
-        await sendTelegramMessage(text, undefined, { message_thread_id: threadId })
       } catch (e) {
         console.warn("[TG] import message fail:", e)
       }

@@ -134,7 +134,7 @@ export default function KhoHangPage() {
       const res = await fetch("/api/kho-hang/complete-cnc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productIds: selectedCNCImeis, employeeId: "NV001" }),
+        body: JSON.stringify({ productIds: selectedCNCImeis, employeeId: currentEmployeeId }),
       })
       const data = await res.json()
       if (data.success) {
@@ -182,7 +182,7 @@ export default function KhoHangPage() {
       fetch("/api/kho-hang/send-cnc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productIds: selectedProductIds, cncAddress, employeeId: "NV001" })
+        body: JSON.stringify({ productIds: selectedProductIds, cncAddress, employeeId: currentEmployeeId })
       })
         .then(res => res.json())
         .then(data => {
@@ -206,7 +206,7 @@ export default function KhoHangPage() {
       fetch("/api/kho-hang/return-baohanh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productIds: selectedProductIds, employeeId: "NV001" })
+        body: JSON.stringify({ productIds: selectedProductIds, employeeId: currentEmployeeId })
       })
         .then(res => res.json())
         .then(data => {
@@ -286,8 +286,10 @@ export default function KhoHangPage() {
   const [cncProducts, setCNCProducts] = useState<CNCProduct[]>([])
   const [accessories, setAccessories] = useState<any[]>([])
   const [accessorySearch, setAccessorySearch] = useState("")
-  // Role-based hiển thị giá nhập
+  // Role-based hiển thị giá nhập + ID nhân viên từ auth/me
   const [userRole, setUserRole] = useState<"quan_ly" | "nhan_vien">("nhan_vien")
+  const [employeeId, setEmployeeId] = useState<string>("")
+  const currentEmployeeId = employeeId || "system"
   const isManager = userRole === "quan_ly"
 
   // Lấy headers xác thực giống header/sidebar
@@ -552,7 +554,7 @@ export default function KhoHangPage() {
       const res = await fetch("/api/kho-hang/complete-baohanh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedBaoHanhIds, employeeId: "NV001" })
+        body: JSON.stringify({ ids: selectedBaoHanhIds, employeeId: currentEmployeeId })
       })
       const data = await res.json()
       if (data.success) {
@@ -656,6 +658,7 @@ export default function KhoHangPage() {
         if (res.ok) {
           const me = await res.json()
           if (me?.role === "quan_ly") setUserRole("quan_ly")
+          if (me?.employeeId || me?.email) setEmployeeId(me.employeeId || me.email)
         } else {
           // 401: giữ mặc định nhan_vien
         }
@@ -1205,7 +1208,7 @@ export default function KhoHangPage() {
                               const res = await fetch("/api/kho-hang/send-cnc", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ productIds, cncAddress: addressToSend, employeeId: "NV001", products: productPayload })
+                                body: JSON.stringify({ productIds, cncAddress: addressToSend, employeeId: currentEmployeeId, products: productPayload })
                               })
                               const data = await res.json()
                               if (data.success) {
@@ -1331,7 +1334,7 @@ export default function KhoHangPage() {
                               const res = await fetch("/api/kho-hang/return-baohanh", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ productIds, employeeId: "NV001", products: productPayload })
+                                body: JSON.stringify({ productIds, employeeId: currentEmployeeId, products: productPayload })
                               })
                               const data = await res.json()
                               if (data.success) {

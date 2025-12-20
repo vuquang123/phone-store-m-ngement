@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { updateBaoHanhStatus, readFromGoogleSheets } from "@/lib/google-sheets"
 import { addNotification } from "@/lib/notifications"
-import { buildStockEventMessage, sendTelegramMessage } from "@/lib/telegram"
+import { sendStockEventNotification } from "@/lib/telegram"
 
 export async function POST(req: Request) {
   try {
@@ -45,13 +45,12 @@ export async function POST(req: Request) {
         })
       } catch (e) { console.warn('[NOTIFY] complete-baohanh fail:', e) }
         try {
-          const { text, threadId } = buildStockEventMessage({
+          await sendStockEventNotification({
             type: "complete_warranty",
             total: ids.length,
             devices,
             employee: employeeId,
           })
-          await sendTelegramMessage(text, undefined, { message_thread_id: threadId })
         } catch (e) { console.warn('[TG] complete-baohanh message fail:', e) }
       return NextResponse.json({ success: true, message: `Đã hoàn thành bảo hành cho ${ids.length} sản phẩm!` })
     } else {

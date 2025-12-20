@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { updateProductsStatus, logProductHistory, readFromGoogleSheets, updateRowInGoogleSheets, updateRangeValues } from "@/lib/google-sheets";
 import { addNotification } from "@/lib/notifications";
-import { buildStockEventMessage, sendTelegramMessage } from "@/lib/telegram";
+import { sendStockEventNotification } from "@/lib/telegram";
 
 export async function POST(req: Request) {
   try {
@@ -118,13 +118,12 @@ export async function POST(req: Request) {
         imei: row[idxIMEI],
         serial: idxSerial !== -1 ? row[idxSerial] : undefined,
       }))
-    const { text, threadId } = buildStockEventMessage({
+    await sendStockEventNotification({
       type: "complete_cnc",
       total: imeisToProcess.length,
       devices,
       employee: employeeId,
     })
-    await sendTelegramMessage(text, undefined, { message_thread_id: threadId })
   } catch (e) { console.warn('[TG] complete-cnc message fail:', e) }
   return NextResponse.json({ success: true, message: `Đã hoàn thành CNC cho ${imeisToProcess.length} sản phẩm!` });
   } catch (error: any) {

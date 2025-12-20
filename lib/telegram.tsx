@@ -41,6 +41,17 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
   return { text: lines.join("\n"), threadId }
 }
 
+// Gửi sự kiện kho (nhập/gửi/hoàn thành) vào group kho.
+// Có fallback: nếu gửi kèm topic (thread) thất bại, thử lại không kèm topic để tránh mất thông báo.
+export async function sendStockEventNotification(event: StockEvent) {
+  const { text, threadId } = buildStockEventMessage(event)
+  // Ưu tiên dùng topic 22 (đã thống nhất cho kho)
+  const first = await sendTelegramMessage(text, "offline", { message_thread_id: threadId })
+  if (first?.success) return first
+  // Fallback: bỏ topic để vẫn nhận được ở group
+  return sendTelegramMessage(text, "offline")
+}
+
 // Map logical order types to Telegram chat IDs (groups).
 // Prefer reading chat IDs from environment variables so different deployments can
 // route messages to different groups. Set these env vars on the server:

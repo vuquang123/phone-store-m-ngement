@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { updateProductsStatus, logProductHistory } from "@/lib/google-sheets"
 import { addNotification } from "@/lib/notifications"
-import { buildStockEventMessage, sendTelegramMessage } from "@/lib/telegram"
+import { sendStockEventNotification } from "@/lib/telegram"
 
 export async function POST(req: Request) {
   try {
@@ -54,14 +54,13 @@ export async function POST(req: Request) {
       const devices = Array.isArray(products)
         ? products.map((p: any) => ({ name: p.ten_san_pham, imei: p.imei, serial: p.serial }))
         : []
-      const { text, threadId } = buildStockEventMessage({
+      await sendStockEventNotification({
         type: "send_warranty",
         total: productIds.length,
         address,
         devices,
         employee: employeeId,
       })
-      await sendTelegramMessage(text, undefined, { message_thread_id: threadId })
     } catch (e) { console.warn('[TG] send_warranty message fail:', e) }
     return NextResponse.json({ success: true, message: `Đã trả bảo hành cho ${productIds.length} sản phẩm!` })
   } catch (e: any) {
