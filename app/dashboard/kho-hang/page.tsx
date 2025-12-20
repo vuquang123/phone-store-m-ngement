@@ -19,6 +19,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Edit2, Eye } from "lucide-react"
+import { Slider } from "@/components/ui/slider"
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose } from "@/components/ui/drawer"
   // Dialog xem thông tin khách hàng CNC
   
 import { ProductDialog } from "@/components/kho-hang/product-dialog"
@@ -57,6 +59,7 @@ interface Product {
   gia_nhap: number;
   gia_ban: number;
   trang_thai: string;
+  trang_thai_kho?: string;
   ngay_nhap: string;
   ghi_chu?: string;
   loi?: string;
@@ -92,8 +95,13 @@ export default function KhoHangPage() {
     value: "Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)",
     desc: "9A Đường số 6, KP5, Linh Tây, Thủ Đức",
   }
+  const BAOHANH_EX = {
+    label: "EX shop Tân Bình",
+    value: "EX shop Tân Bình (95 Thành Mỹ, Phường 8, Tân Bình, TP.HCM)",
+    desc: "95 Thành Mỹ, Phường 8, Tân Bình, TP.HCM",
+  }
   const [diaChiBaoHanh, setDiaChiBaoHanh] = useState(BAOHANH_DEFAULT.value)
-  const [baoHanhAddresses, setBaoHanhAddresses] = useState([BAOHANH_DEFAULT])
+  const [baoHanhAddresses, setBaoHanhAddresses] = useState([BAOHANH_DEFAULT, BAOHANH_EX])
   const [isAddingBaoHanhAddress, setIsAddingBaoHanhAddress] = useState(false)
   const [newBaoHanhAddress, setNewBaoHanhAddress] = useState("")
 
@@ -116,6 +124,7 @@ export default function KhoHangPage() {
 
   function handleCancelCompleteCNC() {
     setConfirmCNCAction(false)
+    setCompleteCncProofFiles([])
   }
 
   async function handleConfirmCompleteCNC() {
@@ -130,6 +139,7 @@ export default function KhoHangPage() {
       const data = await res.json()
       if (data.success) {
         alert(`Đã hoàn thành CNC cho ${selectedCNCImeis.length} sản phẩm`)
+        await uploadTelegramProof(completeCncProofFiles, "Hoàn thành CNC")
         fetchCNCProducts()
         setSelectedCNCImeis([])
         setIsEditCNCMode(false)
@@ -141,11 +151,16 @@ export default function KhoHangPage() {
       alert("Lỗi: " + errMsg)
     } finally {
       setIsLoading(false)
+      setCompleteCncProofFiles([])
     }
   }
 
   // Dialog xác nhận thao tác
   const [confirmAction, setConfirmAction] = useState<null | "cnc" | "baohanh">(null)
+  const [cncProofFiles, setCncProofFiles] = useState<File[]>([])
+  const [baoHanhProofFiles, setBaoHanhProofFiles] = useState<File[]>([])
+  const [completeCncProofFiles, setCompleteCncProofFiles] = useState<File[]>([])
+  const [completeBaoHanhProofFiles, setCompleteBaoHanhProofFiles] = useState<File[]>([])
 
   function handleSendSelectedCNC() {
     setConfirmAction("cnc")
@@ -213,6 +228,35 @@ export default function KhoHangPage() {
 
   function handleCancelAction() {
     setConfirmAction(null)
+    setCncProofFiles([])
+    setBaoHanhProofFiles([])
+  }
+  const MAX_PRICE_LIMIT = 50000000
+
+  async function uploadTelegramProof(files: File[], caption?: string) {
+    if (!files || files.length === 0) return
+    const form = new FormData()
+    files.forEach((file, idx) => form.append("photo", file, file.name || `proof_${idx + 1}.jpg`))
+    form.append("message_thread_id", "22")
+    if (caption) form.append("caption", caption)
+    try {
+      await fetch("/api/telegram/send-photo", { method: "POST", body: form })
+    } catch (e) {
+      console.warn("[TG] upload proof fail:", e)
+    }
+  }
+
+  const resetFilters = () => {
+    setTrangThai("all")
+    setSourceFilter("all")
+    setSearchTerm("")
+    setProductNameFilter("all")
+    setColorFilter("all")
+    setCapacityFilter("all")
+    setPinFilter("all")
+    setKhoFilter("all")
+    setPriceRange(priceLimits)
+    setConditionFilter("all")
   }
   // Chế độ chỉnh sửa bảng sản phẩm
   const [isEditMode, setIsEditMode] = useState(false)
@@ -267,8 +311,9 @@ export default function KhoHangPage() {
   const [selectedCNCProductId, setSelectedCNCProductId] = useState("")
   const CNC_DEFAULT = { label: "Tâm Táo", value: "Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)", desc: "9A Đường số 6, KP5, Linh Tây, Thủ Đức" };
   const CNC_QH_STORE = { label: "QH store", value: "QH store (53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình)", desc: "53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình" };
+  const CNC_EX = { label: "EX shop Tân Bình", value: "EX shop Tân Bình (95 Thành Mỹ, Phường 8, Tân Bình, TP.HCM)", desc: "95 Thành Mỹ, Phường 8, Tân Bình, TP.HCM" };
   const [cncAddress, setCNCAddress] = useState(CNC_DEFAULT.value)
-  const [cncAddresses, setCNCAddresses] = useState([CNC_DEFAULT, CNC_QH_STORE])
+  const [cncAddresses, setCNCAddresses] = useState([CNC_DEFAULT, CNC_QH_STORE, CNC_EX])
   const [isAddingCNCAddress, setIsAddingCNCAddress] = useState(false)
   const [newCNCAddress, setNewCNCAddress] = useState("")
   const [isCNCLoading, setIsCNCLoading] = useState(false)
@@ -311,6 +356,193 @@ export default function KhoHangPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [cncSearch, setCncSearch] = useState("")
   const [baoHanhSearch, setBaoHanhSearch] = useState("")
+  const [productNameFilter, setProductNameFilter] = useState("all")
+  const [colorFilter, setColorFilter] = useState("all")
+  const [capacityFilter, setCapacityFilter] = useState("all")
+  const [pinFilter, setPinFilter] = useState<"all" | "100" | "9x" | "8x" | "7x" | "lt70">("all")
+  const [khoFilter, setKhoFilter] = useState<"all" | "co_san" | "khong_san">("all")
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, MAX_PRICE_LIMIT])
+  const [priceLimits, setPriceLimits] = useState<[number, number]>([0, MAX_PRICE_LIMIT])
+  const [conditionFilter, setConditionFilter] = useState<"all" | "nguyen_ban" | "cnc">("all")
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [isAdvancedDrawerOpen, setIsAdvancedDrawerOpen] = useState(false)
+
+  // Base cho options tuân thủ các lọc trước đó (trạng thái, nguồn, kho, tìm kiếm, khoảng giá)
+  const baseOptionProducts = useMemo(() => {
+    const norm = (s: any) => String(s ?? "").normalize("NFD").replace(/[^\p{L}\p{N}\s]/gu, "").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim()
+    const [minP, maxP] = priceRange
+    return products
+      .filter(p => p.trang_thai === "Còn hàng")
+      .filter(p => {
+        if (trangThai === "Lock" || trangThai === "Qte") {
+          const loaiMayRaw = (p as any).loai_may || (p as any)["Loại Máy"] || ""
+          const v = norm(loaiMayRaw)
+          if (!v) return false
+          if (trangThai === "Lock") return v.includes("lock")
+          return v.includes("qte") || v.includes("qt") || v.includes("quoc te") || v.includes("quocte") || v.includes("quoc-te")
+        }
+        return true
+      })
+      .filter(p => {
+        if (sourceFilter === "kho") return p.nguon !== "Đối tác"
+        if (sourceFilter === "doi_tac") return p.nguon === "Đối tác"
+        return true
+      })
+      .filter(p => {
+        if (khoFilter === "co_san") return (p.trang_thai_kho || "").toLowerCase().includes("có sẵn") || (p.trang_thai_kho || "").toLowerCase().includes("co san")
+        if (khoFilter === "khong_san") return (p.trang_thai_kho || "").toLowerCase().includes("không sẵn") || (p.trang_thai_kho || "").toLowerCase().includes("khong san")
+        return true
+      })
+      .filter(p => {
+        const price = p.gia_ban || 0
+        if (minP > 0 && price < minP) return false
+        if (maxP > 0 && price > maxP) return false
+        return true
+      })
+      .filter(p => {
+        if (!searchTerm.trim()) return true
+        const q = norm(searchTerm)
+        const joined = [p.ten_san_pham, p.imei, p.mau_sac, p.dung_luong, p.tinh_trang, p.ghi_chu].map(norm).join("|")
+        return joined.includes(q)
+      })
+      .filter(p => {
+        if (conditionFilter === "all") return true
+        return classifyCondition(p) === conditionFilter
+      })
+  }, [products, trangThai, sourceFilter, khoFilter, searchTerm, priceRange, conditionFilter])
+
+  // Options cho dropdown (cascading)
+  const productNameOptions = useMemo(() => {
+    const names = Array.from(new Set(baseOptionProducts.map(p => p.ten_san_pham).filter(Boolean))) as string[]
+    return ["all", ...names.sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }))]
+  }, [baseOptionProducts])
+
+  const colorOptions = useMemo(() => {
+    let data = baseOptionProducts
+    if (productNameFilter !== "all") {
+      const target = productNameFilter
+      data = data.filter(p => p.ten_san_pham === target)
+    }
+    const colors = Array.from(new Set(data.map(p => p.mau_sac).filter(Boolean))) as string[]
+    return ["all", ...colors.sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }))]
+  }, [baseOptionProducts, productNameFilter])
+
+  const capacityOptions = useMemo(() => {
+    let data = baseOptionProducts
+    if (productNameFilter !== "all") {
+      data = data.filter(p => p.ten_san_pham === productNameFilter)
+    }
+    if (colorFilter !== "all") {
+      data = data.filter(p => p.mau_sac === colorFilter)
+    }
+    const caps = Array.from(new Set(data.map(p => p.dung_luong).filter(Boolean))) as string[]
+    return ["all", ...caps.sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }))]
+  }, [baseOptionProducts, productNameFilter, colorFilter])
+
+  // Reset các chọn phụ thuộc khi không còn hợp lệ
+  useEffect(() => {
+    if (!colorOptions.includes(colorFilter)) {
+      setColorFilter("all")
+    }
+  }, [colorOptions, colorFilter])
+
+  useEffect(() => {
+    if (!capacityOptions.includes(capacityFilter)) {
+      setCapacityFilter("all")
+    }
+  }, [capacityOptions, capacityFilter])
+
+  // Update slider bounds once products loaded
+  useEffect(() => {
+    const ceil = MAX_PRICE_LIMIT
+    setPriceLimits([0, ceil])
+    setPriceRange([0, ceil])
+  }, [products])
+
+  const advancedFilters = (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-2">
+      <Select value={productNameFilter} onValueChange={(v) => setProductNameFilter(v)}>
+        <SelectTrigger className="w-full h-10 bg-white text-sm min-w-[150px]"><SelectValue placeholder="Tên sản phẩm" /></SelectTrigger>
+        <SelectContent className="bg-white max-h-[320px]">
+          {productNameOptions.map(opt => (
+            <SelectItem key={opt} value={opt}>{opt === "all" ? "Tên: Tất cả" : opt}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={sourceFilter} onValueChange={v => setSourceFilter(v as any)}>
+        <SelectTrigger className="w-full h-10 bg-white text-sm min-w-[140px]"><SelectValue placeholder="Nguồn" /></SelectTrigger>
+        <SelectContent className="bg-white">
+          <SelectItem value="all">Nguồn: Tất cả</SelectItem>
+          <SelectItem value="kho">Trong kho</SelectItem>
+          <SelectItem value="doi_tac">Đối tác</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={trangThai} onValueChange={setTrangThai}>
+        <SelectTrigger className="w-full h-10 bg-white text-sm min-w-[130px]"><SelectValue placeholder="Loại máy" /></SelectTrigger>
+        <SelectContent className="bg-white">
+          <SelectItem value="all">Loại: Tất cả</SelectItem>
+          <SelectItem value="Lock">Lock</SelectItem>
+          <SelectItem value="Qte">Quốc tế</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={colorFilter} onValueChange={(v) => setColorFilter(v)}>
+        <SelectTrigger className="w-full h-10 bg-white text-sm min-w-[120px]"><SelectValue placeholder="Màu" /></SelectTrigger>
+        <SelectContent className="bg-white max-h-[260px]">
+          {colorOptions.map(opt => (
+            <SelectItem key={opt} value={opt}>{opt === "all" ? "Màu: Tất cả" : opt}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={capacityFilter} onValueChange={(v) => setCapacityFilter(v)}>
+        <SelectTrigger className="w-full h-10 bg-white text-sm min-w-[140px]"><SelectValue placeholder="Dung lượng" /></SelectTrigger>
+        <SelectContent className="bg-white max-h-[260px]">
+          {capacityOptions.map(opt => (
+            <SelectItem key={opt} value={opt}>{opt === "all" ? "Dung lượng: Tất cả" : opt}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={pinFilter} onValueChange={(v) => setPinFilter(v as any)}>
+        <SelectTrigger className="w-full h-10 bg-white text-sm min-w-[120px]"><SelectValue placeholder="Pin" /></SelectTrigger>
+        <SelectContent className="bg-white">
+          <SelectItem value="all">Pin: Tất cả</SelectItem>
+          <SelectItem value="100">100%</SelectItem>
+          <SelectItem value="9x">9x%</SelectItem>
+          <SelectItem value="8x">8x%</SelectItem>
+          <SelectItem value="7x">7x%</SelectItem>
+          <SelectItem value="lt70">&lt; 70%</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={conditionFilter} onValueChange={(v) => setConditionFilter(v as any)}>
+        <SelectTrigger className="w-full h-10 bg-white text-sm min-w-[170px]"><SelectValue placeholder="Nguyên bản/CNC" /></SelectTrigger>
+        <SelectContent className="bg-white">
+          <SelectItem value="all">Nguyên bản/CNC: Tất cả</SelectItem>
+          <SelectItem value="nguyen_ban">Nguyên bản</SelectItem>
+          <SelectItem value="cnc">CNC</SelectItem>
+        </SelectContent>
+      </Select>
+      <div className="col-span-2 sm:col-span-3 md:col-span-4 lg:col-span-6 xl:col-span-7 flex flex-col gap-2">
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <span className="font-medium text-slate-700">Khoảng giá</span>
+          <span className="text-[11px] text-slate-500">{priceRange[0].toLocaleString("vi-VN")} - {priceRange[1].toLocaleString("vi-VN")} VNĐ</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-slate-500 w-10 text-left">0</span>
+          <Slider
+            value={priceRange}
+            min={priceLimits[0]}
+            max={priceLimits[1]}
+            step={500000}
+            onValueChange={(val) => {
+              const [minV, maxV] = val as number[]
+              setPriceRange([minV, maxV])
+            }}
+            className="py-1 flex-1"
+          />
+          <span className="text-[11px] text-slate-500 w-16 text-right">{priceLimits[1].toLocaleString("vi-VN")}</span>
+        </div>
+      </div>
+    </div>
+  )
 
   // Bảo hành - Xác nhận hoàn thành bảo hành
   async function handleConfirmCompleteBaoHanh() {
@@ -325,6 +557,7 @@ export default function KhoHangPage() {
       const data = await res.json()
       if (data.success) {
         alert("Đã hoàn thành bảo hành cho " + selectedBaoHanhIds.length + " sản phẩm")
+        await uploadTelegramProof(completeBaoHanhProofFiles, "Hoàn thành bảo hành")
         fetchProducts()
         fetchBaoHanhHistory()
       } else {
@@ -337,6 +570,7 @@ export default function KhoHangPage() {
       setIsLoading(false)
       setSelectedBaoHanhIds([])
       setIsEditBaoHanhMode(false)
+      setCompleteBaoHanhProofFiles([])
     }
   }
 
@@ -365,6 +599,7 @@ export default function KhoHangPage() {
           gia_nhap: typeof it.gia_chuyen === "number" ? it.gia_chuyen : Number(String(it.gia_chuyen||"").replace(/[^0-9.-]/g,"")) || 0,
           gia_ban: typeof it.gia_goi_y_ban === "number" ? it.gia_goi_y_ban : Number(String(it.gia_goi_y_ban||"").replace(/[^0-9.-]/g,"")) || 0,
           trang_thai: "Còn hàng", // Hiển thị trong kho như hàng sẵn có, nhưng sẽ có badge Đối tác
+            trang_thai_kho: "Có sẵn",
           ngay_nhap: it.ngay_nhap || "",
           ghi_chu: it.ghi_chu || "",
           loai_may: it.loai_may || "",
@@ -473,7 +708,7 @@ export default function KhoHangPage() {
       filtered = filtered.filter(p => p.nguon === "Đối tác")
     }
 
-    // Search text
+    // Search text (tên/IMEI/màu/dung lượng/ghi chú)
     if (searchTerm.trim()) {
       const q = norm(searchTerm)
       filtered = filtered.filter(p => {
@@ -489,9 +724,63 @@ export default function KhoHangPage() {
       })
     }
 
+    // Tên sản phẩm cụ thể
+    if (productNameFilter !== "all") {
+      const target = norm(productNameFilter)
+      filtered = filtered.filter(p => norm(p.ten_san_pham) === target)
+    }
+
+    // Màu
+    if (colorFilter !== "all") {
+      const target = norm(colorFilter)
+      filtered = filtered.filter(p => norm(p.mau_sac) === target)
+    }
+
+    // Dung lượng
+    if (capacityFilter !== "all") {
+      const target = norm(capacityFilter)
+      filtered = filtered.filter(p => norm(p.dung_luong) === target)
+    }
+
+    // Pin buckets
+    if (pinFilter !== "all") {
+      filtered = filtered.filter(p => {
+        const val = Number(String(p.pin || "").replace(/[^0-9.]/g, ""))
+        if (Number.isNaN(val)) return false
+        if (pinFilter === "100") return val >= 100
+        if (pinFilter === "9x") return val >= 90 && val < 100
+        if (pinFilter === "8x") return val >= 80 && val < 90
+        if (pinFilter === "7x") return val >= 70 && val < 80
+        return val < 70
+      })
+    }
+
+    // Kho (có sẵn / không sẵn)
+    if (khoFilter !== "all") {
+      filtered = filtered.filter(p => {
+        const val = (p.trang_thai_kho || "").toLowerCase()
+        if (khoFilter === "co_san") return val.includes("có sẵn") || val.includes("co san")
+        return val.includes("không sẵn") || val.includes("khong san")
+      })
+    }
+
+    // Khoảng giá bán
+    const [minP, maxP] = priceRange
+    if (minP > 0) {
+      filtered = filtered.filter(p => (p.gia_ban || 0) >= minP)
+    }
+    if (maxP > 0) {
+      filtered = filtered.filter(p => (p.gia_ban || 0) <= maxP)
+    }
+
+    // Nguyên bản / CNC
+    if (conditionFilter !== "all") {
+      filtered = filtered.filter(p => classifyCondition(p) === conditionFilter)
+    }
+
   setFilteredProducts(filtered)
   setPage(1) // Reset về trang đầu khi thay đổi filter/search
-  }, [products, trangThai, sourceFilter, searchTerm])
+  }, [products, trangThai, sourceFilter, searchTerm, productNameFilter, colorFilter, capacityFilter, pinFilter, khoFilter, priceRange, conditionFilter])
 
   // Stats
   const tongSanPham = products.length
@@ -508,8 +797,22 @@ export default function KhoHangPage() {
       default: return "bg-gray-100 text-gray-700"
     }
   }
+  function classifyCondition(p: Product) {
+    const text = `${p.tinh_trang || ""} ${p.ghi_chu || ""} ${p.loai_may || ""}`
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+    if (text.includes("cnc")) return "cnc"
+    if (text.includes("nguyen") && text.includes("ban")) return "nguyen_ban"
+    return "unknown"
+  }
   function getTrangThaiText(status: string) {
     return status || "-"
+  }
+  function getTrangThaiKhoColor(status?: string) {
+    const val = (status || "").toLowerCase()
+    if (val.includes("không sẵn")) return "bg-amber-100 text-amber-700"
+    return "bg-emerald-100 text-emerald-700"
   }
   function handleSuccess() {
     // refetch products nếu cần
@@ -706,30 +1009,8 @@ export default function KhoHangPage() {
         <TabsContent value="san-pham" className="space-y-6">
           <Card className="shadow-lg border-0">
             <CardContent className="p-6">
-              <div className="flex justify-between items-center gap-3">
-                <div style={{ width: '10rem' }}>
-                  <div className="hidden md:block">
-                    <Select value={trangThai} onValueChange={setTrangThai}>
-                      <SelectTrigger className="w-40 bg-white rounded-lg shadow border focus:ring-2 focus:ring-blue-200 transition-all">
-                        <SelectValue placeholder="Trạng thái" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white rounded-lg shadow-lg">
-                        <SelectItem value="all" className="hover:bg-blue-50">Tất cả</SelectItem>
-                        <SelectItem value="Lock" className="hover:bg-blue-50">Máy Lock</SelectItem>
-                        <SelectItem value="Qte" className="hover:bg-blue-50">Máy Quốc tế</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+              <div className="flex justify-between items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <div className="hidden md:block">
-                    <Input
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Tìm theo tên, IMEI, màu..."
-                      className="w-56"
-                    />
-                  </div>
                   <Button onClick={() => { setSelectedProduct(null); setIsDialogOpen(true) }} className="bg-blue-600 text-white font-semibold rounded-lg shadow hover:bg-blue-700">
                     <Plus className="w-4 h-4 mr-1" /> Nhập hàng
                   </Button>
@@ -743,49 +1024,75 @@ export default function KhoHangPage() {
                 </div>
               </div>
 
-              {/* Mobile quick filters */}
-              <div className="md:hidden mt-3 space-y-2">
-                <div className="text-xs text-slate-500">Nguồn hàng</div>
-                <div className="flex gap-2 overflow-x-auto">
-                  {[
-                    { key: "all", label: "Tất cả" },
-                    { key: "kho", label: "Trong kho" },
-                    { key: "doi_tac", label: "Đối tác" },
-                  ].map(opt => (
-                    <button
-                      key={opt.key}
-                      onClick={() => setSourceFilter(opt.key as any)}
-                      className={`px-3 py-1 rounded-full text-sm border ${sourceFilter === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200"}`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="text-xs text-slate-500 mt-2">Loại máy</div>
-                <div className="flex gap-2 overflow-x-auto">
-                  {[
-                    { key: "all", label: "Tất cả" },
-                    { key: "Lock", label: "Lock" },
-                    { key: "Qte", label: "Quốc tế" },
-                  ].map(opt => (
-                    <button
-                      key={opt.key}
-                      onClick={() => setTrangThai(opt.key)}
-                      className={`px-3 py-1 rounded-full text-sm border ${trangThai === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200"}`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                <div>
+              {/* Bộ lọc 2 tầng */}
+              <div
+                className={`mt-4 border border-slate-200 rounded-xl bg-slate-50/60 p-3 shadow-sm space-y-3 w-full ${isMobile ? "max-w-xl mx-auto" : ""}`}
+              >
+                {/* Tầng 1: thao tác nhanh */}
+                <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
                   <Input
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Tìm theo tên, IMEI, màu..."
-                    className="w-full"
+                    placeholder="Tìm tên / IMEI / màu..."
+                    className="h-10 text-sm bg-white w-full sm:min-w-[220px] sm:flex-1"
                   />
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <Select value={khoFilter} onValueChange={(v) => setKhoFilter(v as any)}>
+                      <SelectTrigger className="w-full sm:w-[150px] h-10 bg-white text-sm"><SelectValue placeholder="Kho" /></SelectTrigger>
+                      <SelectContent className="bg-white">
+                        <SelectItem value="all">Kho: Tất cả</SelectItem>
+                        <SelectItem value="co_san">Có sẵn</SelectItem>
+                        <SelectItem value="khong_san">Không sẵn</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <Button variant="outline" size="sm" className="h-10 flex-1 sm:flex-none" onClick={resetFilters}>Xóa lọc</Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-10 flex-1 sm:flex-none"
+                        onClick={() => {
+                          if (isMobile) {
+                            setIsAdvancedDrawerOpen(true)
+                            return
+                          }
+                          setShowAdvancedFilters(v => !v)
+                        }}
+                      >
+                        {isMobile ? "Lọc chi tiết" : (showAdvancedFilters ? "Ẩn lọc chi tiết" : "Lọc chi tiết")}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Tầng 2: lọc chi tiết */}
+                {!isMobile && showAdvancedFilters && advancedFilters}
               </div>
+
+              {isMobile && (
+                <Drawer open={isAdvancedDrawerOpen} onOpenChange={setIsAdvancedDrawerOpen} dismissible={false}>
+                  <DrawerContent centered className="max-h-[85vh]">
+                    <DrawerHeader>
+                      <DrawerTitle className="text-base">Lọc chi tiết</DrawerTitle>
+                    </DrawerHeader>
+                    <div className="p-4 pt-0 space-y-3 overflow-y-auto">
+                      {advancedFilters}
+                    </div>
+                    <DrawerFooter className="pt-2">
+                      <Button variant="outline" onClick={resetFilters}>Xóa lọc</Button>
+                      <DrawerClose asChild>
+                        <Button
+                          type="button"
+                          className="bg-blue-600 text-white hover:bg-blue-700"
+                          onClick={() => setIsAdvancedDrawerOpen(false)}
+                        >
+                          Đóng
+                        </Button>
+                      </DrawerClose>
+                    </DrawerFooter>
+                  </DrawerContent>
+                </Drawer>
+              )}
 
               {/* Hiển thị thao tác khi có sản phẩm được chọn và đang ở chế độ chỉnh sửa */}
               {isEditMode && selectedProductIds.length > 0 && (
@@ -866,49 +1173,58 @@ export default function KhoHangPage() {
                               </div>
                             </div>
                           )}
+                          <div className="mt-4">
+                            <Label className="text-sm text-slate-700">Ảnh xác nhận (tùy chọn)</Label>
+                            <Input type="file" multiple accept="image/*" onChange={e => setCncProofFiles(Array.from(e.target.files || []))} className="mt-1" />
+                            {cncProofFiles.length > 0 && (
+                              <p className="text-xs text-slate-500 mt-1">{cncProofFiles.length} ảnh đã chọn</p>
+                            )}
+                          </div>
                         </div>
                         <div className="flex gap-4 justify-end mt-8">
                           <Button variant="outline" onClick={handleCancelAction} className="rounded-lg px-6 py-2 border border-slate-300">Hủy</Button>
-                          <Button onClick={() => {
+                          <Button onClick={async () => {
                             setIsLoading(true)
-                            const selected = products.filter(p => selectedProductIds.includes(p.id))
-                            const productPayload = selected.map(p => ({
-                              id: p.id,
-                              ten_san_pham: p.ten_san_pham,
-                              loai_may: p.loai_may,
-                              imei: p.imei,
-                              nguon: p.nguon ? p.nguon : (p.id.startsWith("BH-") ? "Khách ngoài" : "Kho shop"),
-                              tinh_trang: p.tinh_trang,
-                              loi: p.loi || "",
-                              dia_chi_bao_hanh: diaChiBaoHanh || "",
-                              ten_khach_hang: p.ten_khach_hang || "",
-                              so_dien_thoai: p.so_dien_thoai || "",
-                              trang_thai_cu: "Còn hàng" // Thêm trường này
-                            }))
-                            const productIds = selected.map(p => p.imei || p.id)
-                            const addressToSend = cncAddress && cncAddress.trim() ? cncAddress : CNC_DEFAULT.value
-                            fetch("/api/kho-hang/send-cnc", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ productIds, cncAddress: addressToSend, employeeId: "NV001", products: productPayload })
-                            })
-                              .then(res => res.json())
-                              .then(data => {
-                                if (data.success) {
-                                  alert(data.message || `Đã gửi CNC cho ${productIds.length} sản phẩm!`)
-                                  setConfirmAction(null)
-                                  fetchProducts()
-                                  fetchCNCProducts()
-                                } else {
-                                  alert("Lỗi gửi CNC: " + (data.error || ""))
-                                }
+                            try {
+                              const selected = products.filter(p => selectedProductIds.includes(p.id))
+                              const productPayload = selected.map(p => ({
+                                id: p.id,
+                                ten_san_pham: p.ten_san_pham,
+                                loai_may: p.loai_may,
+                                imei: p.imei,
+                                nguon: p.nguon ? p.nguon : (p.id.startsWith("BH-") ? "Khách ngoài" : "Kho shop"),
+                                tinh_trang: p.tinh_trang,
+                                loi: p.loi || "",
+                                dia_chi_bao_hanh: diaChiBaoHanh || "",
+                                ten_khach_hang: p.ten_khach_hang || "",
+                                so_dien_thoai: p.so_dien_thoai || "",
+                                trang_thai_cu: "Còn hàng" // Thêm trường này
+                              }))
+                              const productIds = selected.map(p => p.imei || p.id)
+                              const addressToSend = cncAddress && cncAddress.trim() ? cncAddress : CNC_DEFAULT.value
+                              const res = await fetch("/api/kho-hang/send-cnc", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ productIds, cncAddress: addressToSend, employeeId: "NV001", products: productPayload })
                               })
-                              .catch(e => alert("Lỗi gửi CNC: " + e.message))
-                              .finally(() => {
-                                setIsLoading(false)
-                                setSelectedProductIds([])
-                                setIsEditMode(false)
-                              })
+                              const data = await res.json()
+                              if (data.success) {
+                                alert(data.message || `Đã gửi CNC cho ${productIds.length} sản phẩm!`)
+                                setConfirmAction(null)
+                                await uploadTelegramProof(cncProofFiles, "Gửi CNC")
+                                fetchProducts()
+                                fetchCNCProducts()
+                              } else {
+                                alert("Lỗi gửi CNC: " + (data.error || ""))
+                              }
+                            } catch (e: any) {
+                              alert("Lỗi gửi CNC: " + (e?.message || String(e)))
+                            } finally {
+                              setIsLoading(false)
+                              setSelectedProductIds([])
+                              setIsEditMode(false)
+                              setCncProofFiles([])
+                            }
                           }} className="bg-blue-600 text-white rounded-lg px-6 py-2 font-semibold shadow hover:bg-blue-700 transition-all">Xác nhận gửi CNC</Button>
                         </div>
                       </>
@@ -983,49 +1299,58 @@ export default function KhoHangPage() {
                                 </div>
                               </div>
                             )}
+                            <div className="mt-4">
+                              <Label className="text-sm text-slate-700">Ảnh xác nhận (tùy chọn)</Label>
+                              <Input type="file" multiple accept="image/*" onChange={e => setBaoHanhProofFiles(Array.from(e.target.files || []))} className="mt-1" />
+                              {baoHanhProofFiles.length > 0 && (
+                                <p className="text-xs text-slate-500 mt-1">{baoHanhProofFiles.length} ảnh đã chọn</p>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="flex gap-4 justify-end mt-8">
                           <Button variant="outline" onClick={handleCancelAction} className="rounded-lg px-6 py-2 border border-slate-300">Hủy</Button>
-                          <Button onClick={() => {
+                          <Button onClick={async () => {
                             setIsLoading(true)
-                            const selected = products.filter(p => selectedProductIds.includes(p.id))
-                            const productPayload = selected.map(p => ({
-                              id: p.id,
-                              ten_san_pham: p.ten_san_pham,
-                              loai_may: p.loai_may,
-                              imei: p.imei,
-                              nguon: p.nguon ? p.nguon : (p.id.startsWith("BH-") ? "Khách ngoài" : "Kho shop"),
-                              tinh_trang: p.tinh_trang,
-                              loi: p.loi || "",
-                              dia_chi_bao_hanh: diaChiBaoHanh || "",
-                              ten_khach_hang: p.ten_khach_hang || "",
-                              so_dien_thoai: p.so_dien_thoai || "",
-                              trang_thai_cu: "Còn hàng" // Thêm trường này
-                            }))
-                            const productIds = selected.map(p => p.imei || p.id)
-                            fetch("/api/kho-hang/return-baohanh", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ productIds, employeeId: "NV001", products: productPayload })
-                            })
-                              .then(res => res.json())
-                              .then(data => {
-                                if (data.success) {
-                                  alert(data.message || `Đã trả bảo hành cho ${productIds.length} sản phẩm!`)
-                                  setConfirmAction(null)
-                                  fetchProducts()
-                                  fetchBaoHanhHistory()
-                                } else {
-                                  alert("Lỗi trả bảo hành: " + (data.error || ""))
-                                }
+                            try {
+                              const selected = products.filter(p => selectedProductIds.includes(p.id))
+                              const productPayload = selected.map(p => ({
+                                id: p.id,
+                                ten_san_pham: p.ten_san_pham,
+                                loai_may: p.loai_may,
+                                imei: p.imei,
+                                nguon: p.nguon ? p.nguon : (p.id.startsWith("BH-") ? "Khách ngoài" : "Kho shop"),
+                                tinh_trang: p.tinh_trang,
+                                loi: p.loi || "",
+                                dia_chi_bao_hanh: diaChiBaoHanh || "",
+                                ten_khach_hang: p.ten_khach_hang || "",
+                                so_dien_thoai: p.so_dien_thoai || "",
+                                trang_thai_cu: "Còn hàng" // Thêm trường này
+                              }))
+                              const productIds = selected.map(p => p.imei || p.id)
+                              const res = await fetch("/api/kho-hang/return-baohanh", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ productIds, employeeId: "NV001", products: productPayload })
                               })
-                              .catch(e => alert("Lỗi trả bảo hành: " + e.message))
-                              .finally(() => {
-                                setIsLoading(false)
-                                setSelectedProductIds([])
-                                setIsEditMode(false)
-                              })
+                              const data = await res.json()
+                              if (data.success) {
+                                alert(data.message || `Đã trả bảo hành cho ${productIds.length} sản phẩm!`)
+                                setConfirmAction(null)
+                                await uploadTelegramProof(baoHanhProofFiles, "Gửi bảo hành")
+                                fetchProducts()
+                                fetchBaoHanhHistory()
+                              } else {
+                                alert("Lỗi trả bảo hành: " + (data.error || ""))
+                              }
+                            } catch (e: any) {
+                              alert("Lỗi trả bảo hành: " + (e?.message || String(e)))
+                            } finally {
+                              setIsLoading(false)
+                              setSelectedProductIds([])
+                              setIsEditMode(false)
+                              setBaoHanhProofFiles([])
+                            }
                           }} className="bg-blue-600 text-white rounded-lg px-6 py-2 font-semibold shadow hover:bg-blue-700 transition-all">Xác nhận</Button>
                         </div>
                       </>
@@ -1069,7 +1394,12 @@ export default function KhoHangPage() {
                               </div>
                               <div className="mt-0.5 text-slate-900 font-semibold">{p.mau_sac}{p.mau_sac && p.dung_luong ? ' - ' : ''}{p.dung_luong}</div>
                             </div>
-                            <Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-2 py-0.5 text-[10px] font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge>
+                            <div className="flex flex-col items-end gap-1">
+                              <Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-2 py-0.5 text-[10px] font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge>
+                              <Badge className={getTrangThaiKhoColor(p.trang_thai_kho) + " rounded-full px-2 py-0.5 text-[10px] font-semibold"}>
+                                {p.trang_thai_kho || "Có sẵn"}
+                              </Badge>
+                            </div>
                           </div>
                           <div className="mt-2 text-sm text-slate-700">
                             <div>IMEI/Serial: <span className="font-medium">{p.imei || p.serial || "-"}</span></div>
@@ -1103,6 +1433,7 @@ export default function KhoHangPage() {
                         <TableHead className="font-semibold">Pin</TableHead>
                         <TableHead className="font-semibold">Tình trạng</TableHead>
                         <TableHead className="font-semibold">Trạng thái</TableHead>
+                        <TableHead className="font-semibold">Kho</TableHead>
                         {isManager && <TableHead className="font-semibold">Giá nhập</TableHead>}
                         <TableHead className="font-semibold">Giá bán</TableHead>
                         <TableHead className="font-semibold">Ngày nhập</TableHead>
@@ -1111,9 +1442,9 @@ export default function KhoHangPage() {
                     </TableHeader>
                     <TableBody>
                       {isLoading ? (
-                        <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 10 : 9) : (isEditMode ? 9 : 8))} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 11 : 10) : (isEditMode ? 10 : 9))} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
                       ) : paginatedProducts.length === 0 ? (
-                        <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 10 : 9) : (isEditMode ? 9 : 8))} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 11 : 10) : (isEditMode ? 10 : 9))} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào</TableCell></TableRow>
                       ) : (
                         paginatedProducts.map((p, idx) => (
                           <TableRow key={p.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
@@ -1139,6 +1470,7 @@ export default function KhoHangPage() {
                             <TableCell className="text-sm text-slate-700">{p.pin || "-"}</TableCell>
                             <TableCell className="text-sm text-slate-700">{p.tinh_trang}</TableCell>
                             <TableCell><Badge className={getTrangThaiColor(p.trang_thai) + " rounded-full px-3 py-1 text-xs font-semibold"}>{getTrangThaiText(p.trang_thai)}</Badge></TableCell>
+                            <TableCell><Badge className={getTrangThaiKhoColor(p.trang_thai_kho) + " rounded-full px-3 py-1 text-xs font-semibold"}>{p.trang_thai_kho || "Có sẵn"}</Badge></TableCell>
                             {isManager && <TableCell className="text-sm text-blue-700 font-semibold">{p.gia_nhap?.toLocaleString("vi-VN")} VNĐ</TableCell>}
                             <TableCell className="text-sm text-green-700 font-semibold">{p.gia_ban?.toLocaleString("vi-VN")} VNĐ</TableCell>
                             <TableCell className="text-sm text-slate-700">{p.ngay_nhap}</TableCell>
@@ -1286,6 +1618,11 @@ export default function KhoHangPage() {
                       </li>
                     ))}
                   </ul>
+                </div>
+                <div className="mb-4">
+                  <Label className="text-sm text-slate-700">Ảnh xác nhận (tùy chọn)</Label>
+                  <Input type="file" multiple accept="image/*" onChange={e => setCompleteCncProofFiles(Array.from(e.target.files || []))} className="mt-1" />
+                  {completeCncProofFiles.length > 0 && <p className="text-xs text-slate-500 mt-1">{completeCncProofFiles.length} ảnh đã chọn</p>}
                 </div>
                 <div className="flex gap-3 justify-end mt-4">
                   <Button variant="outline" onClick={handleCancelCompleteCNC}>Hủy</Button>
@@ -1556,8 +1893,13 @@ export default function KhoHangPage() {
                   ))}
                 </ul>
               </div>
+              <div className="mb-4">
+                <Label className="text-sm text-slate-700">Ảnh xác nhận (tùy chọn)</Label>
+                <Input type="file" multiple accept="image/*" onChange={e => setCompleteBaoHanhProofFiles(Array.from(e.target.files || []))} className="mt-1" />
+                {completeBaoHanhProofFiles.length > 0 && <p className="text-xs text-slate-500 mt-1">{completeBaoHanhProofFiles.length} ảnh đã chọn</p>}
+              </div>
               <div className="flex gap-3 justify-end mt-4">
-                <Button variant="outline" onClick={() => setConfirmBaoHanhAction(false)}>Hủy</Button>
+                <Button variant="outline" onClick={() => { setConfirmBaoHanhAction(false); setCompleteBaoHanhProofFiles([]) }}>Hủy</Button>
                 <Button onClick={handleConfirmCompleteBaoHanh} className="bg-green-600 text-white">Xác nhận</Button>
               </div>
             </div>

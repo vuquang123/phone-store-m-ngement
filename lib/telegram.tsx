@@ -1,6 +1,46 @@
 type OrderType = "online" | "offline" | "return" | "deposit" | string
 interface TelegramOptions { message_thread_id?: number }
 
+type StockEvent =
+  | { type: "import"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
+  | { type: "send_cnc"; total: number; address: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
+  | { type: "complete_cnc"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
+  | { type: "send_warranty"; total: number; address: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
+  | { type: "complete_warranty"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
+
+export function buildStockEventMessage(event: StockEvent): { text: string; threadId: number } {
+  const threadId = 22
+  const header = (() => {
+    switch (event.type) {
+      case "import": return "📥 Nhập hàng"
+      case "send_cnc": return "🚚 Gửi CNC"
+      case "complete_cnc": return "✅ Hoàn thành CNC"
+      case "send_warranty": return "🛠️ Gửi bảo hành"
+      case "complete_warranty": return "✅ Hoàn thành bảo hành"
+      default: return "Thông báo kho"
+    }
+  })()
+
+  const lines: string[] = [header]
+  if (event.employee) lines.push(`Nhân viên: ${event.employee}`)
+  if (event.type === "send_cnc" || event.type === "send_warranty") {
+    const addr = (event as any).address
+    if (addr) lines.push(`Địa chỉ: ${addr}`)
+  }
+  lines.push(`Số lượng: ${event.total}`)
+  const list = (event.devices || []).map((d, idx) => {
+    const name = d.name || "Máy"
+    const id = d.imei || d.serial || "?"
+    return `${idx + 1}. ${name}${id ? ` • IMEI/Serial: ${id}` : ""}`
+  })
+  if (list.length) {
+    lines.push("Danh sách:")
+    lines.push(...list)
+  }
+
+  return { text: lines.join("\n"), threadId }
+}
+
 // Map logical order types to Telegram chat IDs (groups).
 // Prefer reading chat IDs from environment variables so different deployments can
 // route messages to different groups. Set these env vars on the server:
@@ -17,6 +57,15 @@ function parseEnvChat(envName: string, fallback: number) {
   }
 }
 
+function getBotToken() {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim()
+  if (!token) {
+    console.error("Thiếu TELEGRAM_BOT_TOKEN")
+    return ""
+  }
+  return token
+}
+
 const DEFAULT_CHAT = -1002895849744
 const ORDER_TYPE_CHAT_MAP: Record<string, number> = {
   offline: parseEnvChat('TELEGRAM_CHAT_OFFLINE', DEFAULT_CHAT),
@@ -27,7 +76,7 @@ const ORDER_TYPE_CHAT_MAP: Record<string, number> = {
 
 export async function sendTelegramMessage(message: string, orderType?: OrderType, options?: TelegramOptions) {
   try {
-    const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
+    const botToken = getBotToken()
     // choose chat id from mapping, fallback to default
     const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
     // choose topic/thread id based on orderType defaults, can be overridden by options.message_thread_id
@@ -69,7 +118,7 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
 // Send photo from base64 string. Builds a multipart/form-data body and uploads directly to Telegram.
 export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
-    const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
+    const botToken = getBotToken()
     const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
     // choose thread id defaults
     let messageThreadId = 9
@@ -130,7 +179,7 @@ export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'i
 // Send photo from raw Buffer (server-side file). Accepts filename and returns Telegram result.
 export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
-    const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
+    const botToken = getBotToken()
     const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7
@@ -176,7 +225,7 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
 // Send multiple photos as an album (media group). Accepts arrays of buffers and filenames.
 export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: string[], captions?: string[], orderType?: OrderType, options?: TelegramOptions) {
   try {
-    const botToken = "8251748021:AAFhiMTSeE0fOLpJfcaYEgEJp-5XFO6JAlg"
+    const botToken = getBotToken()
     const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7

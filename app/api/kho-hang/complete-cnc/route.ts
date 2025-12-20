@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { updateProductsStatus, logProductHistory, readFromGoogleSheets, updateRowInGoogleSheets, updateRangeValues } from "@/lib/google-sheets";
 import { addNotification } from "@/lib/notifications";
+import { buildStockEventMessage, sendTelegramMessage } from "@/lib/telegram";
 
 export async function POST(req: Request) {
   try {
@@ -12,6 +13,8 @@ export async function POST(req: Request) {
     const { header: cncHeader, rows: cncRows } = await readFromGoogleSheets("CNC")
     const idxIMEI = cncHeader.indexOf("IMEI")
     const idxIdMay = cncHeader.indexOf("ID Máy")
+    const idxTen = cncHeader.indexOf("Tên Sản Phẩm")
+    const idxSerial = cncHeader.indexOf("Serial")
     const idxTrangThai = cncHeader.indexOf("Trạng Thái")
     const idxNgayNhanLai = cncHeader.indexOf("Ngày nhận lại")
     if (idxIMEI === -1) {
@@ -107,6 +110,22 @@ export async function POST(req: Request) {
       nguoi_nhan_id: "all",
     })
   } catch (e) { console.warn('[NOTIFY] complete-cnc fail:', e) }
+  try {
+    const devices = cncRows
+      .filter(row => imeisToProcess.includes(row[idxIMEI]))
+      .map(row => ({
+        name: idxTen !== -1 ? row[idxTen] : undefined,
+        imei: row[idxIMEI],
+        serial: idxSerial !== -1 ? row[idxSerial] : undefined,
+      }))
+    const { text, threadId } = buildStockEventMessage({
+      type: "complete_cnc",
+      total: imeisToProcess.length,
+      devices,
+      employee: employeeId,
+    })
+    await sendTelegramMessage(text, undefined, { message_thread_id: threadId })
+  } catch (e) { console.warn('[TG] complete-cnc message fail:', e) }
   return NextResponse.json({ success: true, message: `Đã hoàn thành CNC cho ${imeisToProcess.length} sản phẩm!` });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message || "Lỗi xử lý hoàn thành CNC" }, { status: 500 });
