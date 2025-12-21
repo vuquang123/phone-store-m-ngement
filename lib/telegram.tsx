@@ -100,26 +100,41 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
       return { success: false, error: "Thiếu cấu hình Telegram" }
     }
-    const body: any = {
-      chat_id: chatId,
-      text: message,
-      parse_mode: "HTML",
-      message_thread_id: messageThreadId
+    // Try sending with thread id first; if it fails (topic missing/invalid), retry without thread to avoid losing the alert.
+    const sendOnce = async (withThread: boolean) => {
+      const payload: any = {
+        chat_id: chatId,
+        text: message,
+        parse_mode: "HTML",
+      }
+      if (withThread && messageThreadId) payload.message_thread_id = messageThreadId
+      const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload)
+      })
+      return response.json()
     }
-    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body)
-    })
-    const result = await response.json()
-    if (result.ok) {
+
+    const first = await sendOnce(true)
+    if (first?.ok) {
       return { success: true }
-    } else {
-      console.error("Lỗi gửi Telegram:", result)
-      return { success: false, error: result.description }
     }
+
+    if (messageThreadId) {
+      console.warn("[TG] sendMessage fail with topic, retrying without thread:", first)
+      const second = await sendOnce(false)
+      if (second?.ok) {
+        return { success: true }
+      }
+      console.error("Lỗi gửi Telegram (retry):", second)
+      return { success: false, error: second?.description || "Unknown Telegram error" }
+    }
+
+    console.error("Lỗi gửi Telegram:", first)
+    return { success: false, error: first?.description || "Unknown Telegram error" }
   } catch (error) {
     console.error("Lỗi gửi Telegram:", error)
     return { success: false, error }
