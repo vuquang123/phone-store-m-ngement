@@ -48,8 +48,13 @@ export async function sendStockEventNotification(event: StockEvent) {
   // Ưu tiên dùng topic 22 (đã thống nhất cho kho)
   const first = await sendTelegramMessage(text, "offline", { message_thread_id: threadId })
   if (first?.success) return first
+  console.warn("[TG] stock event send failed with topic, retry without topic", { event, first })
   // Fallback: bỏ topic để vẫn nhận được ở group
-  return sendTelegramMessage(text, "offline")
+  const second = await sendTelegramMessage(text, "offline")
+  if (!second?.success) {
+    console.error("[TG] stock event send failed both attempts", { event, first, second })
+  }
+  return second
 }
 
 // Map logical order types to Telegram chat IDs (groups).
@@ -115,26 +120,27 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
         },
         body: JSON.stringify(payload)
       })
-      return response.json()
+      const json = await response.json()
+      return { json, status: response.status, statusText: response.statusText, payload }
     }
 
     const first = await sendOnce(true)
-    if (first?.ok) {
+    if (first?.json?.ok) {
       return { success: true }
     }
 
     if (messageThreadId) {
-      console.warn("[TG] sendMessage fail with topic, retrying without thread:", first)
+      console.warn("[TG] sendMessage fail with topic, retrying without thread", first)
       const second = await sendOnce(false)
-      if (second?.ok) {
+      if (second?.json?.ok) {
         return { success: true }
       }
-      console.error("Lỗi gửi Telegram (retry):", second)
-      return { success: false, error: second?.description || "Unknown Telegram error" }
+      console.error("Lỗi gửi Telegram (retry)", second)
+      return { success: false, error: second?.json?.description || "Unknown Telegram error" }
     }
 
-    console.error("Lỗi gửi Telegram:", first)
-    return { success: false, error: first?.description || "Unknown Telegram error" }
+    console.error("Lỗi gửi Telegram", first)
+    return { success: false, error: first?.json?.description || "Unknown Telegram error" }
   } catch (error) {
     console.error("Lỗi gửi Telegram:", error)
     return { success: false, error }

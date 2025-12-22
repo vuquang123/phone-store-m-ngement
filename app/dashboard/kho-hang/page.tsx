@@ -817,6 +817,17 @@ export default function KhoHangPage() {
     if (val.includes("không sẵn")) return "bg-amber-100 text-amber-700"
     return "bg-emerald-100 text-emerald-700"
   }
+  function getLoaiMayLabel(loai?: string) {
+    const raw = (loai || "").trim()
+    if (!raw) return "-"
+    const norm = raw
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+    if (norm.includes("lock")) return "Lock"
+    if (norm.includes("qte") || norm.includes("qt") || norm.includes("quoc te") || norm.includes("quocte") || norm.includes("quoc-te")) return "QTE"
+    return raw
+  }
   function handleSuccess() {
     // refetch products nếu cần
   }
@@ -1432,6 +1443,7 @@ export default function KhoHangPage() {
                           </TableHead>
                         )}
                         <TableHead className="font-semibold">Sản phẩm</TableHead>
+                        <TableHead className="font-semibold">Loại</TableHead>
                             <TableHead className="font-semibold">IMEI/Serial</TableHead>
                         <TableHead className="font-semibold">Pin</TableHead>
                         <TableHead className="font-semibold">Tình trạng</TableHead>
@@ -1445,9 +1457,9 @@ export default function KhoHangPage() {
                     </TableHeader>
                     <TableBody>
                       {isLoading ? (
-                        <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 11 : 10) : (isEditMode ? 10 : 9))} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 12 : 11) : (isEditMode ? 11 : 10))} className="text-center py-8 text-slate-400">Đang tải...</TableCell></TableRow>
                       ) : paginatedProducts.length === 0 ? (
-                        <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 11 : 10) : (isEditMode ? 10 : 9))} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={(isManager ? (isEditMode ? 12 : 11) : (isEditMode ? 11 : 10))} className="text-center py-8 text-slate-400">Chưa có sản phẩm nào</TableCell></TableRow>
                       ) : (
                         paginatedProducts.map((p, idx) => (
                           <TableRow key={p.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
@@ -1468,6 +1480,18 @@ export default function KhoHangPage() {
                               <div className="mt-0.5 text-slate-900 font-semibold">
                                 {p.mau_sac}{p.mau_sac && p.dung_luong ? ' - ' : ''}{p.dung_luong}
                               </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-slate-700">
+                              {(() => {
+                                const loaiLabel = getLoaiMayLabel(p.loai_may)
+                                if (loaiLabel === "-") return "-"
+                                const isLock = loaiLabel.toLowerCase() === "lock"
+                                return (
+                                  <Badge className={`${isLock ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"} rounded-full px-3 py-1 text-xs font-semibold`}>
+                                    {loaiLabel}
+                                  </Badge>
+                                )
+                              })()}
                             </TableCell>
                             <TableCell className="text-sm text-slate-700">{p.imei || p.serial || "-"}</TableCell>
                             <TableCell className="text-sm text-slate-700">{p.pin || "-"}</TableCell>
