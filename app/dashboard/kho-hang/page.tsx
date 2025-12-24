@@ -374,7 +374,7 @@ export default function KhoHangPage() {
     const norm = (s: any) => String(s ?? "").normalize("NFD").replace(/[^\p{L}\p{N}\s]/gu, "").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim()
     const [minP, maxP] = priceRange
     return products
-      .filter(p => p.trang_thai === "Còn hàng")
+      .filter(isConHangProduct)
       .filter(p => {
         if (trangThai === "Lock" || trangThai === "Qte") {
           const loaiMayRaw = (p as any).loai_may || (p as any)["Loại Máy"] || ""
@@ -690,7 +690,7 @@ export default function KhoHangPage() {
         .replace(/\s+/g, " ")
         .trim()
 
-    let filtered = products.filter(p => p.trang_thai === "Còn hàng")
+    let filtered = products.filter(isConHangProduct)
 
     // Loại máy: Lock / Quốc tế (dựa trên loai_may hoặc 'Loại Máy', không dùng loai_phu_kien)
     if (trangThai === "Lock" || trangThai === "Qte") {
@@ -800,6 +800,20 @@ export default function KhoHangPage() {
       default: return "bg-gray-100 text-gray-700"
     }
   }
+  function normalizeStatus(s?: string) {
+    return (s || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .trim()
+  }
+  function isConHangStatus(s?: string) {
+    return normalizeStatus(s) === "conhang"
+  }
+  function isConHangProduct(p: Product) {
+    return isConHangStatus(p.trang_thai)
+  }
   function classifyCondition(p: Product) {
     const text = `${p.tinh_trang || ""} ${p.ghi_chu || ""} ${p.loai_may || ""}`
       .normalize("NFD")
@@ -844,7 +858,7 @@ export default function KhoHangPage() {
 
   // Tính toán số lượng từng trạng thái sản phẩm
   // Sản phẩm còn hàng: chỉ lấy từ sheet Kho_Hang
-  const soSanPhamCon = products.filter(p => p.trang_thai === "Còn hàng").length
+  const soSanPhamCon = products.filter(isConHangProduct).length
   // Sản phẩm CNC: lấy từ sheet CNC, gồm trạng thái "Đang CNC" và "Hoàn thành CNC" (chỉ khách ngoài)
   const soSanPhamCNC = cncProducts.filter(p => p.trang_thai === "Đang CNC" || (p.trang_thai === "Hoàn thành CNC" && p.nguon === "Khách ngoài")).length
   // Sản phẩm bảo hành: lấy từ sheet Bao_Hanh, gồm trạng thái "Bảo hành" và "Hoàn thành bảo hành" (chỉ khách ngoài)
