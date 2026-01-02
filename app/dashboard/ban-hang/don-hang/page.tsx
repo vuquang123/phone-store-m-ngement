@@ -28,6 +28,8 @@ interface Order {
   nhan_vien?: { id: string }
   loai_don?: string
   hinh_thuc_van_chuyen?: string
+  imeis?: string[]
+  imei?: string // raw from each row for grouping convenience
 }
 
 export default function DonHangPage() {
@@ -109,6 +111,7 @@ export default function DonHangPage() {
               nhan_vien: item["Người Bán"] || item.nhan_vien ? { id: item["Người Bán"] || (item.nhan_vien && item.nhan_vien.id) || "" } : undefined,
               loai_don: item["Loại Đơn"] || item.loai_don || "",
               hinh_thuc_van_chuyen: item["Hình Thức Vận Chuyển"] || item.hinh_thuc_van_chuyen || "",
+              imei: item.imei || item["IMEI"] || item.san_pham?.imei || "",
               // Có thể bổ sung thêm các trường khác nếu cần
             };
           })
@@ -120,7 +123,7 @@ export default function DonHangPage() {
         if (!key) continue
         const ex = groupedMap.get(key)
         if (!ex) {
-          groupedMap.set(key, { ...o, _ids: [o.id] })
+          groupedMap.set(key, { ...o, imeis: o.imei ? [o.imei] : [], _ids: [o.id] })
         } else {
           ex.thanh_toan = (Number(ex.thanh_toan) || 0) + (Number(o.thanh_toan) || 0)
           ex.tong_tien = (Number(ex.tong_tien) || 0) + (Number(o.tong_tien) || 0)
@@ -135,6 +138,10 @@ export default function DonHangPage() {
           // Gom danh sách phương thức (duy nhất)
           const list = new Set<string>([...(ex.phuong_thuc_list || []), ...(o.phuong_thuc_list || [])])
           ex.phuong_thuc_list = Array.from(list)
+          if (o.imei) {
+            const imeiSet = new Set<string>([...(ex.imeis || []), o.imei])
+            ex.imeis = Array.from(imeiSet)
+          }
           ex._ids.push(o.id)
         }
       }
@@ -301,7 +308,8 @@ export default function DonHangPage() {
                       if (s) {
                         const ten = order.khach_hang?.ho_ten?.toLowerCase() || ""
                         const sdt = order.khach_hang?.so_dien_thoai?.toLowerCase() || ""
-                        if (!ten.includes(s) && !sdt.includes(s)) return false
+                        const imeiHit = (order.imeis || []).some(i => String(i || "").toLowerCase().includes(s))
+                        if (!ten.includes(s) && !sdt.includes(s) && !imeiHit) return false
                       }
                       // Trạng thái
                       if (trangThai !== "all" && order.trang_thai !== trangThai) return false
@@ -422,7 +430,8 @@ export default function DonHangPage() {
                           if (s) {
                             const ten = order.khach_hang?.ho_ten?.toLowerCase() || ""
                             const sdt = order.khach_hang?.so_dien_thoai?.toLowerCase() || ""
-                            if (!ten.includes(s) && !sdt.includes(s)) return false
+                            const imeiHit = (order.imeis || []).some(i => String(i || "").toLowerCase().includes(s))
+                            if (!ten.includes(s) && !sdt.includes(s) && !imeiHit) return false
                           }
                           // Trạng thái
                           if (trangThai !== "all" && order.trang_thai !== trangThai) return false

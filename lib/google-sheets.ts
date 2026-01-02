@@ -132,6 +132,10 @@ type SheetCacheEntry = {
 const SHEETS_CACHE: Map<string, SheetCacheEntry> = (globalThis as any).__GS_SHEETS_CACHE || new Map()
 ;(globalThis as any).__GS_SHEETS_CACHE = SHEETS_CACHE
 
+// Lưu lần đọc thành công gần nhất để dùng khi bị quota 429
+const LAST_GOOD_DATA: Map<string, SheetData> = (globalThis as any).__GS_LAST_GOOD_DATA || new Map()
+;(globalThis as any).__GS_LAST_GOOD_DATA = LAST_GOOD_DATA
+
 const READ_MIN_INTERVAL_MS = 250
 const CACHE_TTL_MS = 15_000
 const MAX_CACHE_ENTRIES = 8
@@ -209,6 +213,7 @@ export async function readFromGoogleSheets(sheetName: string, range: string = "A
         data: shouldCache ? data : undefined,
         expiresAt: shouldCache ? (Date.now() + CACHE_TTL_MS) : 0,
       })
+      LAST_GOOD_DATA.set(cacheKey, data)
       return data
     } catch (error: any) {
       const logPayload = {
@@ -226,15 +231,18 @@ export async function readFromGoogleSheets(sheetName: string, range: string = "A
         console.error("[Sheets] Read error:", logPayload)
       }
 
-      if (error?.code === 429 && cacheEntry?.data) {
-        const cachedAge = now - (cacheEntry.expiresAt - CACHE_TTL_MS)
-        console.warn(`[Sheets] Serving cached data for ${sheetName} due to quota (age ${cachedAge}ms).`)
+      if (error?.code === 429 && (cacheEntry?.data || LAST_GOOD_DATA.has(cacheKey))) {
+        const fallback = cacheEntry?.data || LAST_GOOD_DATA.get(cacheKey)!
+        const cachedAge = cacheEntry?.data
+          ? (now - (cacheEntry.expiresAt - CACHE_TTL_MS))
+          : 0
+        console.warn(`[Sheets] Serving stale data for ${sheetName} due to quota (age ${cachedAge}ms).`)
         SHEETS_CACHE.set(cacheKey, {
-          data: cacheEntry.data,
+          data: fallback,
           expiresAt: Date.now() + Math.min(CACHE_TTL_MS, 5_000),
           lastErrorAt: Date.now(),
         })
-        return cacheEntry.data
+        return fallback
       }
 
       SHEETS_CACHE.set(cacheKey, {
@@ -243,7 +251,9 @@ export async function readFromGoogleSheets(sheetName: string, range: string = "A
         lastErrorAt: Date.now(),
       })
 
-      throw new Error(error?.message || "Lỗi đọc Google Sheets")
+      const err = new Error(error?.message || "Lỗi đọc Google Sheets") as any
+      if (error?.code) err.code = error.code
+      throw err
     } finally {
       const entry = SHEETS_CACHE.get(cacheKey)
       if (entry) {

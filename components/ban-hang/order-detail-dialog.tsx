@@ -79,6 +79,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
   const isMobile = useIsMobile()
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [warranties, setWarranties] = useState<WarrantyRow[]>([])
   const [warrantyLoading, setWarrantyLoading] = useState(false)
   const [returnLoading, setReturnLoading] = useState(false)
@@ -130,8 +131,13 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
 
     try {
       setIsLoading(true)
-      const response = await fetch(`/api/ban-hang/${orderId}`)
-      if (!response.ok) throw new Error("Failed to fetch order detail")
+      setError(null)
+      const targetId = orderId.trim()
+      const response = await fetch(`/api/ban-hang/${encodeURIComponent(targetId)}`)
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || "Failed to fetch order detail")
+      }
 
       const data = await response.json()
       // Tự động kiểm tra và chuyển đổi các trường cho phù hợp với FE
@@ -209,8 +215,11 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
     setOrder(orderDetail)
     // Sau khi có chi tiết đơn hàng mới fetch bảo hành (tránh gọi 2 lần)
     fetchWarranties(orderDetail.ma_don_hang)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching order detail:", error)
+      setOrder(null)
+      setWarranties([])
+      setError(error?.message || "Không thể tải chi tiết đơn hàng")
     } finally {
       setIsLoading(false)
     }
@@ -230,8 +239,6 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
       setWarrantyLoading(false)
     }
   }
-
-  if (!order && !isLoading) return null
 
   const getTrangThaiColor = (trangThai: string) => {
     switch (trangThai) {
@@ -313,6 +320,10 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="p-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+            {error}
           </div>
         ) : order ? (
           <div className="space-y-6">
@@ -780,7 +791,9 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               )}
             </div>
           </div>
-        ) : null}
+        ) : (
+          <p className="p-4 text-sm text-muted-foreground">Không có dữ liệu đơn hàng để hiển thị.</p>
+        )}
       </DialogContent>
     </Dialog>
   )

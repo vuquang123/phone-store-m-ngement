@@ -249,6 +249,12 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
 /* =================== GET (optional list) =================== */
 export async function GET(request: NextRequest) {
   try {
+    const searchParams = new URL(request.url).searchParams
+    const pageRaw = Number(searchParams.get("page") || 1)
+    const limitRaw = Number(searchParams.get("limit") || 10)
+    const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 100) : 10
+
     const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
     const idx = idxBanHang(header)
     const mapped = rows.map((row) => ({
@@ -273,7 +279,22 @@ export async function GET(request: NextRequest) {
       nhan_vien: row[idx.nguoiBan] ? { id: row[idx.nguoiBan] } : undefined,
       loai_don: row[header.indexOf("Loại Đơn")],
     }))
-    return NextResponse.json({ data: mapped })
+
+    const total = mapped.length
+    const totalPages = Math.max(1, Math.ceil(total / limit))
+    const start = (page - 1) * limit
+    const end = start + limit
+    const sliced = mapped.slice(start, end)
+
+    return NextResponse.json({
+      data: sliced,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    })
   } catch (error) {
     console.error("Ban_Hang GET error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
