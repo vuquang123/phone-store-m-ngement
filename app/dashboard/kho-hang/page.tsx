@@ -46,6 +46,17 @@ interface CNCProduct {
   so_dien_thoai?: string;
 }
 
+interface CNCHistoryEntry {
+  id_may: string;
+  imei: string;
+  ten_san_pham: string;
+  trang_thai_cu: string;
+  trang_thai_moi: string;
+  thoi_gian: string;
+  nguoi_thay_doi: string;
+  dia_chi_cnc?: string;
+}
+
 interface Product {
   id: string;
   ten_san_pham: string;
@@ -319,6 +330,9 @@ export default function KhoHangPage() {
   const [isAddingCNCAddress, setIsAddingCNCAddress] = useState(false)
   const [newCNCAddress, setNewCNCAddress] = useState("")
   const [isCNCLoading, setIsCNCLoading] = useState(false)
+  const [cncHistory, setCncHistory] = useState<CNCHistoryEntry[]>([])
+  const [cncHistorySearch, setCncHistorySearch] = useState("")
+  const [isCncHistoryLoading, setIsCncHistoryLoading] = useState(false)
   // Dialog thêm máy CNC ngoài kho
   const [isAddCNCMachineOpen, setIsAddCNCMachineOpen] = useState(false)
   // Dialog thêm máy bảo hành ngoài kho
@@ -633,6 +647,21 @@ export default function KhoHangPage() {
     }
   }
 
+  async function fetchCNCHistory() {
+    setIsCncHistoryLoading(true)
+    try {
+      const res = await fetch("/api/kho-hang/cnc-history", { cache: "no-store" })
+      const json = await res.json()
+      if (Array.isArray(json?.data)) {
+        setCncHistory(json.data)
+      }
+    } catch (e) {
+      console.error("Error fetching CNC history:", e)
+    } finally {
+      setIsCncHistoryLoading(false)
+    }
+  }
+
   async function fetchAccessories() {
     setIsLoadingAccessories(true)
     try {
@@ -650,6 +679,7 @@ export default function KhoHangPage() {
     fetchProducts()
     fetchAccessories()
     fetchCNCProducts()
+    fetchCNCHistory()
     fetchBaoHanhHistory()
     // Lấy role người dùng để ẩn/hiện cột Giá nhập
     ;(async () => {
@@ -887,6 +917,17 @@ export default function KhoHangPage() {
     }
     return base
   }, [baoHanhHistory, baoHanhSearch])
+
+  const filteredCNCHistory = useMemo(() => {
+    const norm = (s: any) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    const base = [...cncHistory]
+    if (!cncHistorySearch.trim()) return base
+    const q = norm(cncHistorySearch)
+    return base.filter(item => [item.imei, item.id_may, item.ten_san_pham, item.dia_chi_cnc, item.nguoi_thay_doi, item.trang_thai_moi]
+      .map(norm)
+      .join("|")
+      .includes(q))
+  }, [cncHistory, cncHistorySearch])
 
   // Danh sách hiển thị cho Phụ kiện (áp dụng tìm kiếm)
   const filteredAccessories = useMemo(() => {
@@ -1900,6 +1941,75 @@ export default function KhoHangPage() {
                 </div>
               )
             })()}
+          </CardContent>
+        </Card>
+        <Card className="shadow-lg border-0 mt-4">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-blue-700">Lịch sử gửi CNC</h3>
+                <p className="text-sm text-slate-600">Xem lại đợt gửi CNC, địa chỉ và người thực hiện</p>
+              </div>
+              <div className="w-full md:w-72">
+                <Input
+                  value={cncHistorySearch}
+                  onChange={(e) => setCncHistorySearch(e.target.value)}
+                  placeholder="Tìm theo IMEI, địa chỉ, nhân viên..."
+                  className="w-full"
+                />
+              </div>
+            </div>
+            {isCncHistoryLoading ? (
+              <div className="text-center text-slate-500 py-6">Đang tải lịch sử...</div>
+            ) : filteredCNCHistory.length === 0 ? (
+              <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-lg">Chưa có lịch sử CNC</div>
+            ) : (
+              <div className="border rounded-lg overflow-hidden shadow-sm">
+                {isMobile ? (
+                  <div className="divide-y">
+                    {filteredCNCHistory.map((item, idx) => (
+                      <div key={`${item.id_may}-${idx}`} className="p-4 bg-white">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-semibold text-slate-800">IMEI/ID: {item.imei || item.id_may}</div>
+                          <Badge className="bg-amber-50 text-amber-700 border border-amber-100 rounded-full px-2 py-0.5 text-[10px] font-semibold">{item.trang_thai_moi || "-"}</Badge>
+                        </div>
+                        <div className="text-sm text-slate-600 mt-1">{item.ten_san_pham || "-"}</div>
+                        <div className="text-xs text-slate-500 mt-2">Địa chỉ CNC: <span className="font-medium text-slate-700">{item.dia_chi_cnc || "-"}</span></div>
+                        <div className="text-xs text-slate-500 mt-1">Thời gian: {item.thoi_gian || "-"}</div>
+                        <div className="text-xs text-slate-500 mt-1">Người thực hiện: {item.nguoi_thay_doi || "-"}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-blue-50/50 text-blue-700">
+                        <TableHead className="font-semibold">Thời gian</TableHead>
+                        <TableHead className="font-semibold">IMEI / ID</TableHead>
+                        <TableHead className="font-semibold">Tên sản phẩm</TableHead>
+                        <TableHead className="font-semibold">Trạng thái</TableHead>
+                        <TableHead className="font-semibold">Địa chỉ CNC</TableHead>
+                        <TableHead className="font-semibold">Nguồn</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredCNCHistory.map((item, idx) => (
+                        <TableRow key={`${item.id_may}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                          <TableCell className="text-sm text-slate-700 whitespace-nowrap">{item.thoi_gian || "-"}</TableCell>
+                          <TableCell className="text-sm text-slate-700">{item.imei || item.id_may}</TableCell>
+                          <TableCell className="text-sm text-slate-800">{item.ten_san_pham || "-"}</TableCell>
+                          <TableCell>
+                            <Badge className="bg-amber-50 text-amber-700 border border-amber-100 rounded-full px-3 py-1 text-xs font-semibold">{item.trang_thai_moi || "-"}</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-slate-700">{item.dia_chi_cnc || "-"}</TableCell>
+                          <TableCell className="text-sm text-slate-700">{item.nguoi_thay_doi || "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
         <AddCNCMachineDialog
