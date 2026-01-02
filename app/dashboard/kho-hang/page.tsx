@@ -368,6 +368,7 @@ export default function KhoHangPage() {
   const [pageAccessory, setPageAccessory] = useState(1)
   const [pageCNC, setPageCNC] = useState(1)
   const [pageBaoHanh, setPageBaoHanh] = useState(1)
+  const [pageCncHistory, setPageCncHistory] = useState(1)
   const pageSize = 10
   const [searchTerm, setSearchTerm] = useState("")
   const [cncSearch, setCncSearch] = useState("")
@@ -956,6 +957,10 @@ export default function KhoHangPage() {
   const baoHanhTotalPages = Math.max(1, Math.ceil(filteredBaoHanh.length / pageSize))
   const currentBaoHanhPage = Math.min(pageBaoHanh, baoHanhTotalPages)
   const paginatedBaoHanh = filteredBaoHanh.slice((currentBaoHanhPage - 1) * pageSize, currentBaoHanhPage * pageSize)
+
+  const cncHistoryTotalPages = Math.max(1, Math.ceil(filteredCNCHistory.length / pageSize))
+  const currentCncHistoryPage = Math.min(pageCncHistory, cncHistoryTotalPages)
+  const paginatedCNCHistory = filteredCNCHistory.slice((currentCncHistoryPage - 1) * pageSize, currentCncHistoryPage * pageSize)
 
   const renderPagination = (current: number, total: number, onChange: (p: number) => void) => {
     if (total <= 1) return null
@@ -1953,7 +1958,7 @@ export default function KhoHangPage() {
               <div className="w-full md:w-72">
                 <Input
                   value={cncHistorySearch}
-                  onChange={(e) => setCncHistorySearch(e.target.value)}
+                  onChange={(e) => { setCncHistorySearch(e.target.value); setPageCncHistory(1); }}
                   placeholder="Tìm theo IMEI, địa chỉ, nhân viên..."
                   className="w-full"
                 />
@@ -1967,7 +1972,7 @@ export default function KhoHangPage() {
               <div className="border rounded-lg overflow-hidden shadow-sm">
                 {isMobile ? (
                   <div className="divide-y">
-                    {filteredCNCHistory.map((item, idx) => (
+                    {paginatedCNCHistory.map((item, idx) => (
                       <div key={`${item.id_may}-${idx}`} className="p-4 bg-white">
                         <div className="flex items-center justify-between gap-2">
                           <div className="font-semibold text-slate-800">IMEI/ID: {item.imei || item.id_may}</div>
@@ -1993,7 +1998,7 @@ export default function KhoHangPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredCNCHistory.map((item, idx) => (
+                      {paginatedCNCHistory.map((item, idx) => (
                         <TableRow key={`${item.id_may}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
                           <TableCell className="text-sm text-slate-700 whitespace-nowrap">{item.thoi_gian || "-"}</TableCell>
                           <TableCell className="text-sm text-slate-700">{item.imei || item.id_may}</TableCell>
@@ -2010,6 +2015,7 @@ export default function KhoHangPage() {
                 )}
               </div>
             )}
+            {filteredCNCHistory.length > pageSize && renderPagination(currentCncHistoryPage, cncHistoryTotalPages, setPageCncHistory)}
           </CardContent>
         </Card>
         <AddCNCMachineDialog
