@@ -1906,6 +1906,11 @@ export default function KhoHangPage() {
                 </TableBody>
                 </Table>
                 )}
+              {filteredCNC.length > pageSize && (
+                <div className="px-4 py-3">
+                  {renderPagination(currentCNCPage, cncTotalPages, setPageCNC)}
+                </div>
+              )}
             </div>
             {/* Di chuyển dialogInfo ra ngoài Table/TableBody để tránh lỗi hydration */}
             {dialogInfo && (() => {

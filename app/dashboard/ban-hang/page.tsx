@@ -2341,6 +2341,27 @@ export default function BanHangPage() {
               <CardContent>
                 {/* Gộp các đơn có cùng mã đơn hàng */}
                 {(() => {
+                  const getDepositStatus = (row: any) =>
+                    row?.["Trạng Thái Máy"]
+                    || row?.["Tình Trạng Máy"]
+                    || row?.["Trạng thái máy"]
+                    || row?.["tinh_trang_may"]
+                    || row?.["tinh_trang"]
+                    || "";
+
+                  const parseDepositDate = (raw: any) => {
+                    const val = String(raw || "").trim();
+                    if (!val) return null;
+                    // Hỗ trợ các định dạng: DD/MM/YYYY, D/M/YYYY, YYYY-MM-DD, HH:mm:ss DD/MM/YYYY
+                    const formats = ["DD/MM/YYYY", "D/M/YYYY", "YYYY-MM-DD", "HH:mm:ss DD/MM/YYYY", "H:mm:ss D/M/YYYY"];
+                    for (const fmt of formats) {
+                      const d = dayjs(val, fmt, true);
+                      if (d.isValid()) return d;
+                    }
+                    const d = dayjs(val);
+                    return d.isValid() ? d : null;
+                  };
+
                   // Gộp theo mã đơn hàng
                   const groupedAll = Object.values(
                     depositOrders.reduce((acc: any, order: any) => {
@@ -2382,14 +2403,36 @@ export default function BanHangPage() {
                   }
 
                   if (isMobile) {
+                    const getDepositStatus = (row: any) =>
+                      row?.["Trạng Thái Máy"]
+                      || row?.["Tình Trạng Máy"]
+                      || row?.["Trạng thái máy"]
+                      || row?.["tinh_trang_may"]
+                      || row?.["tinh_trang"]
+                      || "";
+
+                    const parseDepositDate = (raw: any) => {
+                      const val = String(raw || "").trim();
+                      if (!val) return null;
+                      // Hỗ trợ các định dạng: DD/MM/YYYY, D/M/YYYY, YYYY-MM-DD, HH:mm:ss DD/MM/YYYY
+                      const formats = ["DD/MM/YYYY", "D/M/YYYY", "YYYY-MM-DD", "HH:mm:ss DD/MM/YYYY", "H:mm:ss D/M/YYYY"];
+                      for (const fmt of formats) {
+                        const d = dayjs(val, fmt, true);
+                        if (d.isValid()) return d;
+                      }
+                      // Fallback: try native parse
+                      const d = dayjs(val);
+                      return d.isValid() ? d : null;
+                    };
+
                     return (
                       <div className="grid grid-cols-1 gap-3">
                         {filtered.map((order: any, idx: number) => {
                           const now = dayjs();
                           const hanRaw = order["Hạn Thanh Toán"];
                           const han = hanRaw ? dayjs(hanRaw, "YYYY-MM-DD") : null;
-                          const ngayDatCocRaw = order["Ngày Đặt Cọc"];
-                          const ngayDatCoc = ngayDatCocRaw ? dayjs(ngayDatCocRaw, "DD/MM/YYYY") : null;
+                          const ngayDatCocRaw = order["Ngày Đặt Cọc"] || order["Ngày đặt cọc"] || order["Ngay Dat Coc"];
+                          const ngayDatCoc = parseDepositDate(ngayDatCocRaw);
                           const tongCoc = (order._tien_coc_arr || []).reduce((s: number, v: number) => s + v, 0);
                           const tongConLai = (order._con_lai_arr || []).reduce((s: number, v: number) => s + v, 0);
                           const isOverdue = han && han.isValid() && han.isBefore(now) && tongConLai > 0;
@@ -2446,7 +2489,7 @@ export default function BanHangPage() {
                                       return m === maDon;
                                     });
                                     if (!firstProduct) return null;
-                                    const status = firstProduct["Trạng Thái Máy"] || firstProduct["tinh_trang_may"] || "";
+                                    const status = getDepositStatus(firstProduct);
                                     let badgeClass = "px-2 py-0.5 rounded-full text-xs font-medium inline-block mb-1";
                                     if (status === "Còn hàng") badgeClass += " bg-green-100 text-green-800";
                                     else if (status === "Đang CNC") badgeClass += " bg-orange-100 text-orange-800";
@@ -2530,8 +2573,8 @@ export default function BanHangPage() {
                             const now = dayjs();
                             const hanRaw = order["Hạn Thanh Toán"];
                             const han = hanRaw ? dayjs(hanRaw, "YYYY-MM-DD") : null;
-                            const ngayDatCocRaw = order["Ngày Đặt Cọc"];
-                            const ngayDatCoc = ngayDatCocRaw ? dayjs(ngayDatCocRaw, "DD/MM/YYYY") : null;
+                            const ngayDatCocRaw = order["Ngày Đặt Cọc"] || order["Ngày đặt cọc"] || order["Ngay Dat Coc"];
+                            const ngayDatCoc = parseDepositDate(ngayDatCocRaw);
                             const tongCoc = (order._tien_coc_arr || []).reduce((s: number, v: number) => s + v, 0);
                             const tongConLai = (order._con_lai_arr || []).reduce((s: number, v: number) => s + v, 0);
                             const isOverdue = han && han.isValid() && han.isBefore(now) && tongConLai > 0;
@@ -2615,7 +2658,7 @@ export default function BanHangPage() {
                                     const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"];
                                     return m === maDon;
                                   }).map((o: any, i: number) => {
-                                    const status = o["Trạng Thái Máy"] || o["tinh_trang_may"] || "-";
+                                      const status = getDepositStatus(o) || "-";
                                     let badgeClass = "px-2 py-0.5 rounded-full text-sm font-medium inline-block";
                                     if (status === "Còn hàng") badgeClass += " bg-green-100 text-green-800";
                                     else if (status === "Đang CNC") badgeClass += " bg-orange-100 text-orange-800";

@@ -400,6 +400,9 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
   const idxCncNgayGui = cncHeader.indexOf("Ngày gửi")
   const idxCncDiaChi = cncHeader.indexOf("Địa chỉ CNC")
 
+  // Ghi nhận thời gian theo múi giờ Việt Nam để tránh lệch UTC
+  const nowVN = DateTime.now().setZone("Asia/Ho_Chi_Minh").toFormat("HH:mm:ss dd/MM/yyyy")
+
   let newCncRows = [...cncRows]
   for (const row of productsToMove) {
     const idMay = row[idxId]
@@ -421,7 +424,7 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
         return row[idxInKho]
       }
       if (col === "Địa chỉ CNC") return cncAddress
-      if (col === "Ngày gửi") return new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN")
+      if (col === "Ngày gửi") return nowVN
       if (col === "Trạng Thái") return "Đang CNC"
       return ""
     })
