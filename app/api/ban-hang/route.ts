@@ -470,6 +470,7 @@ export async function POST(request: NextRequest) {
 
     let allResults = []
     let errorFlag = false
+    let internalIdsToRemove: string[] = []
     // Tính tổng phí bảo hành theo selections (sẽ dùng cho dòng đầu tiên)
     let warrantyPkgCodes: string[] = []
     let warrantyTotalFee = 0
@@ -652,11 +653,31 @@ export async function POST(request: NextRequest) {
           } else if (may.imei) {
             await tryRemovePartnerRowByIMEI(String(may.imei))
           }
+        } else if (may.id_may && may.id_may !== "PHU_KIEN_ONLY") {
+          internalIdsToRemove.push(String(may.id_may))
         }
       } catch (e) {
         console.warn("[Partner] Không thể xoá dòng đối tác sau khi bán:", e)
       }
     }
+
+    // Xoá các sản phẩm nội bộ đã bán khỏi Kho_Hang
+    if (internalIdsToRemove.length > 0) {
+      try {
+        const { header, rows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
+        const idxIdMay = header.indexOf("ID Máy")
+        if (idxIdMay !== -1) {
+          const originalLength = rows.length
+          const newRows = rows.filter((r) => !internalIdsToRemove.includes(String(r[idxIdMay])))
+          if (newRows.length < originalLength) {
+            await syncToGoogleSheets(SHEETS.KHO_HANG, newRows)
+          }
+        }
+      } catch (e) {
+        console.warn("[Kho_Hang] Lỗi khi xoá sản phẩm nội bộ:", e)
+      }
+    }
+
     if (errorFlag) {
       return NextResponse.json({ error: "Lỗi ghi Google Sheets" }, { status: 500 })
     }
