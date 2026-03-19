@@ -1,0 +1,20 @@
+{
+  "header": [
+    "ID Máy",
+    "Ngày Nhập",
+    "Nguồn Hàng",
+    "Tên Sản Phẩm",
+    "Loại Máy",
+    "Dung Lượng",
+    "Pin (%)",
+    "Màu Sắc",
+    "IMEI",
+    "Serial",
+    "Tình Trạng Máy",
+    "Giá Nhập",
+    "Giá Bán",
+    "Ghi Chú",
+    "Trạng Thái"
+  ],
+  "rowsCount": 0
+}

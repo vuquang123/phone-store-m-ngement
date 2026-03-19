@@ -1,0 +1,1 @@
+ID Máy,Ngày Nhập,Tên Sản Phẩm,Loại Máy,Dung Lượng,Pin (%),Màu Sắc,IMEI,Serial,Tình Trạng Máy,Giá Nhập,Giá Bán,Ghi Chú,Trạng Thái,Trạng Thái Kho

@@ -98,12 +98,12 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
     return Number(item.thanh_tien || item.gia_ban || 0)
   }
 
-  // Xác định có phải hàng đối tác từ nguồn hàng của dòng
+  // Xác định có phải hàng kho ngoài từ nguồn hàng của dòng
   const isPartnerSourceByImei = (imei: string) => {
     if (!order) return false
     const item = (order.chi_tiet || []).find(i => i.san_pham?.imei === imei)
     const src = (item as any)?.nguon_hang ? String((item as any).nguon_hang).toLowerCase() : ''
-    return src.includes('đối tác') || src.includes('doi tac') || src.includes('partner')
+    return src.includes('kho ngoài') || src.includes('kho ngoài') || src.includes('doi tac') || src.includes('partner')
   }
 
   // Prefill khi chỉ có 1 thiết bị trong đơn
@@ -703,7 +703,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                 </div>
                 <div className="flex items-center gap-2 mt-6">
                   <Checkbox id="partner-item" checked={isPartner} onCheckedChange={(v: any)=> setIsPartner(Boolean(v))} />
-                  <Label htmlFor="partner-item" className="text-sm">Hàng đối tác</Label>
+                  <Label htmlFor="partner-item" className="text-sm">Hàng kho ngoài</Label>
                 </div>
                 <div className="md:col-span-2">
                   <Label className="text-sm">Ghi chú</Label>

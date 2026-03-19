@@ -1,0 +1,20 @@
+
+> my-v0-project@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.7
+   - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 26.7s
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+[Error [PageNotFoundError]: Cannot find module for page: /api/dashboard/stats] {
+  code: 'ENOENT'
+}
+
+> Build error occurred
+[Error: Failed to collect page data for /api/dashboard/stats] {
+  type: 'Error'
+}

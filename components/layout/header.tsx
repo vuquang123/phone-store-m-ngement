@@ -15,61 +15,26 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Bell, Settings, User, LogOut, Menu } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAuthMe } from "@/hooks/use-auth-me"
+import { useToast } from "@/hooks/use-toast"
 
 interface HeaderProps {
   title: string
   onMenuClick?: () => void
 }
 
-type Me = {
-  id: string
-  email: string
-  name?: string
-  role?: "quan_ly" | "nhan_vien"
-  status?: string
-}
-
-/** Lấy headers xác thực (khớp sheets-auth) từ localStorage */
-function getAuthHeaders(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem("auth_user")
-    const data = raw ? JSON.parse(raw) : {}
-    if (typeof data?.email === "string") {
-      return { "x-user-email": data.email }
-    }
-    return {}
-  } catch {
-    return {}
-  }
-}
-
 export function Header({ title, onMenuClick }: HeaderProps) {
   const router = useRouter()
-  const [me, setMe] = useState<Me | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const { me, isLoading, error } = useAuthMe()
   const [logoUrl, setLogoUrl] = useState<string>("")
+  const { toast } = useToast()
 
   useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const res = await fetch("/api/auth/me", { headers: getAuthHeaders(), cache: "no-store" })
-        if (!res.ok) {
-          router.replace("/auth/login")
-          return
-        }
-        const data = (await res.json()) as Me
-        if (mounted) setMe(data)
-      } catch (e) {
-        router.replace("/auth/login")
-      } finally {
-        if (mounted) setIsLoading(false)
-      }
-    })()
-    return () => {
-      mounted = false
+    if (!isLoading && (!me || error)) {
+      toast({ title: "Phiên đăng nhập đã hết hạn", description: "Vui lòng đăng nhập lại" })
+      router.replace("/auth/login")
     }
-  }, [router])
+  }, [isLoading, me, error, router, toast])
 
   const loadLogoFromStorage = () => {
     try {
@@ -142,7 +107,7 @@ export function Header({ title, onMenuClick }: HeaderProps) {
               <Menu className="h-5 w-5 text-slate-700" />
             </button>
           )}
-          {logoUrl && title !== "Dashboard" ? (
+          {logoUrl ? (
             <img
               src={logoUrl}
               alt="Logo cửa hàng"
@@ -168,7 +133,6 @@ export function Header({ title, onMenuClick }: HeaderProps) {
             title="Thông báo"
           >
             <Bell className="h-5 w-5 text-slate-600" />
-            <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse" />
           </Button>
 
           <DropdownMenu>

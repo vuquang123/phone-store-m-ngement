@@ -521,7 +521,7 @@ export async function POST(request: NextRequest) {
       const isPartner =
         String(may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "")
           .toLowerCase()
-          .includes("đối tác") ||
+          .includes("kho ngoài") ||
         String(may.source || "").toLowerCase().includes("partner")
 
       const doiTacTen = may.ten_doi_tac || body.ten_doi_tac || may["Tên Đối Tác"] || body["Tên Đối Tác"] || ""
@@ -538,7 +538,7 @@ export async function POST(request: NextRequest) {
           return i === 0 ? (body["Địa Chỉ Nhận"] || body.dia_chi_nhan || "") : "";
         }
         if (k === "Nguồn Hàng" || k === "Nguồn") {
-          if (isPartner) return "Đối tác (mua lại)";
+          if (isPartner) return "Kho ngoài (mua lại)";
           return may["Nguồn Hàng"] || may.nguon || body["Nguồn Hàng"] || body["nguon_hang"] || "";
         }
         if (k === "Tên Đối Tác" || k === "Đối Tác") {
@@ -643,7 +643,7 @@ export async function POST(request: NextRequest) {
         const sourceStr = String(
           may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "",
         ).toLowerCase()
-        const isPartner = sourceStr.includes("đối tác") || sourceStr.includes("partner")
+        const isPartner = sourceStr.includes("kho ngoài") || sourceStr.includes("đối tác") || sourceStr.includes("partner")
         if (isPartner) {
           const partnerSheetName = may.partner_sheet || may.sheet || body.partner_sheet || ""
           const partnerRowIndex = Number(may.partner_row_index || may.row_index || body.partner_row_index)

@@ -50,7 +50,7 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
             {/* Nút đóng ở góc phải */}
             <div className="absolute top-3 right-3 z-10">
               <DrawerClose asChild>
-                <button aria-label="Đóng menu" className="h-9 w-9 inline-flex items-center justify-center rounded-full bg-white/90 shadow border hover:bg-white">
+                <button aria-label="Đóng menu" className="h-9 w-9 inline-flex items-center justify-center rounded-full bg-white/90 shadow border hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
                   <X className="h-5 w-5" />
                 </button>
               </DrawerClose>

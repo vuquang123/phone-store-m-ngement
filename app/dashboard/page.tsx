@@ -31,7 +31,7 @@ const DEFAULT_STATS: NormalizedStats = {
 export default function DashboardPage() {
   // State tháng/năm chỉ dùng cho BarChart
   const [selectedMonth, setSelectedMonth] = useState<number>(0)
-  const [selectedYear, setSelectedYear] = useState<number>(2025)
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   // Dữ liệu tổng cho các phần khác
   const {
     stats: rawStats,
@@ -84,6 +84,14 @@ export default function DashboardPage() {
     <ProtectedRoute>
       <TooltipProvider>
         <div className="space-y-6 lg:space-y-8 p-4 lg:p-0">
+          {error ? (
+            <Card className="border-amber-200 bg-amber-50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-amber-800 text-base">Không tải được dữ liệu</CardTitle>
+                <CardDescription className="text-amber-700">{error || "Vui lòng thử lại sau"}</CardDescription>
+              </CardHeader>
+            </Card>
+          ) : null}
           {/* Bar chart lợi nhuận tháng */}
           <BarChartSection 
             selectedMonth={selectedMonth} 
@@ -100,63 +108,42 @@ export default function DashboardPage() {
               <CardHeader className="text-center pb-4">
                 <CardTitle className="text-xl lg:text-2xl">Bắt đầu với cửa hàng của bạn</CardTitle>
                 <CardDescription className="text-base lg:text-lg">
-                  Hệ thống chưa có dữ liệu. Hãy bắt đầu bằng việc thêm sản phẩm và khách hàng.
+                  Hệ thống chưa có dữ liệu. Thêm sản phẩm hoặc khách hàng để kích hoạt thống kê.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button asChild className="h-20 lg:h-24 flex-col gap-2 text-center">
-                        <Link href="/dashboard/kho-hang">
-                          <Package className="h-6 lg:h-8 w-6 lg:w-8" />
-                          <span className="font-medium text-sm lg:text-base">Thêm sản phẩm</span>
-                          <span className="text-xs opacity-80 hidden lg:block">Quản lý kho hàng iPhone</span>
-                        </Link>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Thêm iPhone Lock vào kho hàng để bắt đầu bán</p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <Button asChild className="h-20 lg:h-24 flex-col gap-1 text-center">
+                    <Link href="/dashboard/kho-hang">
+                      <Package className="h-6 lg:h-8 w-6 lg:w-8" />
+                      <span className="font-semibold text-sm lg:text-base">Thêm sản phẩm</span>
+                      <span className="text-xs opacity-80">Bổ sung hàng vào kho</span>
+                    </Link>
+                  </Button>
 
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        asChild
-                        variant="outline"
-                        className="h-20 lg:h-24 flex-col gap-2 bg-transparent text-center"
-                      >
-                        <Link href="/dashboard/khach-hang">
-                          <Users className="h-6 lg:h-8 w-6 lg:w-8" />
-                          <span className="font-medium text-sm lg:text-base">Thêm khách hàng</span>
-                          <span className="text-xs opacity-80 hidden lg:block">Quản lý thông tin khách hàng</span>
-                        </Link>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Tạo hồ sơ khách hàng để theo dõi lịch sử mua hàng</p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="h-20 lg:h-24 flex-col gap-1 bg-transparent text-center"
+                  >
+                    <Link href="/dashboard/khach-hang">
+                      <Users className="h-6 lg:h-8 w-6 lg:w-8" />
+                      <span className="font-semibold text-sm lg:text-base">Thêm khách hàng</span>
+                      <span className="text-xs opacity-80">Tạo hồ sơ để theo dõi</span>
+                    </Link>
+                  </Button>
 
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        asChild
-                        variant="outline"
-                        className="h-20 lg:h-24 flex-col gap-2 bg-transparent text-center sm:col-span-2 lg:col-span-1"
-                      >
-                        <Link href="/dashboard/ban-hang">
-                          <ShoppingCart className="h-6 lg:h-8 w-6 lg:w-8" />
-                          <span className="font-medium text-sm lg:text-base">Tạo đơn hàng</span>
-                          <span className="text-xs opacity-80 hidden lg:block">Bắt đầu bán hàng</span>
-                        </Link>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Tạo đơn hàng mới và xử lý thanh toán</p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <Button
+                    asChild
+                    variant="secondary"
+                    className="h-20 lg:h-24 flex-col gap-1 text-center sm:col-span-2 lg:col-span-1"
+                  >
+                    <Link href="/dashboard/ban-hang">
+                      <ShoppingCart className="h-6 lg:h-8 w-6 lg:w-8" />
+                      <span className="font-semibold text-sm lg:text-base">Tạo đơn hàng</span>
+                      <span className="text-xs opacity-80">Bắt đầu phiên bán</span>
+                    </Link>
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -182,7 +169,7 @@ type BarChartSectionProps = {
   setSelectedYear: React.Dispatch<React.SetStateAction<number>>;
 };
 function BarChartSection({ selectedMonth, setSelectedMonth, selectedYear, setSelectedYear }: BarChartSectionProps) {
-  const { stats: rawStats, isLoading, error } = useDashboardStats(selectedMonth, selectedYear) || {}
+  const { stats: rawStats } = useDashboardStats(selectedMonth, selectedYear) || {}
   return (
     <div className="mb-4">
       <BarChart
@@ -192,7 +179,7 @@ function BarChartSection({ selectedMonth, setSelectedMonth, selectedYear, setSel
                 labels: rawStats?.labels ?? [],
                 values: rawStats?.revenueByMonth ?? [],
                 profit: rawStats?.profitByMonth ?? [],
-                margin: rawStats?.marginByMonth ?? [],
+                margin: rawStats?.marginByMonth?.length ? rawStats.marginByMonth : undefined,
                 orders: rawStats?.ordersByMonth ?? [],
                 customers: rawStats?.customersByMonth ?? [],
                 title: "Lợi nhuận từng tháng",
@@ -204,7 +191,6 @@ function BarChartSection({ selectedMonth, setSelectedMonth, selectedYear, setSel
                 labels: rawStats?.dailyLabels ?? [],
                 values: rawStats?.dailyRevenue ?? [],
                 profit: rawStats?.dailyProfit ?? [],
-                margin: [],
                 orders: rawStats?.dailyOrders ?? [],
                 customers: rawStats?.dailyCustomers ?? [], 
                 ordersOnl: rawStats?.dailyOrdersOnl ?? [],

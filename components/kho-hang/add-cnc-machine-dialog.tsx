@@ -39,7 +39,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
     if (typeof window !== 'undefined') {
       window.cncAddresses = window.cncAddresses || [];
       const defaultAddress = 'Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)';
-      const qhStoreAddress = 'QH store (53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình)';
+      const qhStoreAddress = 'QH store (5 đường Năm Châu, phường 11, Tân Bình)';
       if (!window.cncAddresses.some(a => a.value === defaultAddress)) {
         window.cncAddresses.unshift({ label: defaultAddress, value: defaultAddress });
       }
@@ -51,8 +51,8 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
 
   const [productNames, setProductNames] = useState<string[]>([])
   const defaultIphoneNames = [
-    "iPhone 17", "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17 Plus",
-    "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16",
+    "iPhone 17", "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17 Air", "iPhone 17 E",
+    "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16", "iPhone 16 E",
     "iPhone 15 Pro Max", "iPhone 15 Pro", "iPhone 15 Plus", "iPhone 15",
     "iPhone 14 Pro Max", "iPhone 14 Pro", "iPhone 14 Plus", "iPhone 14",
     "iPhone 13 Pro Max", "iPhone 13 Pro", "iPhone 13 Mini", "iPhone 13",
@@ -65,7 +65,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
       .then(data => {
         const names = Array.from(new Set((data.data || []).map((p: any) => p.ten_san_pham).filter(Boolean)))
         // Luôn giữ danh sách mặc định, không bị ghi đè bởi kho hàng
-  const allNames = defaultIphoneNames.concat((names as string[]).filter((n: string) => !defaultIphoneNames.includes(n)))
+        const allNames = defaultIphoneNames.concat((names as string[]).filter((n: string) => !defaultIphoneNames.includes(n)))
         setProductNames(allNames as string[])
       })
   }, [])
@@ -98,7 +98,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-  <DialogContent className="bg-white rounded-xl shadow-xl p-6 min-w-[350px] max-w-[600px] border border-slate-200">
+      <DialogContent className="bg-white rounded-xl shadow-xl p-6 min-w-[350px] max-w-[600px] border border-slate-200">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-blue-700 mb-2">Thêm máy CNC ngoài kho</DialogTitle>
           <p className="text-slate-500 text-sm mb-4">Nhập thông tin máy CNC ngoài kho để quản lý và theo dõi trạng thái.</p>

@@ -280,7 +280,7 @@ export async function POST(req: NextRequest) {
           for (const idxRow of matchedIndexes) {
             const r = BR[idxRow]
             const nguon = bIdx.nguonHang !== -1 ? String(r[bIdx.nguonHang]||'').toLowerCase() : ''
-            const isPartner = nguon.includes('đối tác') || nguon.includes('doi tac') || nguon.includes('partner')
+            const isPartner = nguon.includes('kho ngoài') || nguon.includes('doi tac') || nguon.includes('partner') || nguon.includes('đối tác')
             if (isPartner) continue // không nhập lại kho shop cho hàng đối tác
             const im = bIdx.imei !== -1 ? String(r[bIdx.imei]||'') : ''
             const sr = bIdx.serial !== -1 ? String(r[bIdx.serial]||'') : ''
@@ -333,7 +333,7 @@ export async function POST(req: NextRequest) {
           const idxTrangThai = PH.indexOf('Trạng Thái')
           const zeroIdx = Math.max(0, rIdx - 2)
           if (idxTrangThai !== -1 && zeroIdx < PR.length) {
-            PR[zeroIdx][idxTrangThai] = 'Trả về đối tác'
+            PR[zeroIdx][idxTrangThai] = 'Trả về kho ngoài'
             await syncToGoogleSheets(sName, PR)
           }
         }

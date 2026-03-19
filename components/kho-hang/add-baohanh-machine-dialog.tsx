@@ -25,8 +25,8 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
   // Dropdown tên sản phẩm
   const [productNames, setProductNames] = useState<string[]>([])
   const defaultIphoneNames = [
-    "iPhone 17", "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17 Plus",
-    "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16",
+    "iPhone 17", "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17 Air", "iPhone 17 E",
+    "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16", "iPhone 16 E",
     "iPhone 15 Pro Max", "iPhone 15 Pro", "iPhone 15 Plus", "iPhone 15",
     "iPhone 14 Pro Max", "iPhone 14 Pro", "iPhone 14 Plus", "iPhone 14",
     "iPhone 13 Pro Max", "iPhone 13 Pro", "iPhone 13 Mini", "iPhone 13",
@@ -61,7 +61,7 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
     if (typeof window !== 'undefined') {
       window.baoHanhAddresses = window.baoHanhAddresses || [];
       const defaultAddress = 'Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)';
-      const qhStoreAddress = 'QH store (53/6 Đ. Nguyễn Hồng Đào, Phường 14, Tân Bình)';
+      const qhStoreAddress = 'QH store (5 đường Năm Châu, phường 11, Tân Bình)';
       if (!window.baoHanhAddresses.some(a => a.value === defaultAddress)) {
         window.baoHanhAddresses.unshift({ label: defaultAddress, value: defaultAddress });
       }

@@ -77,7 +77,7 @@ export default function HuongDanPage() {
               <div className="space-y-2">
                 <h4 className="font-medium">Tính năng chính</h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• POS bán hàng hợp nhất: hàng trong kho + hàng đối tác</li>
+                  <li>• POS bán hàng hợp nhất: hàng trong kho + hàng kho ngoài</li>
                   <li>• Quản lý kho theo IMEI, nhập hàng, trả hàng</li>
                   <li>• Hợp đồng bảo hành, tính ngày còn lại</li>
                   <li>• Hoàn trả: nhập lại kho, hủy bảo hành, thông báo Telegram</li>
@@ -115,7 +115,7 @@ export default function HuongDanPage() {
                   </h4>
                   <ul className="text-sm text-muted-foreground space-y-1">
                     <li>• Tìm sản phẩm theo IMEI hoặc tên phụ kiện, chọn khách hàng</li>
-                    <li>• Hàng đối tác sẽ tự xác định nguồn, xóa khỏi sheet đối tác sau khi bán</li>
+                    <li>• Hàng kho ngoài sẽ tự xác định nguồn, xóa khỏi sheet kho ngoài sau khi bán</li>
                     <li>• Phí bảo hành (nếu có) tự cộng vào tổng, hợp đồng được tạo sau khi thanh toán</li>
                   </ul>
                   <div className="mt-2 flex gap-2">
@@ -142,7 +142,7 @@ export default function HuongDanPage() {
                   </h4>
                   <ul className="text-sm text-muted-foreground space-y-1">
                     <li>• Thực hiện ngay trong chi tiết đơn: chọn IMEI, số tiền hoàn, hệ thống tự nhập kho lại</li>
-                    <li>• Bảo hành sẽ được hủy theo IMEI; hàng đối tác không nhập lại kho shop</li>
+                    <li>• Bảo hành sẽ được hủy theo IMEI; hàng kho ngoài không nhập lại kho shop</li>
                     <li>• Có thể tạo nhanh tại Dashboard → Hoàn trả</li>
                   </ul>
                   <div className="mt-2 flex gap-2">
@@ -171,7 +171,7 @@ export default function HuongDanPage() {
                   <ul className="text-sm text-muted-foreground space-y-1">
                     <li>• Tải logo cửa hàng, hiển thị tức thì ở Header</li>
                     <li>• Đồng bộ Google Sheets: chú ý hạn mức quota; hệ thống có cache TTL và fallback</li>
-                    <li>• Kiểm tra kết nối đối tác (sheet tên có dấu/không dấu đều được hỗ trợ)</li>
+                    <li>• Kiểm tra kết nối kho ngoài (sheet tên có dấu/không dấu đều được hỗ trợ)</li>
                   </ul>
                   <div className="mt-2 flex gap-2">
                     <Link href="/dashboard/cai-dat"><Button size="sm">Mở Cài đặt</Button></Link>

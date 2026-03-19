@@ -37,6 +37,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 }
 
+import { Providers } from "@/components/providers"
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -45,7 +47,9 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <Suspense fallback={null}>{children}</Suspense>
+        <Providers>
+          <Suspense fallback={null}>{children}</Suspense>
+        </Providers>
         <Analytics />
         {/* Global toast notifications */}
         <Toaster />

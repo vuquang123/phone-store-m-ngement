@@ -31,6 +31,7 @@ interface Product {
   trang_thai: string
   gia_nhap: number
   gia_ban: number
+  giam_gia: number
   ngay_nhap: string
   ghi_chu?: string
 }
@@ -56,11 +57,13 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     "iPhone 17": ["Black", "Lavender", "Mist Blue", "Sage", "White"],
     "iPhone 17 Pro Max": ["Deep Blue", "Cosmic Orange", "Silver"],
     "iPhone 17 Pro": ["Deep Blue", "Cosmic Orange", "Silver"],
-    "iPhone 17 Plus": ["Black", "Lavender", "Mist Blue", "Sage", "White"],
+    "iPhone 17 Air": ["Cloud White", "Light Gold", "Sky Blue", "Space Black"],
+    "iPhone 17 E": ["Soft Pink", "Black", "White"],
     "iPhone 16 Pro Max": ["Black Titanium", "Natural Titanium", "White Titanium", "Desert Titanium"],
     "iPhone 16 Pro": ["Black Titanium", "Natural Titanium", "White Titanium", "Desert Titanium"],
     "iPhone 16 Plus": ["Black", "White", "Pink", "Teal", "Ultramarine"],
     "iPhone 16": ["Black", "White", "Pink", "Teal", "Ultramarine"],
+    "iPhone 16 E": ["Black", "White"],
     "iPhone 15 Pro Max": ["Black Titanium", "White Titanium", "Blue Titanium", "Natural Titanium"],
     "iPhone 15 Pro": ["Black Titanium", "White Titanium", "Blue Titanium", "Natural Titanium"],
     "iPhone 15 Plus": ["Pink", "Yellow", "Green", "Blue", "Black"],
@@ -82,8 +85,8 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
   }
 
   const productNameOptions = [
-    "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17 Plus", "iPhone 17",
-    "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16",
+    "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17", "iPhone 17 Air", "iPhone 17 E",
+    "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16", "iPhone 16 E",
     "iPhone 15 Pro Max", "iPhone 15 Pro", "iPhone 15 Plus", "iPhone 15",
     "iPhone 14 Pro Max", "iPhone 14 Pro", "iPhone 14 Plus", "iPhone 14",
     "iPhone 13 Pro Max", "iPhone 13 Pro", "iPhone 13 Mini", "iPhone 13",
@@ -91,7 +94,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     "iPhone 11 Pro Max", "iPhone 11 Pro", "iPhone 11",
   ]
 
-  const storageOptions = ["128GB", "256GB", "512GB", "1TB"]
+  const storageOptions = ["64GB", "128GB", "256GB", "512GB", "1TB"]
   const [formData, setFormData] = useState({
     ten_san_pham: "",
     loai_phu_kien: "",
@@ -104,6 +107,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     trang_thai: "Còn hàng",
     gia_nhap: "",
     gia_ban: "",
+    giam_gia: "",
     ngay_nhap: new Date().toISOString().slice(0, 10),
     ghi_chu: "",
   })
@@ -123,6 +127,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     trang_thai: "Còn hàng",
     gia_nhap: "",
     gia_ban: "",
+    giam_gia: "",
     ngay_nhap: today,
     ghi_chu: "",
   })
@@ -161,6 +166,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         trang_thai: product.trang_thai || "Còn hàng",
         gia_nhap: (typeof product.gia_nhap === "number" && !isNaN(product.gia_nhap)) ? product.gia_nhap.toString() : "",
         gia_ban: (typeof product.gia_ban === "number" && !isNaN(product.gia_ban)) ? product.gia_ban.toString() : "",
+        giam_gia: (typeof product.giam_gia === "number" && !isNaN(product.giam_gia)) ? product.giam_gia.toString() : "",
         ngay_nhap: product.ngay_nhap ? (() => {
           const d = new Date(product.ngay_nhap)
           return isNaN(d.getTime()) ? new Date().toISOString().slice(0, 10) : d.toISOString().slice(0, 10)
@@ -181,6 +187,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         trang_thai: "Còn hàng",
         gia_nhap: "",
         gia_ban: "",
+        giam_gia: "",
         ngay_nhap: new Date().toISOString().slice(0, 10),
         ghi_chu: "",
       })
@@ -241,6 +248,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
           ...formData,
           gia_nhap: Number(formData.gia_nhap),
           gia_ban: Number(formData.gia_ban),
+          giam_gia: Number(formData.giam_gia || 0),
           ngay_nhap: formData.ngay_nhap,
           trang_thai: formData.trang_thai, // Lưu trạng thái tiếng Việt
         }),
@@ -314,6 +322,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         tinh_trang: r.tinh_trang,
         gia_nhap: Number(r.gia_nhap),
         gia_ban: Number(r.gia_ban),
+        giam_gia: Number(r.giam_gia || 0),
         ngay_nhap: r.ngay_nhap,
         ghi_chu: r.ghi_chu,
         trang_thai: "Còn hàng",
@@ -346,7 +355,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         await uploadProof(bulkProofFiles, `Nhập hàng (bulk): ${added} máy`)
       }
     } catch (error) {
-      toast({ title: "Lỗi", description: `Không thể lưu: ${error instanceof Error ? error.message : ""}` , variant: "destructive" })
+      toast({ title: "Lỗi", description: `Không thể lưu: ${error instanceof Error ? error.message : ""}`, variant: "destructive" })
     } finally {
       setIsLoading(false)
       setBulkProofFiles([])
@@ -431,7 +440,8 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                     </th>
                     <th className="px-3 py-2 text-left min-w-[150px]">Tình trạng*</th>
                     <th className="px-3 py-2 text-left min-w-[130px]">Giá nhập*</th>
-                    <th className="px-3 py-2 text-left min-w-[130px]">Giá bán*</th>
+                    <th className="px-3 py-2 text-left min-w-[130px]">Giá gốc*</th>
+                    <th className="px-3 py-2 text-left min-w-[130px]">Giảm giá</th>
                     <th className="px-3 py-2 text-left min-w-[140px]">Ngày nhập*</th>
                     <th className="px-3 py-2 text-left min-w-[160px]">Ghi chú</th>
                     <th className="px-2 py-2 w-12"></th>
@@ -521,7 +531,15 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                           <Input
                             value={row.gia_ban ? Number(row.gia_ban).toLocaleString("vi-VN") : ""}
                             onChange={(e) => setField("gia_ban", e.target.value.replace(/[^0-9]/g, ""))}
-                            placeholder="Giá bán"
+                            placeholder="Giá gốc"
+                            className="text-right h-10 text-sm"
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <Input
+                            value={row.giam_gia ? Number(row.giam_gia).toLocaleString("vi-VN") : ""}
+                            onChange={(e) => setField("giam_gia", e.target.value.replace(/[^0-9]/g, ""))}
+                            placeholder="Giảm giá"
                             className="text-right h-10 text-sm"
                           />
                         </td>
@@ -578,8 +596,8 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                   </SelectTrigger>
                   <SelectContent className="bg-gray-50">
                     {ensureOption([
-                      "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17 Plus", "iPhone 17",
-                      "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16",
+                      "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17", "iPhone 17 Air", "iPhone 17 E",
+                      "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16", "iPhone 16 E",
                       "iPhone 15 Pro Max", "iPhone 15 Pro", "iPhone 15 Plus", "iPhone 15",
                       "iPhone 14 Pro Max", "iPhone 14 Pro", "iPhone 14 Plus", "iPhone 14",
                       "iPhone 13 Pro Max", "iPhone 13 Pro", "iPhone 13 Mini", "iPhone 13",
@@ -632,6 +650,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                     <SelectValue placeholder="Chọn dung lượng" />
                   </SelectTrigger>
                   <SelectContent className="bg-gray-50">
+                    <SelectItem value="64GB">64GB</SelectItem>
                     <SelectItem value="128GB">128GB</SelectItem>
                     <SelectItem value="256GB">256GB</SelectItem>
                     <SelectItem value="512GB">512GB</SelectItem>
@@ -696,8 +715,8 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
               </div>
             </div>
 
-            {/* Row 4: Giá nhập & Giá bán (VNĐ trong ô) */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Row 4: Giá nhập, Giá bán & Giảm giá (VNĐ trong ô) */}
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="gia_nhap">Giá nhập (VNĐ) <span className="text-red-500">*</span></Label>
                 <div className="relative">
@@ -709,15 +728,15 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                       const raw = e.target.value.replace(/[^0-9]/g, "")
                       setFormData({ ...formData, gia_nhap: raw })
                     }}
-                    placeholder="Nhập giá nhập"
+                    placeholder="Giá nhập"
                     required
-                    className="pr-14"
+                    className="pr-12"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">VNĐ</span>
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-mono">COST</span>
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="gia_ban">Giá bán (VNĐ) <span className="text-red-500">*</span></Label>
+                <Label htmlFor="gia_ban">Giá gốc (VNĐ) <span className="text-red-500">*</span></Label>
                 <div className="relative">
                   <Input
                     id="gia_ban"
@@ -727,11 +746,28 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                       const raw = e.target.value.replace(/[^0-9]/g, "")
                       setFormData({ ...formData, gia_ban: raw })
                     }}
-                    placeholder="Nhập giá bán"
+                    placeholder="Giá gốc"
                     required
-                    className="pr-14"
+                    className="pr-12"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">VNĐ</span>
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-mono">LIST</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="giam_gia">Giảm giá (VNĐ)</Label>
+                <div className="relative">
+                  <Input
+                    id="giam_gia"
+                    type="text"
+                    value={formData.giam_gia ? Number(formData.giam_gia).toLocaleString("vi-VN") : ""}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, "")
+                      setFormData({ ...formData, giam_gia: raw })
+                    }}
+                    placeholder="Số tiền giảm"
+                    className="pr-12"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-mono">OFF</span>
                 </div>
               </div>
             </div>

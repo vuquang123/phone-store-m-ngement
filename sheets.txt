@@ -1,0 +1,18 @@
+Kho_Hang
+Số lượng máy kho hàng
+Kho_Hang(18/3/2026)
+Khach_Hang
+Ban_Hang
+CNC
+USERS
+Hang_Doi_Tac
+Thong_Ke
+HOP_DONG_BAO_HANH
+Bao_Hanh
+GOI_BAO_HANH
+Dat_Coc
+Phu_Kien
+Trang tính13
+Hoan_Tra
+Thong_Bao
+Lich_Su_Trang_Thai_May

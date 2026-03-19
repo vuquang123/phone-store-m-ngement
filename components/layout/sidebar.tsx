@@ -22,6 +22,8 @@ import {
   RotateCcw,
   BookOpen,
 } from "lucide-react"
+import { useAuthMe } from "@/hooks/use-auth-me"
+import { useToast } from "@/hooks/use-toast"
 
 type Role = "quan_ly" | "nhan_vien"
 
@@ -55,20 +57,6 @@ const getNavigation = () => [
     ],
   },
 ]
-
-/** Lấy headers xác thực từ localStorage (phù hợp sheets-auth) */
-function getAuthHeaders(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem("auth_user")
-    const data = raw ? JSON.parse(raw) : {}
-    if (typeof data?.email === "string") {
-      return { "x-user-email": data.email }
-    }
-    return {}
-  } catch {
-    return {}
-  }
-}
 
 // Cache thông tin /api/auth/me để tránh gọi lại mỗi lần mở Drawer
 const ME_CACHE_KEY = "auth_me_cache_v1"
@@ -106,61 +94,34 @@ export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
 
+  const { me, isLoading, error } = useAuthMe()
+  const { toast } = useToast()
+
   const [role, setRole] = useState<Role>("nhan_vien")
   const [userName, setUserName] = useState<string>("")
   const [roleLoading, setRoleLoading] = useState(true)
-  const [navLoading, setNavLoading] = useState(false)
   const [storeName, setStoreName] = useState("iPhone Lock Store")
   const [logoUrl, setLogoUrl] = useState<string>("")
 
-  // lấy role từ API /api/auth/me
+  // đồng bộ thông tin tài khoản
   useEffect(() => {
-    let mounted = true
-    // 1) Dùng cache nếu còn hạn để hiển thị ngay
-    const cached = readMeCache()
-    if (cached && mounted) {
-      setRole(cached.role)
-      if (cached.name) setUserName(cached.name)
-      setRoleLoading(false)
-      // 2) Làm mới cache nền (không chặn UI) nếu gần hết hạn
-      ;(async () => {
-        try {
-          const res = await fetch("/api/auth/me", { headers: getAuthHeaders(), cache: "no-store" })
-          if (!res.ok) return
-          const me = await res.json()
-          if (!mounted) return
-          // Cập nhật cache nếu role hoặc name thay đổi
-          writeMeCache({ role: (me?.role as Role) || "nhan_vien", name: typeof me?.name === "string" ? me.name : undefined })
-          // Không cần set state lần nữa để tránh nháy UI; chỉ cập nhật nếu khác biệt lớn
-        } catch {
-          // ignore trong nền
-        }
-      })()
-    } else {
-      // 3) Không có cache: gọi API rồi lưu cache
-      ;(async () => {
-        try {
-          const res = await fetch("/api/auth/me", { headers: getAuthHeaders(), cache: "no-store" })
-          if (!res.ok) {
-            router.replace("/auth/login")
-            return
-          }
-          const me = await res.json()
-          if (mounted) {
-            const nextRole = (me?.role as Role) || "nhan_vien"
-            const nextName = typeof me?.name === "string" && me.name.trim() ? me.name.trim() : undefined
-            setRole(nextRole)
-            if (nextName) setUserName(nextName)
-            writeMeCache({ role: nextRole, name: nextName })
-          }
-        } catch {
-          router.replace("/auth/login")
-        } finally {
-          if (mounted) setRoleLoading(false)
-        }
-      })()
+    if (isLoading) return
+    if (!me || error) {
+      toast({ title: "Phiên đăng nhập đã hết hạn", description: "Vui lòng đăng nhập lại" })
+      router.replace("/auth/login")
+      return
     }
 
+    const nextRole = (me.role as Role) || readMeCache()?.role || "nhan_vien"
+    const nextName = me.name?.trim() || readMeCache()?.name || ""
+    setRole(nextRole)
+    setUserName(nextName)
+    writeMeCache({ role: nextRole, name: nextName })
+    setRoleLoading(false)
+  }, [isLoading, me, error, toast, router])
+
+  // load store settings & logo
+  useEffect(() => {
     const loadStore = () => {
       try {
         const saved = localStorage.getItem("store_settings")
@@ -182,7 +143,6 @@ export function Sidebar({ className }: SidebarProps) {
       }
     }
 
-    // load lần đầu
     loadStore()
 
     const onStorage = (e: StorageEvent) => {
@@ -193,11 +153,10 @@ export function Sidebar({ className }: SidebarProps) {
     window.addEventListener("store_settings_changed", onCustom as EventListener)
 
     return () => {
-      mounted = false
       window.removeEventListener("storage", onStorage)
       window.removeEventListener("store_settings_changed", onCustom as EventListener)
     }
-  }, [router])
+  }, [])
 
   const navigation = useMemo(() => {
     const base = getNavigation()
@@ -260,17 +219,13 @@ export function Sidebar({ className }: SidebarProps) {
                         asChild
                         onClick={() => {
                           if (pathname !== item.href) {
-                            setNavLoading(true)
-                            setTimeout(() => setNavLoading(false), 120)
+                            router.push(item.href)
                           }
                         }}
                       >
                         <Link href={item.href}>
                           <item.icon className="h-5 w-5" />
                           {item.title}
-                          {navLoading && pathname !== item.href && (
-                            <div className="ml-auto animate-spin rounded-full h-3 w-3 border-b border-current" />
-                          )}
                         </Link>
                       </Button>
                     ))}

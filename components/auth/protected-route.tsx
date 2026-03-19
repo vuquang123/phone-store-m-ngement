@@ -4,6 +4,8 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
+import { useAuthMe } from "@/hooks/use-auth-me"
+import { useToast } from "@/hooks/use-toast"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -26,53 +28,33 @@ export function getAuthHeaders(): Record<string, string> {
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const [isLoading, setIsLoading] = useState(true)
   const [isAuthorized, setIsAuthorized] = useState(false)
   const router = useRouter()
+  const { toast } = useToast()
+  const { me, isLoading, error } = useAuthMe()
 
   useEffect(() => {
-    let mounted = true
-
-    const checkAuth = async () => {
-      try {
-        // gọi API xác thực
-        const res = await fetch("/api/auth/me", {
-          headers: getAuthHeaders(),
-          cache: "no-store",
-        })
-
-        if (!res.ok) {
-          router.replace("/auth/login")
-          return
-        }
-
-        const me = await res.json() // { id, email, role, status, ... }
-
-        // chặn user bị disable
-        if (me?.status && String(me.status).toLowerCase() !== "hoat_dong") {
-          router.replace("/auth/login")
-          return
-        }
-
-        // kiểm tra role nếu yêu cầu
-        if (requiredRole && me?.role !== requiredRole) {
-          router.replace("/dashboard")
-          return
-        }
-
-        if (mounted) setIsAuthorized(true)
-      } catch (e) {
-        router.replace("/auth/login")
-      } finally {
-        if (mounted) setIsLoading(false)
-      }
+    if (isLoading) return
+    if (!me || error) {
+      toast({ title: "Phiên đăng nhập đã hết hạn", description: "Vui lòng đăng nhập lại" })
+      router.replace("/auth/login")
+      return
     }
 
-    checkAuth()
-    return () => {
-      mounted = false
+    if (me?.status && String(me.status).toLowerCase() !== "hoat_dong") {
+      toast({ title: "Tài khoản bị khóa", description: "Liên hệ quản lý để mở khóa" })
+      router.replace("/auth/login")
+      return
     }
-  }, [router, requiredRole])
+
+    if (requiredRole && me?.role !== requiredRole) {
+      toast({ title: "Không đủ quyền", description: "Bạn không thể truy cập trang này" })
+      router.replace("/dashboard")
+      return
+    }
+
+    setIsAuthorized(true)
+  }, [isLoading, me, error, toast, router, requiredRole])
 
   if (isLoading) {
     return (

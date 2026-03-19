@@ -131,6 +131,10 @@ function getValForHeader(
     const v = body.gia_ban ?? bodyNormMap["giaban"]
     return v !== undefined && v !== null && String(v) !== "" ? toNumber(v) : ""
   }
+  if (k === "Giảm Giá") {
+    const v = body.giam_gia ?? bodyNormMap["giamgia"]
+    return v !== undefined && v !== null && String(v) !== "" ? toNumber(v) : ""
+  }
   if (k === "Ghi Chú") {
     return body.ghi_chu || bodyNormMap["ghichu"] || ""
   }
@@ -157,9 +161,11 @@ function idxKho(header: string[]) {
     tinhTrang: colIndex(header, "Tình Trạng Máy"),
     giaNhap: colIndex(header, "Giá Nhập"),
     giaBan: colIndex(header, "Giá Bán"),
+    giamGia: colIndex(header, "Giảm Giá", "Giam gia", "Giam Gia"),
     ghiChu: colIndex(header, "Ghi Chú"),
     trangThai: colIndex(header, "Trạng Thái"),
     trangThaiKho: colIndex(header, "Trạng Thái Kho", "Trạng thái kho", "Tình Trạng Tồn", "Kho Hiển Thị"),
+    nguon: colIndex(header, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang"),
   }
 }
 
@@ -180,8 +186,10 @@ export async function GET(request: NextRequest) {
       tinh_trang: row[idx.tinhTrang],
       gia_nhap: toNumber(row[idx.giaNhap]),
       gia_ban: toNumber(row[idx.giaBan]),
+      giam_gia: idx.giamGia !== -1 ? toNumber(row[idx.giamGia]) : 0,
       trang_thai: row[idx.trangThai],
       trang_thai_kho: idx.trangThaiKho !== -1 ? row[idx.trangThaiKho] : (row[idx.trangThai] === "Còn hàng" ? "Có sẵn" : ""),
+      nguon: (idx.nguon !== -1 && row[idx.nguon]) ? row[idx.nguon] : (idx.trangThaiKho !== -1 ? row[idx.trangThaiKho] : ""),
       ghi_chu: row[idx.ghiChu],
       ngay_nhap: row[idx.ngayNhap],
     }))

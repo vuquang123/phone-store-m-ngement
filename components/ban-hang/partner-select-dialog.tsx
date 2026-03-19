@@ -80,14 +80,14 @@ export function PartnerSelectDialog({ open, onOpenChange, onSelect }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Chọn máy đối tác</DialogTitle>
+          <DialogTitle>Chọn máy kho ngoài</DialogTitle>
           <DialogDescription>
-            Danh sách máy từ sheet hàng đối tác. Chọn để thêm vào giỏ hàng, giá nhập sẽ lấy từ Giá Chuyển.
+            Danh sách máy từ sheet hàng kho ngoài. Chọn để thêm vào giỏ hàng, giá nhập sẽ lấy từ Giá Chuyển.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <Input
-            placeholder="Tìm theo model, dung lượng, màu, IMEI, tên đối tác..."
+            placeholder="Tìm theo model, dung lượng, màu, IMEI, tên kho ngoài..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className="bg-white"
@@ -105,7 +105,7 @@ export function PartnerSelectDialog({ open, onOpenChange, onSelect }: Props) {
                     <th className="text-left px-3 py-2">IMEI</th>
                     <th className="text-left px-3 py-2">Giá chuyển</th>
                     <th className="text-left px-3 py-2">Gợi ý bán</th>
-                    <th className="text-left px-3 py-2">Đối tác</th>
+                    <th className="text-left px-3 py-2">Kho ngoài</th>
                     <th className="text-right px-3 py-2">Thao tác</th>
                   </tr>
                 </thead>
