@@ -30,6 +30,7 @@ export function getTrangThaiColor(status: string) {
     case "Còn hàng": return "bg-green-100 text-green-700"
     case "Đang CNC": return "bg-yellow-100 text-yellow-700"
     case "Bảo hành": return "bg-red-100 text-red-700"
+    case "Giao đối tác": return "bg-purple-100 text-purple-700"
     default: return "bg-gray-100 text-gray-700"
   }
 }

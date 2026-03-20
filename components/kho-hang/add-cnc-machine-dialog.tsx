@@ -9,11 +9,13 @@ declare global {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { isOpen: boolean, onClose: () => void, onSuccess: () => void }) {
+  const { me } = useAuthMe()
   const [form, setForm] = useState({
     ten_san_pham: "",
     imei: "",
@@ -27,8 +29,14 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
     ngay_nhan_lai: "",
     khach_hang: "",
     so_dien_thoai: "",
-    employeeId: "NV001"
+    employeeId: ""
   })
+
+  useEffect(() => {
+    if (me?.employeeId) {
+      setForm(f => ({ ...f, employeeId: me.employeeId || "" }))
+    }
+  }, [me])
 
   // Thêm state cho địa chỉ CNC
   const [isAddingCNCAddress, setIsAddingCNCAddress] = useState(false)
@@ -40,6 +48,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
       window.cncAddresses = window.cncAddresses || [];
       const defaultAddress = 'Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)';
       const qhStoreAddress = 'QH store (5 đường Năm Châu, phường 11, Tân Bình)';
+      const exShopAddress = 'EX shop (95 Thành Mỹ, Phường 8, Tân Bình)';
       if (!window.cncAddresses.some(a => a.value === defaultAddress)) {
         window.cncAddresses.unshift({ label: defaultAddress, value: defaultAddress });
       }

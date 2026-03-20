@@ -2,7 +2,7 @@
 // app/api/ban-hang/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
-import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
@@ -24,28 +24,7 @@ function toColumnLetter(colNum: number) {
   }
   return letter
 }
-const norm = (s: string) =>
-  (s || "")
-    .normalize("NFD")
-    // @ts-ignore
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/\s+/g, "_")
-    .toLowerCase()
 
-function colIndex(header: string[], ...names: string[]) {
-  const h = header.map((x) => x.trim())
-  for (const n of names) {
-    const i = h.findIndex((x) => x === n)
-    if (i !== -1) return i
-  }
-  // fallback nhẹ bằng normalize (phòng sai khác dấu)
-  const hh = header.map((x) => norm(x))
-  for (const n of names) {
-    const i = hh.findIndex((x) => x === norm(n))
-    if (i !== -1) return i
-  }
-  return -1
-}
 function normalizePhone(p: string) {
   const digits = (p || "").replace(/\D/g, "")
   if (digits.startsWith("84")) return "0" + digits.slice(2)
@@ -80,8 +59,9 @@ async function tryRemovePartnerRowByIMEI(imei: string) {
   for (const name of PARTNER_SHEET_CANDIDATES) {
     try {
       const { header, rows } = await readFromGoogleSheets(name, undefined, { silent: true })
-      const idxIMEI = header.indexOf("IMEI")
-      const idxTrangThai = header.indexOf("Trạng Thái")
+      const idxIMEI = colIndex(header, "IMEI")
+      const idxTrangThai = colIndex(header, "Trạng Thái")
+
       if (idxIMEI === -1) continue
       const foundIndex = rows.findIndex((r) => String(r[idxIMEI] || "").trim() === imei)
       if (foundIndex !== -1) {
@@ -665,7 +645,7 @@ export async function POST(request: NextRequest) {
     if (internalIdsToRemove.length > 0) {
       try {
         const { header, rows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
-        const idxIdMay = header.indexOf("ID Máy")
+        const idxIdMay = colIndex(header, "ID Máy")
         if (idxIdMay !== -1) {
           const originalLength = rows.length
           const newRows = rows.filter((r) => !internalIdsToRemove.includes(String(r[idxIdMay])))

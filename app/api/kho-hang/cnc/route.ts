@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
-import { readFromGoogleSheets } from "@/lib/google-sheets"
+import { readFromGoogleSheets, colIndex } from "@/lib/google-sheets"
+
+
 
 export const dynamic = "force-dynamic"
 
@@ -10,20 +12,21 @@ export async function GET() {
     const { header, rows } = await readFromGoogleSheets(SHEET)
     // Map dữ liệu đúng thứ tự cột sheet CNC
     const idx = {
-      id: header.indexOf("ID Máy"),
-      ten_san_pham: header.indexOf("Tên Sản Phẩm"),
-      imei: header.indexOf("Imei") !== -1 ? header.indexOf("Imei") : header.indexOf("IMEI"),
-      mau_sac: header.indexOf("Màu Sắc"),
-      nguon: header.indexOf("Nguồn"),
-      tinh_trang: header.indexOf("Tình trạng"),
-      loai_may: header.indexOf("Loại Máy"),
-      trang_thai: header.indexOf("Trạng Thái"),
-      dia_chi_cnc: header.indexOf("Địa chỉ CNC"),
-      ngay_gui: header.indexOf("Ngày gửi"),
-      ngay_nhan_lai: header.indexOf("Ngày nhận lại"),
-      ten_khach_hang: header.indexOf("Tên khách hàng"),
-      so_dien_thoai: header.indexOf("Số điện thoại"),
+      id: colIndex(header, "ID Máy"),
+      ten_san_pham: colIndex(header, "Tên Sản Phẩm"),
+      imei: colIndex(header, "IMEI", "imei", "Imei"),
+      mau_sac: colIndex(header, "Màu Sắc"),
+      nguon: colIndex(header, "Nguồn"),
+      tinh_trang: colIndex(header, "Tình trạng"),
+      loai_may: colIndex(header, "Loại Máy"),
+      trang_thai: colIndex(header, "Trạng Thái"),
+      dia_chi_cnc: colIndex(header, "Địa chỉ CNC"),
+      ngay_gui: colIndex(header, "Ngày gửi"),
+      ngay_nhan_lai: colIndex(header, "Ngày nhận lại"),
+      ten_khach_hang: colIndex(header, "Tên khách hàng"),
+      so_dien_thoai: colIndex(header, "Số điện thoại"),
     }
+
     const data = rows.map(row => ({
       id: row[idx.id],
       ten_san_pham: row[idx.ten_san_pham],

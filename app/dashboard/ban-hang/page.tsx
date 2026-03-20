@@ -163,7 +163,9 @@ export default function BanHangPage() {
   const [isCustomerSelectOpen, setIsCustomerSelectOpen] = useState(false)
   const [orders, setOrders] = useState<any[]>([])
   const [currentDepositOrderId, setCurrentDepositOrderId] = useState<string | null>(null)
+  const [depositAmountAlreadyPaid, setDepositAmountAlreadyPaid] = useState(0)
   const [customerSearch, setCustomerSearch] = useState("")
+
   const [customerResults, setCustomerResults] = useState<any[]>([])
   // Máy kho ngoài cache để lọc nhanh trong tìm kiếm
   const [partnerProducts, setPartnerProducts] = useState<any[]>([])
@@ -668,8 +670,9 @@ export default function BanHangPage() {
 
   const giamGiaToUse = computedGiamGia > 0 ? computedGiamGia : giamGia;
   
-  const finalThanhToan = Math.max(tongTien + warrantyTotal - giamGiaToUse, 0)
+  const finalThanhToan = Math.max(tongTien + warrantyTotal - giamGiaToUse - (currentDepositOrderId ? depositAmountAlreadyPaid : 0), 0)
   const expectedCollect = loaiThanhToan === 'Đặt cọc' ? Math.max(Number(soTienCoc)||0, 0) : finalThanhToan
+
   
   // Handlers cho input Giảm giá
   const handleDiscountPreset = (preset: string) => {
@@ -1202,6 +1205,8 @@ export default function BanHangPage() {
             }
           } catch {}
           setCurrentDepositOrderId(null)
+          setDepositAmountAlreadyPaid(0)
+
           toast({ title: 'Tạo đơn thành công', description: `Mã: ${order.id_don_hang || order.ma_don_hang || ''}` })
           try { localStorage.removeItem('cart_draft_v1'); localStorage.removeItem('cart_warranty_sel_v1') } catch{}
           setReloadFlag(f => f + 1);
@@ -1245,6 +1250,12 @@ export default function BanHangPage() {
         toast({ title: 'Không tìm thấy mã máy để hủy đặt cọc', variant: 'destructive' as any })
         return
       }
+      const restoredProducts = allRows.map((o: any) => ({
+        ...o,
+        trang_thai: "Còn hàng",
+        trang_thai_kho: "Kho Ngoài",
+        tinh_trang: o["Tình Trạng Máy"] || o["tinh_trang_may"] || o["Trạng Thái Máy"] || ""
+      }));
       await fetch("/api/update-product-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1253,7 +1264,7 @@ export default function BanHangPage() {
       await fetch("/api/kho-hang", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ products: allRows })
+        body: JSON.stringify({ products: restoredProducts })
       });
       await fetch("/api/dat-coc", {
         method: "PATCH",
@@ -1534,6 +1545,13 @@ export default function BanHangPage() {
                             <span>Giảm giá:</span>
                             <span>-₫{giamGiaToUse.toLocaleString()}</span>
                           </div>
+                          {currentDepositOrderId && depositAmountAlreadyPaid > 0 && (
+                            <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                              <span>Sẵn có (Tiền cọc):</span>
+                              <span>-₫{depositAmountAlreadyPaid.toLocaleString()}</span>
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between font-bold text-lg mt-2">
                             <span>Thanh toán:</span>
                             <span>₫{finalThanhToan.toLocaleString()}</span>
@@ -1743,12 +1761,23 @@ export default function BanHangPage() {
                                           ho_ten: tenKhach,
                                           so_dien_thoai: sdtKhach
                                         });
-                                        setCurrentDepositOrderId(maDon || null);
+                                         // Tính tổng tiền đã cọc từ tất cả các dòng của đơn này
+                                         const totalPaid = allRows.reduce((sum, o: any) => {
+                                           let val = o["Số Tiền Cọc"] || o["so_tien_coc"] || 0;
+                                           if (typeof val === 'string') val = Number(String(val).replace(/[^\d]/g, '')) || 0;
+                                           return sum + (Number(val) || 0);
+                                         }, 0);
+
+                                         setCurrentDepositOrderId(maDon || null);
+                                         setDepositAmountAlreadyPaid(totalPaid || 0);
+                                         setLoaiThanhToan("Thanh toán đủ");
+                                         toast({ title: 'Đã tải đơn đặt cọc', description: `Đã cọc: ₫${(totalPaid || 0).toLocaleString('vi-VN')}. Vui lòng thanh toán số còn lại.` });
+
                                         setActiveTab("ban-hang");
                                      }}>Thanh toán tiếp</Button>
                                      <Button size="sm" variant="destructive" className="bg-red-500 hover:bg-red-600 whitespace-nowrap h-8 px-3" onClick={async () => {
                                         if (!confirm(`Bạn có chắc muốn hủy đơn đặt cọc ${maDon}?`)) return;
-                                        // TODO: implement logic to cancel deposit
+                                        handleCancelDeposit(maDon);
                                      }}>Hủy đặt cọc</Button>
                                    </div>
                                  </TableCell>

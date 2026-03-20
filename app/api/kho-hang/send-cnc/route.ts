@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { moveProductsToCNC, logProductHistory } from "@/lib/google-sheets"
+import { moveProductsToCNC, logProductHistory, colIndex } from "@/lib/google-sheets"
+
 import { addNotification } from "@/lib/notifications"
 import { sendStockEventNotification } from "@/lib/telegram"
 
@@ -14,12 +15,13 @@ export async function POST(req: Request) {
     }
     // Lấy trạng thái cũ từ sheet Kho_Hang
     const { header, rows } = await import("@/lib/google-sheets").then(m => m.readFromGoogleSheets("Kho_Hang"))
-    const idxId = header.indexOf("ID Máy")
-    const idxTen = header.indexOf("Tên Sản Phẩm")
-    const idxSerial = header.indexOf("Serial")
-    const idxTrangThai = header.indexOf("Trạng Thái")
+    const idxId = colIndex(header, "ID Máy")
+    const idxTen = colIndex(header, "Tên Sản Phẩm")
+    const idxSerial = colIndex(header, "Serial")
+    const idxTrangThai = colIndex(header, "Trạng Thái")
     // Chuẩn hóa danh sách ID Máy cần chuyển: nhận cả IMEI, 5 số cuối IMEI hoặc ID Máy
-    const idxIMEI = header.indexOf("IMEI")
+    const idxIMEI = colIndex(header, "IMEI")
+
     const idsToMove = rows
       .filter(r => {
         const idMay = r[idxId] || ""

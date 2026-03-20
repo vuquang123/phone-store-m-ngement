@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
-import { updateBaoHanhStatus, readFromGoogleSheets } from "@/lib/google-sheets"
+import { updateBaoHanhStatus, readFromGoogleSheets, colIndex } from "@/lib/google-sheets"
+
+
 import { addNotification } from "@/lib/notifications"
 import { sendStockEventNotification } from "@/lib/telegram"
 
@@ -12,10 +14,11 @@ export async function POST(req: Request) {
     let devices: { name?: string; imei?: string; serial?: string }[] = []
     try {
       const { header, rows } = await readFromGoogleSheets("Bao_Hanh")
-      const idxId = header.indexOf("ID Máy")
-      const idxTen = header.indexOf("Tên Sản Phẩm")
-      const idxIMEI = header.indexOf("IMEI")
-      const idxSerial = header.indexOf("Serial")
+      const idxId = colIndex(header, "ID Máy")
+      const idxTen = colIndex(header, "Tên Sản Phẩm")
+      const idxIMEI = colIndex(header, "IMEI")
+      const idxSerial = colIndex(header, "Serial")
+
       devices = rows
         .filter(r => {
           const idVal = idxId !== -1 ? r[idxId] : ""

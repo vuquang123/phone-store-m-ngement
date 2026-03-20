@@ -1,6 +1,31 @@
 import { DateTime } from "luxon"
 import { google } from "googleapis"
 
+/* =================== Utils  =================== */
+export const norm = (s: string) =>
+  (s || "")
+    .normalize("NFD")
+    // @ts-ignore
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, "_")
+    .toLowerCase()
+
+export function colIndex(header: string[], ...names: string[]) {
+  const h = header.map((x) => x.trim())
+  for (const n of names) {
+    const i = h.findIndex((x) => x === n)
+    if (i !== -1) return i
+  }
+  // fallback nhẹ bằng normalize (phòng sai khác dấu)
+  const hh = header.map((x) => norm(x))
+  for (const n of names) {
+    const i = hh.findIndex((x) => x === norm(n))
+    if (i !== -1) return i
+  }
+  return -1
+}
+
+
 // Cập nhật trạng thái bảo hành cho nhiều sản phẩm trong sheet Bao_Hanh
 export async function updateBaoHanhStatus(imeis: string[], employeeId: string) {
   const { header, rows } = await readFromGoogleSheets("Bao_Hanh")
@@ -169,7 +194,7 @@ function invalidateSheetCache(sheetName: string) {
 
 // Đọc dữ liệu, trả về { header, rows }
 // Mặc định đọc rộng tới cột ZZ để tránh thiếu cột (sheet này vượt quá Z)
-export async function readFromGoogleSheets(sheetName: string, range: string = "A:ZZ", options?: { silent?: boolean }) {
+export async function readFromGoogleSheets(sheetName: string, range: string = "A1:ZZ10000", options?: { silent?: boolean }): Promise<SheetData> {
   const cacheKey = `${sheetName}::${range}`
   const cacheEntry = SHEETS_CACHE.get(cacheKey)
   const now = Date.now()
@@ -275,26 +300,52 @@ export async function readFromGoogleSheets(sheetName: string, range: string = "A
 // Ghi đè toàn bộ dữ liệu (bỏ qua header)
 export async function syncToGoogleSheets(sheetName: string, data: any[], range: string = "A2") {
   try {
-    // Xóa dữ liệu cũ
+    // Kiểm tra an toàn: Nếu data rỗng nhưng sheet gốc có dữ liệu thì cảnh báo/ngăn chặn (tùy logic)
+    // Ở đây ta cho phép rỗng nếu thực sự muốn xóa hết, nhưng nên log kỹ
+    if (!data || !Array.isArray(data)) {
+        return { success: false, error: "Dữ liệu đồng bộ không hợp lệ (không phải mảng)" }
+    }
+
+    // Xác định chiều rộng tối đa của dữ liệu để xóa dải cột tương ứng
+    let maxCols = 26; // Mặc định Z
+    if (data.length > 0) {
+        maxCols = Math.max(...data.map(r => r.length), 26);
+    }
+    const endCol = numberToColumnName(maxCols);
+
+    // Xóa dữ liệu cũ trong dải cột tương ứng
     await sheets.spreadsheets.values.clear({
       spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
-      range: `${escapeSheetName(sheetName)}!A2:Z`,
+      range: `${escapeSheetName(sheetName)}!A2:${endCol}`,
     })
     // Thêm dữ liệu mới
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
-      range: `${escapeSheetName(sheetName)}!${range}`,
-      valueInputOption: "RAW",
-      requestBody: {
-        values: data,
-      },
-    })
+    if (data.length > 0) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+          range: `${escapeSheetName(sheetName)}!${range}`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: data,
+          },
+        })
+    }
     invalidateSheetCache(sheetName)
     return { success: true }
   } catch (error: any) {
     console.error("Lỗi đồng bộ Google Sheets:", error)
     return { success: false, error: error.message || "Lỗi đồng bộ Google Sheets" }
   }
+}
+
+// Helper chuyển số thành tên cột (1 -> A, 27 -> AA)
+function numberToColumnName(num: number): string {
+    let name = "";
+    while (num > 0) {
+        let mod = (num - 1) % 26;
+        name = String.fromCharCode(65 + mod) + name;
+        num = Math.floor((num - mod) / 26);
+    }
+    return name || "Z";
 }
 
 // Thêm dòng mới vào sheet
@@ -320,10 +371,28 @@ export async function appendToGoogleSheets(sheetName: string, data: any[]) {
 export async function updateRowInGoogleSheets(sheetName: string, key: string, keyValue: string, newData: any[]) {
   try {
     const { header, rows } = await readFromGoogleSheets(sheetName)
-    const keyIndex = header.indexOf(key)
-    if (keyIndex === -1) return { success: false, error: "Không tìm thấy cột khóa" }
-    // newData là mảng các dòng đã cập nhật, thay thế toàn bộ rows
-    await syncToGoogleSheets(sheetName, newData)
+    const keyIndex = colIndex(header, key)
+    if (keyIndex === -1) return { success: false, error: `Không tìm thấy cột khóa "${key}"` }
+
+    // Kiểm tra xem newData là gì. 
+    // Nếu newData[0] là mảng, có nghĩa là người dùng truyền vào toàn bộ bảng.
+    // Nếu newData[0] không phải mảng (string/number), có nghĩa là người dùng truyền vào 1 dòng.
+    
+    let updatedRows: any[][] = [];
+    if (Array.isArray(newData[0])) {
+        // Trường hợp truyền vào toàn bộ bảng
+        updatedRows = newData;
+    } else {
+        // Trường hợp truyền vào 1 dòng duy nhất (newRow)
+        const rowIndex = rows.findIndex(row => String(row[keyIndex]) === String(keyValue));
+        if (rowIndex === -1) {
+            return { success: false, error: `Không tìm thấy dòng có ${key} = ${keyValue}` };
+        }
+        updatedRows = [...rows];
+        updatedRows[rowIndex] = newData;
+    }
+
+    await syncToGoogleSheets(sheetName, updatedRows)
     return { success: true }
   } catch (error: any) {
     console.error("Lỗi cập nhật dòng Google Sheets:", error)
@@ -350,16 +419,17 @@ export async function updateRangeValues(range: string, values: any[][]) {
 // Cập nhật trạng thái cho nhiều sản phẩm trong sheet Kho_Hang
 export async function updateProductsStatus(productIds: string[], newStatus: string) {
   const { header, rows } = await readFromGoogleSheets("Kho_Hang")
-  const idxId = header.indexOf("ID Máy")
-  const idxIMEI = header.indexOf("IMEI")
-  const idxSerial = header.indexOf("Serial")
-  const idxTrangThai = header.indexOf("Trạng Thái")
+  const idxId = colIndex(header, "ID Máy")
+  const idxIMEI = colIndex(header, "IMEI")
+  const idxSerial = colIndex(header, "Serial")
+  const idxTrangThai = colIndex(header, "Trạng Thái")
   if (idxId === -1 || idxTrangThai === -1) return { success: false, error: "Không tìm thấy cột ID Máy hoặc Trạng Thái" }
   const updatedRows = rows.map(row => {
     // So sánh 5 số cuối IMEI với ID Máy
-    const imei = idxIMEI !== -1 ? (row[idxIMEI] || "") : ""
-    const serial = idxSerial !== -1 ? (row[idxSerial] || "") : ""
-    const idMay = row[idxId] || ""
+    const imei = idxIMEI !== -1 ? String(row[idxIMEI] || "") : ""
+    const serial = idxSerial !== -1 ? String(row[idxSerial] || "") : ""
+    const idMay = String(row[idxId] || "")
+
     const imeiLast5 = imei ? String(imei).slice(-5) : ""
     const serialLast5 = serial ? String(serial).slice(-5) : ""
     if (
@@ -371,15 +441,19 @@ export async function updateProductsStatus(productIds: string[], newStatus: stri
     }
     return row
   })
-  await syncToGoogleSheets("Kho_Hang", updatedRows)
+  const syncResult = await syncToGoogleSheets("Kho_Hang", updatedRows)
+  if (!syncResult.success) {
+    return { success: false, error: "Lỗi đồng bộ kho hàng: " + syncResult.error }
+  }
   return { success: true, count: productIds.length }
 }
 export async function moveProductsToCNC(productIds: string[], cncAddress: string) {
   // Đọc dữ liệu kho hàng
   const { header: khoHeader, rows } = await readFromGoogleSheets("Kho_Hang")
-  const idxId = khoHeader.indexOf("ID Máy")
-  const idxTrangThai = khoHeader.indexOf("Trạng Thái")
+  const idxId = colIndex(khoHeader, "ID Máy")
+  const idxTrangThai = colIndex(khoHeader, "Trạng Thái")
   if (idxId === -1 || idxTrangThai === -1) return { success: false, error: "Không tìm thấy cột ID Máy hoặc Trạng Thái" }
+
   // Tìm các sản phẩm cần chuyển
   const productsToMove = rows.filter(row => productIds.includes(row[idxId]))
   if (productsToMove.length === 0) return { success: false, error: "Không tìm thấy sản phẩm cần chuyển" }
@@ -391,14 +465,18 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
     }
     return row
   })
-  await syncToGoogleSheets("Kho_Hang", updatedRows)
+  const syncResult = await syncToGoogleSheets("Kho_Hang", updatedRows)
+  if (!syncResult.success) {
+    return { success: false, error: "Lỗi đồng bộ kho hàng: " + syncResult.error }
+  }
 
   // Đọc dữ liệu sheet CNC
   const { header: cncHeader, rows: cncRows } = await readFromGoogleSheets("CNC")
-  const idxCncId = cncHeader.indexOf("ID Máy")
-  const idxCncTrangThai = cncHeader.indexOf("Trạng Thái")
-  const idxCncNgayGui = cncHeader.indexOf("Ngày gửi")
-  const idxCncDiaChi = cncHeader.indexOf("Địa chỉ CNC")
+  const idxCncId = colIndex(cncHeader, "ID Máy")
+  const idxCncTrangThai = colIndex(cncHeader, "Trạng Thái")
+  const idxCncNgayGui = colIndex(cncHeader, "Ngày gửi")
+  const idxCncDiaChi = colIndex(cncHeader, "Địa chỉ CNC")
+
 
   // Ghi nhận thời gian theo múi giờ Việt Nam để tránh lệch UTC
   const nowVN = DateTime.now().setZone("Asia/Ho_Chi_Minh").toFormat("HH:mm:ss dd/MM/yyyy")
@@ -431,12 +509,15 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
     // Nếu máy đã tồn tại trong sheet CNC thì cập nhật, nếu chưa thì thêm mới
     const existIdx = newCncRows.findIndex(r => r[idxCncId] === idMay)
     if (existIdx !== -1) {
-      newCncRows[existIdx] = newRow
+    newCncRows[existIdx] = newRow
     } else {
       newCncRows.push(newRow)
     }
   }
-  await syncToGoogleSheets("CNC", newCncRows)
+  const syncCncResult = await syncToGoogleSheets("CNC", newCncRows)
+  if (!syncCncResult.success) {
+    return { success: false, error: "Lỗi đồng bộ sheet CNC: " + syncCncResult.error }
+  }
 
     // Ghi lịch sử trạng thái máy sẽ được gọi từ API, không ghi ở đây nữa
     return { success: true, count: productsToMove.length }
@@ -462,35 +543,40 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
 // Ghi lịch sử trạng thái máy
 export async function logProductHistory(productIds: string[], newStatus: string, employeeId: string, oldStatuses?: string[]) {
   const { header, rows } = await readFromGoogleSheets("Kho_Hang")
-  const idxId = header.indexOf("ID Máy")
-  const idxTenSP = header.indexOf("Tên Sản Phẩm")
+  const idxId = colIndex(header, "ID Máy")
+  const idxTenSP = colIndex(header, "Tên Sản Phẩm")
+
   const now = new Date()
   const nowVN = DateTime.now().setZone('Asia/Ho_Chi_Minh').toFormat('HH:mm:ss dd/MM/yyyy')
   // Đọc thêm sheet CNC để lấy tên sản phẩm nếu không có ở kho
   const { header: cncHeader, rows: cncRows } = await readFromGoogleSheets("CNC")
-  const idxCncId = cncHeader.indexOf("ID Máy")
-  const idxCncTenSP = cncHeader.indexOf("Tên Sản Phẩm")
-  const idxCncIMEI = cncHeader.indexOf("IMEI")
+  const idxCncId = colIndex(cncHeader, "ID Máy")
+  const idxCncTenSP = colIndex(cncHeader, "Tên Sản Phẩm")
+  const idxCncIMEI = colIndex(cncHeader, "IMEI")
+
   for (let i = 0; i < productIds.length; i++) {
     let imei = productIds[i];
     let idLast5 = imei.slice(-5);
     let tenSP = "";
     let trangThaiCu = "";
+    const imeiIdx = colIndex(header, "IMEI")
+    const ttIdx = colIndex(header, "Trạng Thái")
     let row = rows.find(r => {
-      const imeiIdx = header.indexOf("IMEI");
-      return r[imeiIdx] && r[imeiIdx].endsWith(idLast5);
+      return imeiIdx !== -1 && r[imeiIdx] && String(r[imeiIdx]).endsWith(idLast5);
     });
     if (row) {
       tenSP = row[idxTenSP];
-      trangThaiCu = oldStatuses && oldStatuses[i] ? oldStatuses[i] : (row ? row[header.indexOf("Trạng Thái")] : "");
+      trangThaiCu = oldStatuses && oldStatuses[i] ? oldStatuses[i] : (ttIdx !== -1 ? row[ttIdx] : "");
     } else {
       // Nếu không tìm thấy ở kho thì tìm theo ID Máy ở CNC
       let cncRow = null;
-      if (idxCncIMEI !== -1) {
-        cncRow = cncRows.find(r => r[idxCncIMEI] && r[idxCncIMEI].endsWith(idLast5));
+      const cncImeiIdx = colIndex(cncHeader, "IMEI")
+      const cncTtIdx = colIndex(cncHeader, "Trạng Thái")
+      if (cncImeiIdx !== -1) {
+        cncRow = cncRows.find(r => r[cncImeiIdx] && String(r[cncImeiIdx]).endsWith(idLast5));
       }
-      tenSP = cncRow ? cncRow[idxCncTenSP] : "";
-      trangThaiCu = oldStatuses && oldStatuses[i] ? oldStatuses[i] : (cncRow ? cncRow[cncHeader.indexOf("Trạng Thái")] : "");
+      tenSP = (cncRow && idxCncTenSP !== -1) ? cncRow[idxCncTenSP] : "";
+      trangThaiCu = oldStatuses && oldStatuses[i] ? oldStatuses[i] : (cncRow && cncTtIdx !== -1 ? cncRow[cncTtIdx] : "");
     }
     await appendToGoogleSheets("Lich_Su_Trang_Thai_May", [
       idLast5,

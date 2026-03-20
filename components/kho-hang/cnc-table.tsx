@@ -28,6 +28,7 @@ interface CNCTableProps {
   onSelect: (imei: string) => void
   onSelectAll: () => void
   isEditMode: boolean
+  onComplete?: (product: CNCProduct) => void
   onCustomerReceived?: (imei: string) => void
   totalCount?: number
 }
@@ -38,9 +39,12 @@ export function CNCTable({
   onSelect,
   onSelectAll,
   isEditMode,
+  onComplete,
   onCustomerReceived,
   totalCount
 }: CNCTableProps) {
+  const getItemKey = (p: CNCProduct, idx: number) => p.imei || p.id || `unknown-${idx}`;
+
   return (
     <div className="rounded-md border border-slate-200 overflow-hidden bg-white shadow-sm">
       <Table>
@@ -49,7 +53,7 @@ export function CNCTable({
             {isEditMode && (
               <TableHead className="w-12 text-center">
                 <Checkbox 
-                  checked={products.length > 0 && selectedImeis.length === products.length}
+                  checked={products.length > 0 && products.every((p, idx) => selectedImeis.includes(getItemKey(p, idx)))}
                   onCheckedChange={onSelectAll}
                 />
               </TableHead>
@@ -66,8 +70,8 @@ export function CNCTable({
             <TableHead className="font-semibold text-slate-700 hidden md:table-cell">Địa chỉ CNC</TableHead>
             <TableHead className="font-semibold text-slate-700 hidden lg:table-cell">Tình trạng</TableHead>
             <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden xl:table-cell">Ngày gửi</TableHead>
-            {onCustomerReceived && <TableHead className="w-24"></TableHead>}
+            <TableHead className="hidden xl:table-cell font-semibold text-slate-700">Ngày gửi</TableHead>
+            {(onComplete || onCustomerReceived) && <TableHead className="w-24"></TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -76,8 +80,8 @@ export function CNCTable({
               {isEditMode && (
                 <TableCell className="text-center">
                   <Checkbox 
-                    checked={selectedImeis.includes(p.imei)}
-                    onCheckedChange={() => onSelect(p.imei)}
+                    checked={selectedImeis.includes(getItemKey(p, idx))}
+                    onCheckedChange={() => onSelect(getItemKey(p, idx))}
                   />
                 </TableCell>
               )}
@@ -96,11 +100,20 @@ export function CNCTable({
                 </Badge>
               </TableCell>
               <TableCell className="hidden xl:table-cell text-sm text-slate-500">{p.ngay_gui}</TableCell>
-              {onCustomerReceived && p.trang_thai === "Hoàn thành CNC" && p.nguon === "Khách ngoài" && (
+              {(onComplete || onCustomerReceived) && (
                 <TableCell>
-                  <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => onCustomerReceived(p.imei)}>
-                    Khách nhận
-                  </Button>
+                  <div className="flex gap-2 justify-end">
+                    {onComplete && p.trang_thai !== "Hoàn thành CNC" && (
+                      <Button size="sm" className="text-xs h-8 bg-blue-600 hover:bg-blue-700" onClick={() => onComplete(p)}>
+                        Xong
+                      </Button>
+                    )}
+                    {onCustomerReceived && p.trang_thai === "Hoàn thành CNC" && p.nguon === "Khách ngoài" && (
+                      <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => onCustomerReceived(p.imei)}>
+                        Khách nhận
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               )}
             </TableRow>

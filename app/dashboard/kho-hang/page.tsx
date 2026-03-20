@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Edit2 } from "lucide-react"
+import { Plus, ListChecks } from "lucide-react"
 
 // Components
 import { FilterBar } from "@/components/kho-hang/filter-bar"
@@ -18,32 +18,40 @@ import { BaoHanhTable } from "@/components/kho-hang/bao-hanh-table"
 import { InventoryTabs, InventoryStats } from "@/components/kho-hang/inventory-tabs"
 import { TableSkeleton } from "@/components/kho-hang/table-skeleton"
 import { ProductDialog } from "@/components/kho-hang/product-dialog"
+import { SendCNCDialog } from "@/components/kho-hang/send-cnc-dialog"
+import { PartnerTable } from "@/components/kho-hang/partner-table"
 import AddCNCMachineDialog from "@/components/kho-hang/add-cnc-machine-dialog"
 import AddBaoHanhMachineDialog from "@/components/kho-hang/add-baohanh-machine-dialog"
+import { SendPartnerDialog } from "@/components/kho-hang/send-partner-dialog"
+import { useRouter } from "next/navigation"
 
 // Hooks & Store
 import { useInventoryStore } from "@/lib/store/inventory-store"
-import { 
-  useInventoryData, 
-  usePartnerData, 
-  useCNCData, 
+import {
+  useInventoryData,
+  usePartnerData,
+  useCNCData,
   useBaoHanhHistory,
   useAccessoriesData
 } from "@/hooks/use-inventory-data"
 import { useInventoryActions } from "@/hooks/use-inventory-actions"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useAuthMe } from "@/hooks/use-auth-me"
+import { toast } from "sonner"
 
 // Utils
 import { isConHangProduct } from "@/lib/utils/inventory-helpers"
 import { uploadTelegramProof } from "@/lib/utils/telegram"
-import { toast } from "sonner"
+
 
 export default function KhoHangPage() {
+  const router = useRouter()
+  const { me } = useAuthMe()
   const isMobile = useIsMobile()
-  const { 
-    activeTab, 
-    searchTerm, 
-    khoFilter, 
+  const {
+    activeTab,
+    searchTerm,
+    khoFilter,
     priceRange,
     trangThai,
     sourceFilter,
@@ -51,6 +59,7 @@ export default function KhoHangPage() {
     colorFilter,
     capacityFilter,
     pinFilter,
+    setSearchTerm,
     resetFilters
   } = useInventoryStore()
 
@@ -68,26 +77,36 @@ export default function KhoHangPage() {
   const accessories = accRes?.data || []
 
   // Actions
-  const { sendCNC, completeCNC } = useInventoryActions()
+  const {
+    sendCNC,
+    completeCNC,
+    isCompletingCNC,
+    sendPartner,
+    isSendingPartner,
+    returnPartner,
+    isReturningPartner
+  } = useInventoryActions()
 
   // Local UI State
   const [isEditMode, setIsEditMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
-  
+
   const [isAddCNCMachineOpen, setIsAddCNCMachineOpen] = useState(false)
+  const [isSendCNCDialogOpen, setIsSendCNCDialogOpen] = useState(false)
   const [isAddBaoHanhMachineOpen, setIsAddBaoHanhMachineOpen] = useState(false)
-  
+  const [isSendPartnerDialogOpen, setIsSendPartnerDialogOpen] = useState(false)
+
   const [page, setPage] = useState(1)
   const [accessoryPage, setAccessoryPage] = useState(1)
   const [accessoryStatusFilter, setAccessoryStatusFilter] = useState("all")
-  
+
   const [cncProcessingSearch, setCncProcessingSearch] = useState("")
   const [cncCompletedSearch, setCncCompletedSearch] = useState("")
   const [cncProcessingPage, setCncProcessingPage] = useState(1)
   const [cncCompletedPage, setCncCompletedPage] = useState(1)
-  
+
   const pageSize = 10
 
   // Auth/Role
@@ -99,14 +118,14 @@ export default function KhoHangPage() {
       try {
         const raw = localStorage.getItem("auth_user")
         const auth = raw ? JSON.parse(raw) : null
-        const res = await fetch("/api/auth/me", { 
-          headers: auth?.email ? { "x-user-email": auth.email } : {} 
+        const res = await fetch("/api/auth/me", {
+          headers: auth?.email ? { "x-user-email": auth.email } : {}
         })
         if (res.ok) {
           const me = await res.ok ? await res.json() : null
           if (me?.role === "quan_ly") setUserRole("quan_ly")
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     checkRole()
   }, [])
@@ -124,14 +143,14 @@ export default function KhoHangPage() {
   }, [rawInventory, partnerInventory])
 
   // Filtering Logic
-  const filteredProducts = useMemo(() => {
+  const baseFilteredProducts = useMemo(() => {
     let result = allProducts.filter(isConHangProduct)
 
     // Basic Search
     if (searchTerm) {
       const q = searchTerm.toLowerCase()
-      result = result.filter((p: any) => 
-        p.ten_san_pham?.toLowerCase().includes(q) || 
+      result = result.filter((p: any) =>
+        p.ten_san_pham?.toLowerCase().includes(q) ||
         p.imei?.toLowerCase().includes(q) ||
         p.mau_sac?.toLowerCase().includes(q)
       )
@@ -144,8 +163,6 @@ export default function KhoHangPage() {
         return khoFilter === "co_san" ? isReady : !isReady
       })
     }
-
-
 
     // Price Filter
     const [minP, maxP] = priceRange
@@ -166,12 +183,32 @@ export default function KhoHangPage() {
         return sourceFilter === "kho" ? !isPartner : isPartner;
       })
     }
+    return result
+  }, [allProducts, searchTerm, khoFilter, priceRange, trangThai, sourceFilter])
+
+  // Lọc sản phẩm cho dropdowns (giữ lại option của field bị loại trừ)
+  const getFilteredOptions = (excludeFilter: 'product' | 'color' | 'capacity') => {
+    let result = baseFilteredProducts;
+    if (excludeFilter !== 'product' && productNameFilter !== "all") {
+      result = result.filter((p: any) => p.ten_san_pham === productNameFilter)
+    }
+    if (excludeFilter !== 'color' && colorFilter !== "all") {
+      result = result.filter((p: any) => p.mau_sac === colorFilter)
+    }
+    if (excludeFilter !== 'capacity' && capacityFilter !== "all") {
+      result = result.filter((p: any) => p.dung_luong === capacityFilter)
+    }
+    return result;
+  }
+
+  const filteredProducts = useMemo(() => {
+    let result = baseFilteredProducts
     if (productNameFilter !== "all") result = result.filter((p: any) => p.ten_san_pham === productNameFilter)
     if (colorFilter !== "all") result = result.filter((p: any) => p.mau_sac === colorFilter)
     if (capacityFilter !== "all") result = result.filter((p: any) => p.dung_luong === capacityFilter)
 
     return result
-  }, [allProducts, searchTerm, khoFilter, priceRange, trangThai, sourceFilter, productNameFilter, colorFilter, capacityFilter])
+  }, [baseFilteredProducts, productNameFilter, colorFilter, capacityFilter])
 
   const filteredAccessories = useMemo(() => {
     let result = accessories
@@ -189,21 +226,21 @@ export default function KhoHangPage() {
 
     if (!searchTerm) return result
     const q = searchTerm.toLowerCase()
-    return result.filter((a: any) => 
-      a.ten_phu_kien?.toLowerCase().includes(q) || 
+    return result.filter((a: any) =>
+      a.ten_phu_kien?.toLowerCase().includes(q) ||
       a.loai_phu_kien?.toLowerCase().includes(q) ||
       a.ghi_chu?.toLowerCase().includes(q)
     )
   }, [accessories, searchTerm, accessoryStatusFilter])
 
   const processingCNC = useMemo(() => {
-    let result = cncProducts.filter((p: any) => 
+    let result = cncProducts.filter((p: any) =>
       p.trang_thai !== "Hoàn thành CNC" && (p.trang_thai_cnc || "").toLowerCase() !== "đã nhận"
     )
     if (cncProcessingSearch) {
       const q = cncProcessingSearch.toLowerCase()
-      result = result.filter((p: any) => 
-        p.ten_san_pham?.toLowerCase().includes(q) || 
+      result = result.filter((p: any) =>
+        p.ten_san_pham?.toLowerCase().includes(q) ||
         p.imei?.toLowerCase().includes(q)
       )
     }
@@ -211,43 +248,62 @@ export default function KhoHangPage() {
   }, [cncProducts, cncProcessingSearch])
 
   const completedCNC = useMemo(() => {
-    let result = cncProducts.filter((p: any) => 
+    let result = cncProducts.filter((p: any) =>
       p.trang_thai === "Hoàn thành CNC" || (p.trang_thai_cnc || "").toLowerCase() === "đã nhận"
     )
     if (cncCompletedSearch) {
       const q = cncCompletedSearch.toLowerCase()
-      result = result.filter((p: any) => 
-        p.ten_san_pham?.toLowerCase().includes(q) || 
+      result = result.filter((p: any) =>
+        p.ten_san_pham?.toLowerCase().includes(q) ||
         p.imei?.toLowerCase().includes(q)
       )
     }
     return result
   }, [cncProducts, cncCompletedSearch])
 
+  const partnerProducts = useMemo(() => {
+    let result = rawInventory.filter((p: any) => p.trang_thai === "Giao đối tác")
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase()
+      result = result.filter((p: any) =>
+        p.ten_san_pham?.toLowerCase().includes(q) ||
+        p.imei?.toLowerCase().includes(q)
+      )
+    }
+    return result
+  }, [rawInventory, searchTerm])
+
   const productNameOptions = useMemo(() => {
-    const names = Array.from(new Set(allProducts.map((p: any) => p.ten_san_pham).filter(Boolean))) as string[]
+    const validProducts = getFilteredOptions('product');
+    const names = Array.from(new Set(validProducts.map((p: any) => p.ten_san_pham).filter(Boolean))) as string[]
     return names.sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }))
-  }, [allProducts])
+  }, [baseFilteredProducts, colorFilter, capacityFilter])
 
   const colorOptions = useMemo(() => {
-    const colors = Array.from(new Set(allProducts.map((p: any) => p.mau_sac).filter(Boolean))) as string[]
+    const validProducts = getFilteredOptions('color');
+    const colors = Array.from(new Set(validProducts.map((p: any) => p.mau_sac).filter(Boolean))) as string[]
     return colors.sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }))
-  }, [allProducts])
+  }, [baseFilteredProducts, productNameFilter, capacityFilter])
 
   const capacityOptions = useMemo(() => {
-    const caps = Array.from(new Set(allProducts.map((p: any) => p.dung_luong).filter(Boolean))) as string[]
+    const validProducts = getFilteredOptions('capacity');
+    const caps = Array.from(new Set(validProducts.map((p: any) => p.dung_luong).filter(Boolean))) as string[]
     return caps.sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }))
-  }, [allProducts])
+  }, [baseFilteredProducts, productNameFilter, colorFilter])
 
 
   // Stats
   const stats = useMemo(() => ({
     soSanPhamCon: allProducts.filter(isConHangProduct).length,
     soSanPhamCNC: cncProducts.filter((p: any) => p.trang_thai === "Đang CNC").length,
-    soSanPhamBH: baoHanhHistory.filter((p: any) => p["Trạng Thái"] === "Bảo hành").length,
-    soPhuKienDaHet: accessories.filter((a: any) => Number(a.so_luong_ton) === 0).length,
-    soPhuKienSapHet: accessories.filter((a: any) => Number(a.so_luong_ton) >= 1 && Number(a.so_luong_ton) <= 5).length
-  }), [allProducts, cncProducts, baoHanhHistory, accessories])
+    soSanPhamBH: baoHanhHistory.length,
+    soSanPhamDoiTac: partnerProducts.length,
+    soPhuKienDaHet: accessories.filter((a: any) => parseInt(a.so_luong_ton) <= 0).length,
+    soPhuKienSapHet: accessories.filter((a: any) => {
+      const q = parseInt(a.so_luong_ton)
+      return q > 0 && q <= 5
+    }).length,
+  }), [allProducts, cncProducts, baoHanhHistory, accessories, partnerProducts])
 
   // Handlers
   const handleSelect = (id: string) => {
@@ -264,6 +320,39 @@ export default function KhoHangPage() {
     setIsDialogOpen(true)
   }
 
+  const handleCompleteSalePartner = (p: any) => {
+    // Thêm sản phẩm vào giỏ hàng localStorage
+    try {
+      const cartRaw = localStorage.getItem('cart_draft_v1')
+      let cart = cartRaw ? JSON.parse(cartRaw) : []
+      if (!Array.isArray(cart)) cart = []
+
+      const newCartItem = {
+        id: p.id || p.ID || p["ID Máy"],
+        ten_san_pham: p.ten_san_pham || p.tenSP || p["Tên Sản Phẩm"],
+        imei: p.imei || "",
+        mau_sac: p.mau_sac || "",
+        dung_luong: p.dung_luong || "",
+        loai_may: p.loai_may || "",
+        gia_ban: p.gia_ban || 0,
+        gia_nhap: p.gia_nhap || 0,
+        sl: 1
+      }
+
+      // Kiểm tra nếu đã có trong giỏ
+      const exists = cart.find((item: any) => item.id === newCartItem.id)
+      if (!exists) {
+        cart.push(newCartItem)
+        localStorage.setItem('cart_draft_v1', JSON.stringify(cart))
+      }
+
+      toast.success("Đã thêm vào giỏ hàng. Chuyển sang trang bán hàng...")
+      router.push('/dashboard/ban-hang')
+    } catch (e) {
+      toast.error("Lỗi khi thêm vào giỏ hàng")
+    }
+  }
+
   return (
     <div className="space-y-6 px-4 pb-8 max-w-[1600px] mx-auto">
       <InventoryStats {...stats} />
@@ -275,19 +364,19 @@ export default function KhoHangPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center gap-2">
               <div className="flex gap-2">
-                <Button 
+                <Button
                   onClick={() => { setSelectedProduct(null); setIsDialogOpen(true) }}
                   className="bg-emerald-600 hover:bg-emerald-700 shadow-sm"
                 >
                   <Plus className="w-4 h-4 mr-2" /> Nhập hàng
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="icon"
                   className={isEditMode ? "bg-blue-50 text-blue-600 border-blue-200" : ""}
                   onClick={() => setIsEditMode(!isEditMode)}
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <ListChecks className="w-4 h-4" />
                 </Button>
               </div>
               {isEditMode && selectedIds.length > 0 && (
@@ -295,14 +384,27 @@ export default function KhoHangPage() {
                   <Badge variant="secondary" className="px-3 py-1 bg-blue-50 text-blue-700 border-blue-100">
                     Đã chọn {selectedIds.length}
                   </Badge>
-                  <Button size="sm" variant="outline" className="text-orange-600" onClick={() => toast.info("Tính năng Gửi CNC hàng loạt đang được cập nhật")}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-orange-600 bg-orange-50 hover:bg-orange-100 border-orange-200"
+                    onClick={() => setIsSendCNCDialogOpen(true)}
+                  >
                     Gửi CNC
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-purple-600 bg-purple-50 hover:bg-purple-100 border-purple-200"
+                    onClick={() => setIsSendPartnerDialogOpen(true)}
+                  >
+                    Giao đối tác
                   </Button>
                 </div>
               )}
             </div>
 
-            <FilterBar 
+            <FilterBar
               productNames={productNameOptions}
               colors={colorOptions}
               capacities={capacityOptions}
@@ -313,7 +415,7 @@ export default function KhoHangPage() {
               <TableSkeleton rows={5} />
             ) : (
               <Card className="border-none shadow-sm overflow-hidden">
-                <ProductTable 
+                <ProductTable
                   products={filteredProducts.slice((page - 1) * pageSize, page * pageSize)}
                   selectedIds={selectedIds}
                   onSelect={handleSelect}
@@ -321,23 +423,31 @@ export default function KhoHangPage() {
                   isEditMode={isEditMode}
                   isManager={isManager}
                   onEdit={handleEdit}
+                  onSendCNC={(p) => {
+                    setSelectedIds([p.id])
+                    setIsSendCNCDialogOpen(true)
+                  }}
+                  onSendPartner={(p) => {
+                    setSelectedIds([p.id])
+                    setIsSendPartnerDialogOpen(true)
+                  }}
                   totalCount={filteredProducts.length}
                 />
-                
+
                 {filteredProducts.length > pageSize && (
                   <div className="flex items-center justify-center p-4 bg-slate-50/50 gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      disabled={page === 1} 
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === 1}
                       onClick={() => setPage(page - 1)}
                     >
                       Trạm trước
                     </Button>
                     <span className="text-sm font-medium">Trang {page} / {Math.ceil(filteredProducts.length / pageSize)}</span>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       disabled={page * pageSize >= filteredProducts.length}
                       onClick={() => setPage(page + 1)}
                     >
@@ -360,45 +470,80 @@ export default function KhoHangPage() {
                   <Badge variant="secondary" className="ml-2 bg-blue-50 text-blue-600 border-blue-100">{processingCNC.length}</Badge>
                 </h3>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Input 
-                    placeholder="Tìm máy đang CNC..." 
-                    className="h-9 bg-white w-full sm:w-[240px]" 
+                  <Input
+                    placeholder="Tìm máy đang CNC..."
+                    className="h-9 bg-white w-full sm:w-[240px]"
                     value={cncProcessingSearch}
                     onChange={(e) => { setCncProcessingSearch(e.target.value); setCncProcessingPage(1); }}
                   />
-                  <Button onClick={() => setIsAddCNCMachineOpen(true)} className="bg-blue-600 h-9 shrink-0">
-                    + Thêm mới
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={() => setIsAddCNCMachineOpen(true)} className="bg-blue-600 h-9 shrink-0">
+                      + Thêm mới
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className={`h-9 w-9 shrink-0 ${isEditMode ? "bg-blue-50 text-blue-600 border-blue-200" : ""}`}
+                      onClick={() => setIsEditMode(!isEditMode)}
+                    >
+                      <ListChecks className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
+
+              {isEditMode && selectedIds.length > 0 && (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">
+                  <Badge variant="secondary" className="px-3 py-1 bg-blue-50 text-blue-700 border-blue-100">
+                    Đã chọn {selectedIds.length} máy
+                  </Badge>
+                  <Button
+                    size="sm"
+                    className="h-8 bg-green-600 hover:bg-green-700 shadow-sm"
+                    onClick={() => {
+                      completeCNC({ productIds: selectedIds, employeeId: me?.employeeId || "NV-UNKNOWN" });
+                      setSelectedIds([]);
+                      setIsEditMode(false);
+                    }}
+                    disabled={isCompletingCNC}
+                  >
+                    Hoàn thành CNC ({selectedIds.length})
+                  </Button>
+                </div>
+              )}
+
               {isLoadingCNC ? <TableSkeleton rows={3} /> : (
                 <>
-                  <CNCTable 
+                  <CNCTable
                     products={processingCNC.slice((cncProcessingPage - 1) * pageSize, cncProcessingPage * pageSize)}
-                    selectedImeis={[]}
-                    onSelect={() => {}}
-                    onSelectAll={() => {}}
-                    isEditMode={false}
+                    selectedImeis={selectedIds}
+                    onSelect={(imei) => handleSelect(imei)}
+                    onSelectAll={() => {
+                      if (selectedIds.length === processingCNC.length) setSelectedIds([])
+                      else setSelectedIds(processingCNC.map((p: any, idx: number) => p.imei || p.id || `unknown-${idx}`))
+                    }}
+                    isEditMode={isEditMode}
+                    onComplete={(p) => completeCNC({ productIds: [p.imei || p.id], employeeId: me?.employeeId || "NV-UNKNOWN" })}
                     totalCount={processingCNC.length}
                   />
                   {processingCNC.length > pageSize && (
                     <div className="flex items-center justify-between mt-2 px-2">
                       <div className="text-[12px] text-slate-500">
-                         Trang {cncProcessingPage} / {Math.ceil(processingCNC.length / pageSize)}
+                        Trang {cncProcessingPage} / {Math.ceil(processingCNC.length / pageSize)}
                       </div>
                       <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="h-7 text-[11px]"
                           disabled={cncProcessingPage === 1}
                           onClick={() => setCncProcessingPage(cncProcessingPage - 1)}
                         >
                           Trạm trước
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="h-7 text-[11px]"
                           disabled={cncProcessingPage * pageSize >= processingCNC.length}
                           onClick={() => setCncProcessingPage(cncProcessingPage + 1)}
@@ -420,9 +565,9 @@ export default function KhoHangPage() {
                   <Badge variant="secondary" className="ml-2 bg-emerald-50 text-emerald-600 border-emerald-100">{completedCNC.length}</Badge>
                 </h3>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Input 
-                    placeholder="Tìm máy đã hoàn thành..." 
-                    className="h-9 bg-white w-full sm:w-[240px]" 
+                  <Input
+                    placeholder="Tìm máy đã hoàn thành..."
+                    className="h-9 bg-white w-full sm:w-[240px]"
                     value={cncCompletedSearch}
                     onChange={(e) => { setCncCompletedSearch(e.target.value); setCncCompletedPage(1); }}
                   />
@@ -430,32 +575,32 @@ export default function KhoHangPage() {
               </div>
               {isLoadingCNC ? <TableSkeleton rows={3} /> : (
                 <>
-                  <CNCTable 
+                  <CNCTable
                     products={completedCNC.slice((cncCompletedPage - 1) * pageSize, cncCompletedPage * pageSize)}
                     selectedImeis={[]}
-                    onSelect={() => {}}
-                    onSelectAll={() => {}}
+                    onSelect={() => { }}
+                    onSelectAll={() => { }}
                     isEditMode={false}
                     totalCount={completedCNC.length}
                   />
                   {completedCNC.length > pageSize && (
                     <div className="flex items-center justify-between mt-2 px-2">
                       <div className="text-[12px] text-slate-500">
-                         Trang {cncCompletedPage} / {Math.ceil(completedCNC.length / pageSize)}
+                        Trang {cncCompletedPage} / {Math.ceil(completedCNC.length / pageSize)}
                       </div>
                       <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="h-7 text-[11px]"
                           disabled={cncCompletedPage === 1}
                           onClick={() => setCncCompletedPage(cncCompletedPage - 1)}
                         >
                           Trạm trước
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="h-7 text-[11px]"
                           disabled={cncCompletedPage * pageSize >= completedCNC.length}
                           onClick={() => setCncCompletedPage(cncCompletedPage + 1)}
@@ -471,6 +616,71 @@ export default function KhoHangPage() {
           </div>
         )}
 
+        {activeTab === "giao-doi-tac" && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-2">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+                Đang giao đối tác
+                <Badge variant="secondary" className="ml-2 bg-purple-50 text-purple-600 border-purple-100">{partnerProducts.length}</Badge>
+              </h3>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Input
+                  placeholder="Tìm máy đang giao..."
+                  className="h-9 bg-white w-full sm:w-[240px]"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={`h-9 w-9 shrink-0 ${isEditMode ? "bg-purple-50 text-purple-600 border-purple-200" : ""}`}
+                  onClick={() => setIsEditMode(!isEditMode)}
+                >
+                  <ListChecks className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            {isEditMode && selectedIds.length > 0 && (
+              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">
+                <Badge variant="secondary" className="px-3 py-1 bg-purple-50 text-purple-700 border-purple-100">
+                  Đã chọn {selectedIds.length} máy
+                </Badge>
+                <Button
+                  size="sm"
+                  className="h-8 bg-orange-600 hover:bg-orange-700 shadow-sm"
+                  onClick={async () => {
+                    await returnPartner({ productIds: selectedIds, employeeId: me?.employeeId || "NV-UNKNOWN" });
+                    setSelectedIds([]);
+                    setIsEditMode(false);
+                  }}
+                  disabled={isReturningPartner}
+                >
+                  Hoàn kho đồng loạt ({selectedIds.length})
+                </Button>
+              </div>
+            )}
+
+            {isLoadingInv ? <TableSkeleton rows={3} /> : (
+              <PartnerTable
+                products={partnerProducts}
+                selectedIds={selectedIds}
+                onSelect={handleSelect}
+                onSelectAll={() => {
+                  if (selectedIds.length === partnerProducts.length) setSelectedIds([])
+                  else setSelectedIds(partnerProducts.map((p: any) => p.id))
+                }}
+                isEditMode={isEditMode}
+                onReturnStock={(p) => returnPartner({ productIds: [p.id], employeeId: me?.employeeId || "NV-UNKNOWN" })}
+                onCompleteSale={handleCompleteSalePartner}
+                totalCount={partnerProducts.length}
+                isReturning={isReturningPartner}
+              />
+            )}
+          </div>
+        )}
+
         {activeTab === "bao-hanh" && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -479,11 +689,11 @@ export default function KhoHangPage() {
               </Button>
             </div>
             {isLoadingBH ? <TableSkeleton rows={5} /> : (
-              <BaoHanhTable 
+              <BaoHanhTable
                 products={baoHanhHistory}
                 selectedIds={[]}
-                onSelect={() => {}}
-                onSelectAll={() => {}}
+                onSelect={() => { }}
+                onSelectAll={() => { }}
                 isEditMode={false}
                 onViewInfo={(p) => toast.info(`Thông tin: ${p["Địa chỉ Bảo hành"]}`)}
               />
@@ -511,7 +721,7 @@ export default function KhoHangPage() {
             </div>
             {isLoadingAcc ? <TableSkeleton rows={5} /> : (
               <>
-                <AccessoryTable 
+                <AccessoryTable
                   items={filteredAccessories.slice((accessoryPage - 1) * pageSize, accessoryPage * pageSize)}
                   isManager={isManager}
                   onEdit={(item) => toast.info(`Chỉnh sửa phụ kiện: ${item.ten_phu_kien}`)}
@@ -524,17 +734,17 @@ export default function KhoHangPage() {
                       Hiển thị {Math.min(filteredAccessories.length, (accessoryPage - 1) * pageSize + 1)} - {Math.min(filteredAccessories.length, accessoryPage * pageSize)} trong tổng số {filteredAccessories.length} phụ kiện
                     </div>
                     <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         disabled={accessoryPage === 1}
                         onClick={() => setAccessoryPage(accessoryPage - 1)}
                       >
                         Trang trước
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         disabled={accessoryPage * pageSize >= filteredAccessories.length}
                         onClick={() => setAccessoryPage(accessoryPage + 1)}
                       >
@@ -549,23 +759,44 @@ export default function KhoHangPage() {
         )}
       </div>
 
-      <ProductDialog 
+      <ProductDialog
         isOpen={isDialogOpen}
         onClose={() => { setIsDialogOpen(false); setSelectedProduct(null) }}
         product={selectedProduct}
-        onSuccess={() => {}}
+        onSuccess={() => { }}
       />
 
-      <AddCNCMachineDialog 
+      <AddCNCMachineDialog
         isOpen={isAddCNCMachineOpen}
         onClose={() => setIsAddCNCMachineOpen(false)}
-        onSuccess={() => {}}
+        onSuccess={() => { }}
       />
 
-      <AddBaoHanhMachineDialog 
+      <SendCNCDialog
+        isOpen={isSendCNCDialogOpen}
+        onClose={() => setIsSendCNCDialogOpen(false)}
+        selectedProducts={allProducts.filter(p => selectedIds.includes(p.id))}
+        onSuccess={() => {
+          setSelectedIds([])
+          setIsEditMode(false)
+        }}
+      />
+
+      <AddBaoHanhMachineDialog
         isOpen={isAddBaoHanhMachineOpen}
         onClose={() => setIsAddBaoHanhMachineOpen(false)}
-        onSuccess={() => {}}
+        onSuccess={() => { }}
+      />
+
+      <SendPartnerDialog
+        open={isSendPartnerDialogOpen}
+        onOpenChange={setIsSendPartnerDialogOpen}
+        selectedProducts={allProducts.filter(p => selectedIds.includes(p.id))}
+        employeeId={me?.employeeId}
+        onSuccess={() => {
+          setSelectedIds([])
+          setIsEditMode(false)
+        }}
       />
     </div>
   )

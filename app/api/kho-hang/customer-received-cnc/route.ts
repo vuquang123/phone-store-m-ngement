@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { readFromGoogleSheets, updateRowInGoogleSheets, logProductHistory } from "@/lib/google-sheets";
+import { readFromGoogleSheets, updateRowInGoogleSheets, logProductHistory, colIndex } from "@/lib/google-sheets";
+
+
 import { addNotification } from "@/lib/notifications";
 
 // Alias endpoint cho việc xác nhận khách đã nhận máy sau CNC.
@@ -12,8 +14,9 @@ export async function POST(req: Request) {
     }
     // Đọc sheet CNC
     const { header, rows } = await readFromGoogleSheets("CNC");
-    const idxIMEI = header.indexOf("IMEI");
-    const idxTrangThai = header.indexOf("Trạng Thái");
+    const idxIMEI = colIndex(header, "IMEI");
+    const idxTrangThai = colIndex(header, "Trạng Thái");
+
     if (idxIMEI === -1 || idxTrangThai === -1) {
       return NextResponse.json({ success: false, error: "Sheet CNC thiếu cột IMEI hoặc Trạng Thái" }, { status: 500 });
     }

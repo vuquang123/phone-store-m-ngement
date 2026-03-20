@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { readFromGoogleSheets, syncToGoogleSheets } from "@/lib/google-sheets";
+import { readFromGoogleSheets, syncToGoogleSheets, colIndex } from "@/lib/google-sheets";
+
 
 export async function POST(req: Request) {
   try {
@@ -9,9 +10,9 @@ export async function POST(req: Request) {
     }
     // Đọc sheet Kho_Hang
     const { header, rows } = await readFromGoogleSheets("Kho_Hang");
-    const idxIMEI = header.indexOf("IMEI");
-    const idxSerial = header.indexOf("Serial");
-    const idxId = header.indexOf("ID Máy");
+    const idxIMEI = colIndex(header, "IMEI");
+    const idxSerial = colIndex(header, "Serial");
+    const idxId = colIndex(header, "ID Máy");
     // Lọc các dòng không thuộc sản phẩm cần xóa (match theo IMEI, Serial hoặc ID Máy)
     const newRows = rows.filter(row => {
       const imei = idxIMEI !== -1 ? String(row[idxIMEI] || "") : "";
@@ -19,10 +20,15 @@ export async function POST(req: Request) {
       const idMay = idxId !== -1 ? String(row[idxId] || "") : "";
       const imeiLast5 = imei ? imei.slice(-5) : "";
       const serialLast5 = serial ? serial.slice(-5) : "";
-      const match = (v: string) => v && productIds.includes(v);
-      const matched = match(imei) || match(serial) || match(idMay) || match(imeiLast5) || match(serialLast5);
+      const match = (v: string) => v && (productIds.includes(v) || productIds.some(pid => pid === v));
+      const matched = (imei && productIds.includes(imei)) || 
+                      (serial && productIds.includes(serial)) || 
+                      (idMay && productIds.includes(idMay)) ||
+                      (imeiLast5 && productIds.includes(imeiLast5)) ||
+                      (serialLast5 && productIds.includes(serialLast5));
       return !matched;
     });
+
     await syncToGoogleSheets("Kho_Hang", newRows);
     return NextResponse.json({ success: true, count: productIds.length });
   } catch (error) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { updateProductsStatus, logProductHistory, readFromGoogleSheets, updateRowInGoogleSheets, updateRangeValues } from "@/lib/google-sheets";
+import { updateProductsStatus, logProductHistory, readFromGoogleSheets, updateRowInGoogleSheets, updateRangeValues, colIndex } from "@/lib/google-sheets";
+
 import { addNotification } from "@/lib/notifications";
 import { sendStockEventNotification } from "@/lib/telegram";
 
@@ -11,12 +12,13 @@ export async function POST(req: Request) {
     }
     // Đọc dữ liệu sheet CNC
     const { header: cncHeader, rows: cncRows } = await readFromGoogleSheets("CNC")
-    const idxIMEI = cncHeader.indexOf("IMEI")
-    const idxIdMay = cncHeader.indexOf("ID Máy")
-    const idxTen = cncHeader.indexOf("Tên Sản Phẩm")
-    const idxSerial = cncHeader.indexOf("Serial")
-    const idxTrangThai = cncHeader.indexOf("Trạng Thái")
-    const idxNgayNhanLai = cncHeader.indexOf("Ngày nhận lại")
+    const idxIMEI = colIndex(cncHeader, "IMEI")
+    const idxIdMay = colIndex(cncHeader, "ID Máy")
+    const idxTen = colIndex(cncHeader, "Tên Sản Phẩm")
+    const idxSerial = colIndex(cncHeader, "Serial")
+    const idxTrangThai = colIndex(cncHeader, "Trạng Thái")
+    const idxNgayNhanLai = colIndex(cncHeader, "Ngày nhận lại")
+
     if (idxIMEI === -1) {
       return NextResponse.json({ success: false, error: "Sheet CNC thiếu cột IMEI" }, { status: 500 })
     }
@@ -47,18 +49,23 @@ export async function POST(req: Request) {
         }
         return row;
       });
-      await updateRowInGoogleSheets("CNC", "IMEI", "", updatedCncRows);
+      const cncUpdateResult = await updateRowInGoogleSheets("CNC", "IMEI", "", updatedCncRows);
+      if (!cncUpdateResult.success) {
+        return NextResponse.json({ success: false, error: "Lỗi cập nhật trạng thái CNC: " + cncUpdateResult.error }, { status: 500 });
+      }
     }
 
     // Cập nhật trạng thái về 'Còn hàng' trong kho chỉ với máy nguồn 'Kho shop'
     const { header: khoHeader, rows: khoRows } = await readFromGoogleSheets("Kho_Hang");
-    const idxKhoId = khoHeader.indexOf("ID Máy");
-    const idxKhoIMEI = khoHeader.indexOf("IMEI");
-    const idxKhoTrangThai = khoHeader.indexOf("Trạng Thái");
-    const idxKhoGhiChu = khoHeader.indexOf("Ghi Chú");
+    const idxKhoId = colIndex(khoHeader, "ID Máy");
+    const idxKhoIMEI = colIndex(khoHeader, "IMEI");
+    const idxKhoTrangThai = colIndex(khoHeader, "Trạng Thái");
+    const idxKhoGhiChu = colIndex(khoHeader, "Ghi Chú");
+
 
     // Lấy nguồn từ sheet CNC
-    const idxNguonCNC = cncHeader.indexOf("Nguồn");
+    const idxNguonCNC = colIndex(cncHeader, "Nguồn");
+
     // Tạo danh sách IMEI máy nguồn 'Kho shop'
     const imeisKhoShop = cncRows
       .filter(row => imeisToProcess.includes(row[idxIMEI]) && row[idxNguonCNC] === "Kho shop")
@@ -75,7 +82,10 @@ export async function POST(req: Request) {
       }
       return row;
     });
-    await import("@/lib/google-sheets").then(m => m.syncToGoogleSheets("Kho_Hang", updatedKhoRows));
+    const syncKhoResult = await import("@/lib/google-sheets").then(m => m.syncToGoogleSheets("Kho_Hang", updatedKhoRows));
+    if (!syncKhoResult.success) {
+      return NextResponse.json({ success: false, error: "Lỗi đồng bộ kho hàng: " + syncKhoResult.error }, { status: 500 });
+    }
 
     // --- Đồng bộ trạng thái máy về Dat_Coc ---
     try {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex } from "@/lib/google-sheets"
+
 import { DateTime } from "luxon"
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { addNotification } from "@/lib/notifications"
@@ -57,11 +58,12 @@ async function adjustCustomerTotal(phoneRaw: string | undefined, amountDelta: nu
   if (!phone) return { adjusted: false }
   const { header, rows } = await readFromGoogleSheets(KHACH_HANG_SHEET)
   const idx = {
-    ten: header.indexOf("Tên Khách Hàng"),
-    sdt: header.indexOf("Số Điện Thoại"),
-    tongMua: header.indexOf("Tổng Mua"),
-    lanMuaCuoi: header.indexOf("Lần Mua Cuối"),
+    ten: colIndex(header, "Tên Khách Hàng"),
+    sdt: colIndex(header, "Số Điện Thoại"),
+    tongMua: colIndex(header, "Tổng Mua"),
+    lanMuaCuoi: colIndex(header, "Lần Mua Cuối"),
   }
+
   if (idx.sdt === -1) return { adjusted: false }
   const found = rows.findIndex(r => normalizePhone(String(r[idx.sdt] || "")) === phone)
   if (found === -1) return { adjusted: false }
@@ -84,9 +86,10 @@ async function adjustCustomerTotal(phoneRaw: string | undefined, amountDelta: nu
 export async function GET() {
   try {
     const { sheet, header, rows } = await getHoanTraSheet()
-    const idx = (name: string) => header.indexOf(name)
+    const idx = (name: string) => colIndex(header, name)
     const data = rows.map(r => ({
       id: r[idx("ID")],
+
       ngay_yeu_cau: r[idx("Ngày Yêu Cầu")],
       khach_hang: r[idx("Khách Hàng")],
       so_dien_thoai: r[idx("Số Điện Thoại")],
@@ -129,18 +132,19 @@ export async function POST(req: NextRequest) {
 
     const { header, rows, sheet } = await getHoanTraSheet()
     const H = {
-      id: header.indexOf("ID"),
-      ngayYC: header.indexOf("Ngày Yêu Cầu"),
-      khach: header.indexOf("Khách Hàng"),
-      sdt: header.indexOf("Số Điện Thoại"),
-      sp: header.indexOf("Sản Phẩm"),
-      imei: header.indexOf("IMEI"),
-      lyDo: header.indexOf("Lý Do"),
-      trangThai: header.indexOf("Trạng Thái"),
-      nguoiXL: header.indexOf("Người Xử Lý"),
-      ngayXL: header.indexOf("Ngày Xử Lý"),
-      ghiChu: header.indexOf("Ghi Chú"),
+      id: colIndex(header, "ID"),
+      ngayYC: colIndex(header, "Ngày Yêu Cầu"),
+      khach: colIndex(header, "Khách Hàng"),
+      sdt: colIndex(header, "Số Điện Thoại"),
+      sp: colIndex(header, "Sản Phẩm"),
+      imei: colIndex(header, "IMEI"),
+      lyDo: colIndex(header, "Lý Do"),
+      trangThai: colIndex(header, "Trạng Thái"),
+      nguoiXL: colIndex(header, "Người Xử Lý"),
+      ngayXL: colIndex(header, "Ngày Xử Lý"),
+      ghiChu: colIndex(header, "Ghi Chú"),
     }
+
 
     // Sinh ID dạng RT00001
     let maxNum = 0
@@ -195,26 +199,27 @@ export async function POST(req: NextRequest) {
       if (ma_don_hang || imei) {
         const { header: BH, rows: BR } = await readFromGoogleSheets('Ban_Hang')
         const bIdx = {
-          idDon: BH.indexOf('ID Đơn Hàng'),
-          tenSP: BH.indexOf('Tên Sản Phẩm'),
-          loaiMay: BH.indexOf('Loại Máy'),
-          dungLuong: BH.indexOf('Dung Lượng'),
-          pin: BH.indexOf('Pin (%)'),
-          mauSac: BH.indexOf('Màu Sắc'),
-          imei: BH.indexOf('IMEI'),
-          serial: BH.indexOf('Serial'),
-          tinhTrang: BH.indexOf('Tình Trạng Máy'),
-          giaNhap: BH.indexOf('Giá Nhập'),
-          giaBan: BH.indexOf('Giá Bán'),
-          lai: BH.indexOf('Lãi'),
-          tongThu: BH.indexOf('Tổng Thu'),
-          loaiDon: BH.indexOf('Loại Đơn'),
-          trangThai: BH.indexOf('Trạng Thái'),
-          ghiChu: BH.indexOf('Ghi Chú'),
-          nguonHang: BH.indexOf('Nguồn Hàng') !== -1 ? BH.indexOf('Nguồn Hàng') : BH.indexOf('Nguồn'),
-          tenDoiTac: BH.indexOf('Tên Đối Tác'),
-          sdtDoiTac: BH.indexOf('SĐT Đối Tác'),
+          idDon: colIndex(BH, 'ID Đơn Hàng'),
+          tenSP: colIndex(BH, 'Tên Sản Phẩm'),
+          loaiMay: colIndex(BH, 'Loại Máy'),
+          dungLuong: colIndex(BH, 'Dung Lượng'),
+          pin: colIndex(BH, 'Pin (%)'),
+          mauSac: colIndex(BH, 'Màu Sắc'),
+          imei: colIndex(BH, 'IMEI'),
+          serial: colIndex(BH, 'Serial'),
+          tinhTrang: colIndex(BH, 'Tình Trạng Máy'),
+          giaNhap: colIndex(BH, 'Giá Nhập'),
+          giaBan: colIndex(BH, 'Giá Bán'),
+          lai: colIndex(BH, 'Lãi'),
+          tongThu: colIndex(BH, 'Tổng Thu'),
+          loaiDon: colIndex(BH, 'Loại Đơn'),
+          trangThai: colIndex(BH, 'Trạng Thái'),
+          ghiChu: colIndex(BH, 'Ghi Chú'),
+          nguonHang: colIndex(BH, 'Nguồn Hàng', 'Nguồn'),
+          tenDoiTac: colIndex(BH, 'Tên Đối Tác'),
+          sdtDoiTac: colIndex(BH, 'SĐT Đối Tác'),
         }
+
         const targetId = String(ma_don_hang || '')
         const imeiStr = String(imei || '')
         const serialStr = String(serial || '')
@@ -253,22 +258,23 @@ export async function POST(req: NextRequest) {
           // Load Kho_Hang header once
           const { header: KH, rows: KR } = await readFromGoogleSheets('Kho_Hang')
           const kIdx = {
-            idMay: KH.indexOf('ID Máy'),
-            ngayNhap: KH.indexOf('Ngày Nhập'),
-            tenSP: KH.indexOf('Tên Sản Phẩm'),
-            loaiMay: KH.indexOf('Loại Máy'),
-            dungLuong: KH.indexOf('Dung Lượng'),
-            pin: KH.indexOf('Pin (%)'),
-            mauSac: KH.indexOf('Màu Sắc'),
-            imei: KH.indexOf('IMEI'),
-            serial: KH.indexOf('Serial'),
-            tinhTrang: KH.indexOf('Tình Trạng Máy') !== -1 ? KH.indexOf('Tình Trạng Máy') : KH.indexOf('Tình Trạng'),
-            giaNhap: KH.indexOf('Giá Nhập'),
-            giaBan: KH.indexOf('Giá Bán'),
-            nguon: KH.indexOf('Nguồn') !== -1 ? KH.indexOf('Nguồn') : KH.indexOf('Nguồn Hàng'),
-            ghiChu: KH.indexOf('Ghi Chú'),
-            trangThai: KH.indexOf('Trạng Thái'),
+            idMay: colIndex(KH, 'ID Máy'),
+            ngayNhap: colIndex(KH, 'Ngày Nhập'),
+            tenSP: colIndex(KH, 'Tên Sản Phẩm'),
+            loaiMay: colIndex(KH, 'Loại Máy'),
+            dungLuong: colIndex(KH, 'Dung Lượng'),
+            pin: colIndex(KH, 'Pin (%)'),
+            mauSac: colIndex(KH, 'Màu Sắc'),
+            imei: colIndex(KH, 'IMEI'),
+            serial: colIndex(KH, 'Serial'),
+            tinhTrang: colIndex(KH, 'Tình Trạng Máy', 'Tình Trạng'),
+            giaNhap: colIndex(KH, 'Giá Nhập'),
+            giaBan: colIndex(KH, 'Giá Bán'),
+            nguon: colIndex(KH, 'Nguồn', 'Nguồn Hàng'),
+            ghiChu: colIndex(KH, 'Ghi Chú'),
+            trangThai: colIndex(KH, 'Trạng Thái'),
           }
+
           // Chỉ lấy ngày dạng dd/mm/yyyy theo múi giờ VN
           const nowVN = new Date()
           const ngayVN = nowVN.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })

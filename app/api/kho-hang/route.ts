@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm } from "@/lib/google-sheets"
+
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { sendStockEventNotification } from "@/lib/telegram"
 
@@ -8,39 +9,7 @@ export const dynamic = "force-dynamic"
 const SHEET = "Kho_Hang"
 
 /* ========== helpers ========== */
-const norm = (s: string) =>
-  (s || "")
-    .normalize("NFD")
-    // @ts-ignore
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .trim()
 
-
-function parseVNDate(str: string) {
-  // Ví dụ: "27/8/2025" hoặc "27/8"
-  if (!str) return null
-  const parts = str.split("/")
-  if (parts.length < 2) return null
-  const day = parts[0].padStart(2, "0")
-  const month = parts[1].padStart(2, "0")
-  const year = parts[2] ? parts[2] : new Date().getFullYear()
-  // Trả về định dạng chuẩn cho JS
-  return `${year}-${month}-${day}`
-}   
-
-function colIndex(header: string[], ...names: string[]) {
-  for (const n of names) {
-    const i = header.indexOf(n)
-    if (i !== -1) return i
-  }
-  const hh = header.map((h) => norm(h))
-  for (const n of names) {
-    const i = hh.indexOf(norm(n))
-    if (i !== -1) return i
-  }
-  return -1
-}
 
 const onlyDigits = (s: string) => (s || "").replace(/\D/g, "")
 // Chuyển đổi giá trị tiền tệ về số nguyên
@@ -96,7 +65,8 @@ function getValForHeader(
   if (k === "IMEI") return opts.imeiStr
   if (k === "Serial") return opts.serialStr
   if (k === "Trạng Thái") return body.trang_thai || bodyNormMap["trangthai"] || "Còn hàng"
-  if (k === "Trạng Thái Kho") return body.trang_thai_kho || bodyNormMap["trangthaikho"] || "Có sẵn"
+  if (k === "Trạng Thái Kho") return body.trang_thai_kho || bodyNormMap["trangthaikho"] || body.trang_thai_ton || bodyNormMap["trangthaiton"] || "Có sẵn"
+
   if (k === "Ngày Nhập") {
     const input = body.ngay_nhap || bodyNormMap["ngaynhap"]
     if (input) {
@@ -121,8 +91,9 @@ function getValForHeader(
     return body.pin || bodyNormMap["pin"] || ""
   }
   if (k === "Tình Trạng Máy") {
-    return body.tinh_trang || bodyNormMap["tinhtrang"] || ""
+    return body.tinh_trang || bodyNormMap["tinhtrang"] || body.tinh_trang_may || bodyNormMap["tinhtrangmay"] || ""
   }
+
   if (k === "Giá Nhập") {
     const v = body.gia_nhap ?? bodyNormMap["gianhap"]
     return v !== undefined && v !== null && String(v) !== "" ? toNumber(v) : ""
@@ -254,10 +225,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, added }, { status: 200 })
     } else if (body.action === "update" && body.id) {
       // Tìm index cột ID Máy
-      const idxId = header.indexOf("ID Máy")
+      const idxId = colIndex(header, "ID Máy")
       if (idxId === -1) {
         return NextResponse.json({ error: "Không tìm thấy cột ID Máy" }, { status: 400 })
       }
+
       // Tìm dòng cũ theo id
       const rowIndex = rows.findIndex(row => row[idxId] === body.id)
       if (rowIndex === -1) {

@@ -7,6 +7,7 @@ type StockEvent =
   | { type: "complete_cnc"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
   | { type: "send_warranty"; total: number; address: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
   | { type: "complete_warranty"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
+  | { type: "send_partner"; total: number; partner: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
 
 export function buildStockEventMessage(event: StockEvent): { text: string; threadId: number } {
   const threadId = 22
@@ -17,6 +18,7 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
       case "complete_cnc": return "✅ Hoàn thành CNC"
       case "send_warranty": return "🛠️ Gửi bảo hành"
       case "complete_warranty": return "✅ Hoàn thành bảo hành"
+      case "send_partner": return "🤝 Giao đối tác"
       default: return "Thông báo kho"
     }
   })()
@@ -26,6 +28,10 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
   if (event.type === "send_cnc" || event.type === "send_warranty") {
     const addr = (event as any).address
     if (addr) lines.push(`Địa chỉ: ${addr}`)
+  }
+  if (event.type === "send_partner") {
+    const partner = (event as any).partner
+    if (partner) lines.push(`Đối tác: ${partner}`)
   }
   lines.push(`Số lượng: ${event.total}`)
   const list = (event.devices || []).map((d, idx) => {

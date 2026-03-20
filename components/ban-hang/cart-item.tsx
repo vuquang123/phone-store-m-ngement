@@ -1,9 +1,10 @@
 "use client"
 
+import { useState } from "react"
 import { CartItem, WarrantyPackageUI } from "@/lib/types/ban-hang"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { CheckCircle, Plus, Minus, Trash2 } from "lucide-react"
+import { CheckCircle, Plus, Minus, Trash2, Pencil, Check, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 
@@ -36,6 +37,9 @@ export function CartItemRow({
   updateQuantity,
   removeFromCart
 }: CartItemRowProps) {
+  const [isEditingPrice, setIsEditingPrice] = useState(false)
+  const [tempPrice, setTempPrice] = useState(String(item.gia_ban))
+  
   const isPartner = String(item.nguon || item.source || '').toLowerCase().includes('kho ngoài')
   const deviceId = (item.imei || item.serial || item.id) as string
 
@@ -222,8 +226,60 @@ export function CartItemRow({
         )}
       </div>
 
-      <div className="text-right">
-        <p className="font-semibold text-sm">₫{(item.gia_ban * (item.so_luong || 1)).toLocaleString()}</p>
+      <div className="text-right min-w-[100px]">
+        {isEditingPrice ? (
+          <div className="flex items-center gap-1 justify-end">
+            <Input
+              className="h-7 w-20 text-[11px] px-1 text-right"
+              value={tempPrice}
+              autoFocus
+              onChange={e => setTempPrice(e.target.value.replace(/\D/g, ''))}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const newPrice = parseInt(tempPrice) || 0
+                  setCart(prev => prev.map(it => (it.id === item.id && it.type === item.type) ? { ...it, gia_ban: newPrice } : it))
+                  setIsEditingPrice(false)
+                } else if (e.key === 'Escape') {
+                  setTempPrice(String(item.gia_ban))
+                  setIsEditingPrice(false)
+                }
+              }}
+            />
+            <button 
+              className="text-green-600 hover:text-green-700"
+              onClick={() => {
+                const newPrice = parseInt(tempPrice) || 0
+                setCart(prev => prev.map(it => (it.id === item.id && it.type === item.type) ? { ...it, gia_ban: newPrice } : it))
+                setIsEditingPrice(false)
+              }}
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button 
+              className="text-slate-400 hover:text-slate-500"
+              onClick={() => {
+                setTempPrice(String(item.gia_ban))
+                setIsEditingPrice(false)
+              }}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 justify-end group">
+            <p className="font-semibold text-sm">₫{(item.gia_ban * (item.so_luong || 1)).toLocaleString()}</p>
+            <button 
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500"
+              onClick={() => {
+                setTempPrice(String(item.gia_ban))
+                setIsEditingPrice(true)
+              }}
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+        
         {item.type === 'product' && selectedWarranties[deviceId] && (
           <p className="text-[10px] text-blue-600">
             + ₫{(warrantyPackages.find(p => p.code === selectedWarranties[deviceId])?.price || 0).toLocaleString()}

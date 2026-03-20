@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Edit2, Eye } from "lucide-react"
+import { Edit2, Eye, Hammer, UserPlus } from "lucide-react"
 import { getTrangThaiColor, getTrangThaiKhoColor, getLoaiMayLabel } from "@/lib/utils/inventory-helpers"
 
 interface Product {
@@ -36,6 +36,8 @@ interface ProductTableProps {
   isEditMode: boolean
   isManager: boolean
   onEdit: (product: Product) => void
+  onSendCNC?: (product: Product) => void
+  onSendPartner?: (product: Product) => void
   onViewCustomer?: (product: Product) => void
   totalCount?: number
 }
@@ -48,6 +50,8 @@ export function ProductTable({
   isEditMode,
   isManager,
   onEdit,
+  onSendCNC,
+  onSendPartner,
   onViewCustomer,
   totalCount
 }: ProductTableProps) {
@@ -75,8 +79,9 @@ export function ProductTable({
             <TableHead className="font-semibold text-slate-700 hidden md:table-cell">IMEI/Serial</TableHead>
             <TableHead className="font-semibold text-slate-700 hidden sm:table-cell">Loại</TableHead>
             <TableHead className="font-semibold text-slate-700 hidden lg:table-cell">Pin</TableHead>
-
+            <TableHead className="font-semibold text-slate-700">Tình trạng</TableHead>
             <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
+
             <TableHead className="font-semibold text-slate-700 text-right">Giá bán</TableHead>
             {!isEditMode && <TableHead className="w-20"></TableHead>}
           </TableRow>
@@ -125,10 +130,14 @@ export function ProductTable({
               </TableCell>
 
               <TableCell>
+                <span className="text-sm text-slate-600">{product.tinh_trang || "-"}</span>
+              </TableCell>
+              <TableCell>
                 <Badge className={`${getTrangThaiColor(product.trang_thai)} border-none text-[11px]`}>
                   {product.trang_thai}
                 </Badge>
               </TableCell>
+
               <TableCell className="text-right">
                 <div className="flex flex-col items-end">
                   <span className="font-bold text-emerald-600">
@@ -149,13 +158,24 @@ export function ProductTable({
               {!isEditMode && (
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Row-level edit removed as per user request */}
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-8 w-8 text-slate-400 hover:text-emerald-600"
-                      onClick={() => onEdit(product)}
+                      className="h-8 w-8 text-slate-400 hover:text-orange-500"
+                      title="Gửi CNC"
+                      onClick={() => onSendCNC?.(product)}
                     >
-                      <Edit2 className="h-4 w-4" />
+                      <Hammer className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-slate-400 hover:text-purple-600"
+                      title="Giao đối tác"
+                      onClick={() => onSendPartner?.(product)}
+                    >
+                      <UserPlus className="h-4 w-4" />
                     </Button>
                     {onViewCustomer && (
                       <Button 
@@ -174,7 +194,8 @@ export function ProductTable({
           ))}
           {products.length === 0 && (
             <TableRow>
-              <TableCell colSpan={isEditMode ? 8 : 7} className="h-32 text-center text-slate-500">
+              <TableCell colSpan={isEditMode ? 9 : 8} className="h-32 text-center text-slate-500">
+
                 Không tìm thấy sản phẩm nào phù hợp.
               </TableCell>
             </TableRow>

@@ -8,6 +8,7 @@ interface InventoryStatsProps {
   soSanPhamCon: number
   soSanPhamCNC: number
   soSanPhamBH: number
+  soSanPhamDoiTac: number
   soPhuKienDaHet: number
   soPhuKienSapHet: number
 }
@@ -16,6 +17,7 @@ export function InventoryStats({
   soSanPhamCon,
   soSanPhamCNC,
   soSanPhamBH,
+  soSanPhamDoiTac,
   soPhuKienDaHet,
   soPhuKienSapHet
 }: InventoryStatsProps) {
@@ -28,7 +30,7 @@ export function InventoryStats({
           <div className="bg-white p-2 rounded-lg shadow-sm">📲</div>
           <div className="flex-1">
             <div className="text-sm font-bold text-emerald-800 mb-2">Sản phẩm hệ thống</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <button 
                 onClick={() => setActiveTab("san-pham")}
                 className="flex flex-col items-center p-2 bg-white/60 rounded-lg border border-emerald-100 hover:bg-white transition-colors"
@@ -49,6 +51,13 @@ export function InventoryStats({
               >
                 <span className="text-xs text-slate-500 mb-1">Bảo hành</span>
                 <span className="text-lg font-bold text-blue-600">{soSanPhamBH}</span>
+              </button>
+              <button 
+                onClick={() => setActiveTab("giao-doi-tac")}
+                className="flex flex-col items-center p-2 bg-white/60 rounded-lg border border-emerald-100 hover:bg-white transition-colors"
+              >
+                <span className="text-xs text-slate-500 mb-1">Đối tác</span>
+                <span className="text-lg font-bold text-purple-600">{soSanPhamDoiTac}</span>
               </button>
             </div>
           </div>
@@ -88,11 +97,12 @@ export function InventoryTabs() {
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      <TabsList className="grid w-full grid-cols-4 max-w-2xl bg-slate-100/50 p-1 rounded-xl h-11">
+      <TabsList className="grid w-full grid-cols-5 max-w-3xl bg-slate-100/50 p-1 rounded-xl h-11">
         <TabsTrigger value="san-pham" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 font-medium">Sản phẩm</TabsTrigger>
         <TabsTrigger value="phu-kien" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 font-medium">Phụ kiện</TabsTrigger>
         <TabsTrigger value="dang-cnc" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 font-medium">CNC</TabsTrigger>
         <TabsTrigger value="bao-hanh" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 font-medium">Bảo hành</TabsTrigger>
+        <TabsTrigger value="giao-doi-tac" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 font-medium">Đối tác</TabsTrigger>
       </TabsList>
     </Tabs>
   )

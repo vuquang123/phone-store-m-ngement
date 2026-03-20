@@ -10,12 +10,14 @@ export async function PATCH(req: Request) {
     }
     // Đọc dữ liệu hiện tại
     const { header, rows } = await readFromGoogleSheets("Dat_Coc");
-    const idxIMEI = header.findIndex(h => h.trim().toLowerCase() === "imei");
-    const idxTrangThai = header.findIndex(h => h.trim().toLowerCase() === "trạng thái");
-    const idxMaDon = header.findIndex(h => h.trim().toLowerCase() === "mã đơn hàng" || h.trim().toLowerCase() === "id đơn hàng");
+    const idxIMEI = colIndex(header, "IMEI");
+    const idxTrangThai = colIndex(header, "Trạng Thái");
+    const idxMaDon = colIndex(header, "Mã Đơn Hàng", "ID Đơn Hàng");
+    
     if (idxIMEI === -1 || idxTrangThai === -1) {
       return NextResponse.json({ error: "Không tìm thấy cột IMEI hoặc Trạng Thái" }, { status: 400 });
     }
+
     // Đổi trạng thái thành 'Đã hoàn thành' cho các dòng có IMEI nằm trong productIds
     const desired = String(newStatus || 'Đã hoàn thành');
     const imeiSet = new Set((productIds || []).map((i: any) => String(i).trim()));
@@ -45,13 +47,14 @@ export async function DELETE(req: Request) {
     }
     // Đọc dữ liệu hiện tại
     const { header, rows } = await readFromGoogleSheets("Dat_Coc");
-    const idxIMEI = header.findIndex(h => h.trim().toLowerCase() === "imei");
+    const idxIMEI = colIndex(header, "IMEI");
     if (idxIMEI === -1) {
       return NextResponse.json({ error: "Không tìm thấy cột IMEI" }, { status: 400 });
     }
     // Đổi trạng thái thành 'Hủy đặt cọc' cho các dòng có IMEI nằm trong productIds
-    const idxTrangThai = header.findIndex(h => h.trim().toLowerCase() === "trạng thái");
-    const idxTrangThaiMay = header.findIndex(h => h.trim().toLowerCase() === "trạng thái máy");
+    const idxTrangThai = colIndex(header, "Trạng Thái");
+    const idxTrangThaiMay = colIndex(header, "Trạng Thái Máy", "Tình Trạng Máy");
+
     const imeiSet = new Set(productIds.map(i => String(i).trim()));
     // Lưu trạng thái máy hiện tại từ Dat_Coc
     const imeiToStatus: Record<string, string> = {};
@@ -74,9 +77,10 @@ export async function DELETE(req: Request) {
     // --- Cập nhật trạng thái máy về kho ---
     // Đọc sheet Kho_Hang
     const { header: khoHeader, rows: khoRows } = await readFromGoogleSheets("Kho_Hang");
-    const idxKhoIMEI = khoHeader.findIndex(h => h.trim().toLowerCase() === "imei");
-    const idxKhoTrangThai = khoHeader.findIndex(h => h.trim().toLowerCase() === "trạng thái");
+    const idxKhoIMEI = colIndex(khoHeader, "IMEI");
+    const idxKhoTrangThai = colIndex(khoHeader, "Trạng Thái");
     if (idxKhoIMEI !== -1 && idxKhoTrangThai !== -1) {
+
       const updatedKhoRows = khoRows.map(row => {
         const imei = String(row[idxKhoIMEI]).trim();
         if (imeiSet.has(imei) && imeiToStatus[imei]) {
@@ -93,18 +97,20 @@ export async function DELETE(req: Request) {
   }
 }
 import { NextResponse } from "next/server"
-import { appendToGoogleSheets, readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
+import { appendToGoogleSheets, readFromGoogleSheets, updateRangeValues, colIndex, norm } from "@/lib/google-sheets"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
+
 
 // API route: GET /api/dat-coc
 export async function GET() {
   try {
     const { header, rows } = await readFromGoogleSheets("Dat_Coc")
     // Bỏ qua các dòng có trạng thái 'Hủy đặt cọc'
-    const idxTrangThai = header.findIndex(h => h.trim().toLowerCase() === "trạng thái");
+    const idxTrangThai = colIndex(header, "Trạng Thái");
     const filteredRows = idxTrangThai === -1
       ? rows
-      : rows.filter(row => (row[idxTrangThai] || "").trim().toLowerCase() !== "hủy đặt cọc");
+      : rows.filter(row => String(row[idxTrangThai] || "").trim().toLowerCase() !== "hủy đặt cọc");
+
     return NextResponse.json({ data: [header, ...filteredRows] }, { status: 200 })
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -139,18 +145,15 @@ export async function POST(req: Request) {
 
     // Đọc header để map động theo tên cột (tránh lệch khi thêm 'Serial' hoặc cột khác)
     const { header } = await readFromGoogleSheets("Dat_Coc")
-    const norm = (s: string) => (s||"")
-      .normalize("NFD")
-      // @ts-ignore
-      .replace(/\p{Diacritic}/gu, "")
-      .toLowerCase()
-      .trim()
-    const idx = (name: string) => header.findIndex(h => norm(h) === norm(name))
+    
+    // Sử dụng colIndex và norm từ lib/google-sheets
+    const idx = (name: string) => colIndex(header, name)
 
     const setField = (row: any[], name: string, value: any) => {
       const i = idx(name)
       if (i !== -1) row[i] = value ?? ""
     }
+
 
     const buildRow = (p: any, idxLine: number) => {
       const row = Array(header.length).fill("")

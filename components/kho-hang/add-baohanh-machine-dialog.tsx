@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useAuthMe } from "@/hooks/use-auth-me"
 
 interface AddBaoHanhMachineDialogProps {
   isOpen: boolean
@@ -20,6 +21,7 @@ interface AddBaoHanhMachineDialogProps {
 }
 
 export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: AddBaoHanhMachineDialogProps) {
+  const { me } = useAuthMe()
   const { toast } = useToast()
 
   // Dropdown tên sản phẩm
@@ -62,6 +64,7 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
       window.baoHanhAddresses = window.baoHanhAddresses || [];
       const defaultAddress = 'Tâm Táo (9A Đường số 6, KP5, Linh Tây, Thủ Đức)';
       const qhStoreAddress = 'QH store (5 đường Năm Châu, phường 11, Tân Bình)';
+      const exShopAddress = 'EX shop (95 Thành Mỹ, Phường 8, Tân Bình)';
       if (!window.baoHanhAddresses.some(a => a.value === defaultAddress)) {
         window.baoHanhAddresses.unshift({ label: defaultAddress, value: defaultAddress });
       }
@@ -89,7 +92,7 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
         loi,
         dia_chi_bao_hanh: diaChiBaoHanh,
         ngay_gui: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN"),
-        employeeId: "NV001"
+        employeeId: me?.employeeId || "NV-UNKNOWN"
       })
     })
       .then(res => res.json())

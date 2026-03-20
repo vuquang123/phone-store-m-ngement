@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { readFromGoogleSheets, updateRowInGoogleSheets, logProductHistory } from "@/lib/google-sheets";
+import { readFromGoogleSheets, updateRowInGoogleSheets, logProductHistory, colIndex } from "@/lib/google-sheets";
+
+
 import { addNotification } from "@/lib/notifications";
 
 export async function POST(req: Request) {
@@ -10,8 +12,9 @@ export async function POST(req: Request) {
     }
     // Đọc sheet Bao_Hanh
     const { header, rows } = await readFromGoogleSheets("Bao_Hanh");
-    const idxIMEI = header.indexOf("IMEI");
-    const idxTrangThai = header.indexOf("Trạng Thái");
+    const idxIMEI = colIndex(header, "IMEI");
+    const idxTrangThai = colIndex(header, "Trạng Thái");
+
     if (idxIMEI === -1 || idxTrangThai === -1) {
       return NextResponse.json({ success: false, error: "Sheet Bao_Hanh thiếu cột IMEI hoặc Trạng Thái" }, { status: 500 });
     }
