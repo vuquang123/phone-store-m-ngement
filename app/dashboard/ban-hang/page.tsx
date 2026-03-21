@@ -914,7 +914,7 @@ export default function BanHangPage() {
         // Flow Đặt cọc: chỉ đổi trạng thái → 'Đã đặt cọc' (hàng nội bộ), KHÔNG xóa khỏi kho, ghi vào sheet Đặt Cọc
         try {
           const internalImeis = products
-            .filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('kho ngoài'))
+            .filter(p => !String(p.id || '').startsWith('DT-'))
             .map(p => p.imei || p.serial || p.id)
           if (internalImeis.length > 0) {
             const resStatus = await fetch("/api/update-product-status", {
@@ -980,7 +980,7 @@ export default function BanHangPage() {
           const dc = await res.json()
           // Xóa sản phẩm khỏi kho cho hàng nội bộ ngay khi đặt cọc
           const internalImeisForDelete = products
-            .filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('kho ngoài'))
+            .filter(p => !String(p.id || '').startsWith('DT-'))
             .map(p => p.imei || p.serial || p.id)
             .filter(Boolean)
           if (internalImeisForDelete.length > 0) {
@@ -1011,7 +1011,7 @@ export default function BanHangPage() {
         // Cập nhật trạng thái sản phẩm thành 'Đã bán'
         try {
           const internalImeis = products
-            .filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('kho ngoài'))
+            .filter(p => !String(p.id || '').startsWith('DT-'))
             .map(p => p.imei || p.serial || p.id)
           if (internalImeis.length > 0) {
             const resStatus = await fetch("/api/update-product-status", {
@@ -1027,7 +1027,7 @@ export default function BanHangPage() {
         }
         // Xóa sản phẩm khỏi kho cho hàng nội bộ
         const internalImeisForDelete = products
-          .filter(p => !String(p.nguon || p.source || '').toLowerCase().includes('kho ngoài'))
+          .filter(p => !String(p.id || '').startsWith('DT-'))
           .map(p => p.imei || p.serial || p.id)
           .filter(Boolean)
         if (internalImeisForDelete.length > 0) {
