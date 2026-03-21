@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm, updateProductsNguon } from "@/lib/google-sheets"
 
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { sendStockEventNotification } from "@/lib/telegram"
@@ -108,6 +108,9 @@ function getValForHeader(
   }
   if (k === "Ghi Chú") {
     return body.ghi_chu || bodyNormMap["ghichu"] || ""
+  }
+  if (k === "Nguồn" || k === "Nguồn Hàng") {
+    return body.nguon || bodyNormMap["nguon"] || bodyNormMap["nguonhang"] || ""
   }
   return (
     body[k] ??
@@ -223,6 +226,22 @@ export async function POST(request: NextRequest) {
         await sendImportMessage(added, body.products)
       }
       return NextResponse.json({ ok: true, added }, { status: 200 })
+    } else if (body.action === "bulk_update_nguon" && Array.isArray(body.productIds) && body.nguon) {
+      const result: any = await updateProductsNguon(body.productIds, body.nguon, body.employeeId || "NV-UNKNOWN")
+      if (!result.success) {
+        return NextResponse.json({ error: result.error }, { status: 500 })
+      }
+      // Gửi thông báo Telegram khi chuyển kho thành công
+      if (result.devices && result.devices.length > 0) {
+        await sendStockEventNotification({
+          type: "transfer",
+          total: result.devices.length,
+          to: body.nguon,
+          devices: result.devices,
+          employee: body.employeeId
+        }).catch(e => console.error("[TG] transfer notify fail:", e))
+      }
+      return NextResponse.json({ ok: true, updated: body.productIds.length }, { status: 200 })
     } else if (body.action === "update" && body.id) {
       // Tìm index cột ID Máy
       const idxId = colIndex(header, "ID Máy")
@@ -237,9 +256,18 @@ export async function POST(request: NextRequest) {
       }
       const oldRow = rows[rowIndex]
       // Map dữ liệu mới: nếu trường không có trong body thì lấy giá trị cũ
+      const bodyNormMap = buildBodyNormMap(body)
       const newRow = header.map((k, i) => {
+        const nk = normalizeKey(k)
+        // Ưu tiên các key cụ thể trong body hoặc bodyNormMap
+        if (k === "Nguồn" || k === "Nguồn Hàng") {
+          return body.nguon || bodyNormMap["nguon"] || bodyNormMap["nguonhang"] || oldRow[i] || ""
+        }
         if (body[k] !== undefined && body[k] !== null && body[k] !== "") {
           return body[k]
+        }
+        if (bodyNormMap[nk] !== undefined && bodyNormMap[nk] !== null && bodyNormMap[nk] !== "") {
+          return bodyNormMap[nk]
         }
         return oldRow[i] || ""
       })

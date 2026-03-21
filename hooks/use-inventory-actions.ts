@@ -93,6 +93,28 @@ export function useInventoryActions() {
     }
   })
 
+  const bulkUpdateNguonMutation = useMutation({
+    mutationFn: async ({ productIds, nguon, employeeId }: { productIds: string[], nguon: string, employeeId: string }) => {
+      const res = await fetch("/api/kho-hang", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulk_update_nguon", productIds, nguon, employeeId })
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Chuyển kho thất bại")
+      }
+      return res.json()
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] })
+      toast.success(`Đã chuyển ${variables.productIds.length} máy sang ${variables.nguon}`)
+    },
+    onError: (error: any) => {
+      toast.error(`Lỗi: ${error.message}`)
+    }
+  })
+
   return {
     completeCNC: completeCNCMutation.mutateAsync,
     isCompletingCNC: completeCNCMutation.isPending,
@@ -102,5 +124,7 @@ export function useInventoryActions() {
     isSendingPartner: sendPartnerMutation.isPending,
     returnPartner: returnPartnerMutation.mutateAsync,
     isReturningPartner: returnPartnerMutation.isPending,
+    bulkUpdateNguon: bulkUpdateNguonMutation.mutateAsync,
+    isUpdatingNguon: bulkUpdateNguonMutation.isPending,
   }
 }

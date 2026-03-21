@@ -84,7 +84,9 @@ export default function KhoHangPage() {
     sendPartner,
     isSendingPartner,
     returnPartner,
-    isReturningPartner
+    isReturningPartner,
+    bulkUpdateNguon,
+    isUpdatingNguon,
   } = useInventoryActions()
 
   // Local UI State
@@ -400,6 +402,24 @@ export default function KhoHangPage() {
                   >
                     Giao đối tác
                   </Button>
+                  <Select onValueChange={(val) => {
+                    bulkUpdateNguon({ 
+                      productIds: selectedIds, 
+                      nguon: val, 
+                      employeeId: me?.employeeId || "NV-UNKNOWN" 
+                    }).then(() => {
+                      setSelectedIds([]);
+                      setIsEditMode(false);
+                    });
+                  }}>
+                    <SelectTrigger className="h-8 w-[130px] text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border-emerald-200">
+                      <SelectValue placeholder="Chuyển kho" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white">
+                      <SelectItem value="Kho trong">Kho trong</SelectItem>
+                      <SelectItem value="Kho ngoài">Kho ngoài</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </div>

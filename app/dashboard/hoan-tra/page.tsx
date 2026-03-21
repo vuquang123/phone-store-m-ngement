@@ -18,6 +18,7 @@ interface ReturnOrder {
   so_dien_thoai?: string
   san_pham?: string
   imei?: string
+  serial?: string
   ly_do?: string
   trang_thai?: string
   so_tien_hoan?: number
@@ -72,6 +73,7 @@ export default function HoanTraPage() {
           so_dien_thoai: item.so_dien_thoai || "",
           san_pham: item.san_pham || "",
           imei: item.imei || "",
+          serial: item.serial || item.Serial || "",
           ly_do: item.ly_do || "",
           trang_thai: item.trang_thai || "Đang xử lý",
           so_tien_hoan: soTien,
@@ -122,7 +124,8 @@ export default function HoanTraPage() {
         (r.khach_hang || "").toLowerCase().includes(s) ||
         (r.san_pham || "").toLowerCase().includes(s) ||
         (r.so_dien_thoai || "").toLowerCase().includes(s) ||
-        (r.imei || "").toLowerCase().includes(s)
+        (r.imei || "").toLowerCase().includes(s) ||
+        (r.serial || "").toLowerCase().includes(s)
       )
     })
     setFilteredReturns(filtered)
@@ -247,10 +250,10 @@ export default function HoanTraPage() {
                       <span className="font-medium">{r.khach_hang}</span>
                       {r.so_dien_thoai && <span className="text-muted-foreground"> • {r.so_dien_thoai}</span>}
                     </div>
-                    {(r.san_pham || r.imei) && (
+                    {(r.san_pham || r.imei || r.serial) && (
                       <div className="text-muted-foreground">
                         {r.san_pham && <span>{r.san_pham}</span>}
-                        {r.imei && <span>{r.san_pham ? ' • ' : ''}IMEI: {r.imei}</span>}
+                        {(r.imei || r.serial) && <span>{r.san_pham ? ' • ' : ''}{r.imei || r.serial}</span>}
                       </div>
                     )}
                     {typeof r.so_tien_hoan === 'number' && r.so_tien_hoan > 0 && (
@@ -302,7 +305,11 @@ export default function HoanTraPage() {
             <div><span className="text-slate-500">Khách hàng:</span> <span className="font-medium">{selected?.khach_hang || '-'}</span></div>
             {selected?.so_dien_thoai && <div><span className="text-slate-500">SĐT:</span> {selected.so_dien_thoai}</div>}
             {selected?.san_pham && <div><span className="text-slate-500">Sản phẩm:</span> {selected.san_pham}</div>}
-            {selected?.imei && <div><span className="text-slate-500">IMEI:</span> {selected.imei}</div>}
+            {(selected?.imei || selected?.serial) && (
+              <div>
+                <span className="text-slate-500">IMEI/Serial:</span> {selected.imei || selected.serial}
+              </div>
+            )}
             {typeof selected?.so_tien_hoan === 'number' && selected?.so_tien_hoan! > 0 && (
               <div className="text-red-600 font-semibold">Số tiền hoàn: {new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND'}).format(selected!.so_tien_hoan!)}</div>
             )}

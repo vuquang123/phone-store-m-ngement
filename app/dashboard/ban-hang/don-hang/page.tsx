@@ -111,7 +111,7 @@ export default function DonHangPage() {
               nhan_vien: item["Người Bán"] || item.nhan_vien ? { id: item["Người Bán"] || (item.nhan_vien && item.nhan_vien.id) || "" } : undefined,
               loai_don: item["Loại Đơn"] || item.loai_don || "",
               hinh_thuc_van_chuyen: item["Hình Thức Vận Chuyển"] || item.hinh_thuc_van_chuyen || "",
-              imei: item.imei || item["IMEI"] || item.san_pham?.imei || "",
+              imei: item.imei || item["IMEI"] || item.san_pham?.imei || item.serial || item["Serial"] || item.san_pham?.serial || "",
               // Có thể bổ sung thêm các trường khác nếu cần
             };
           })

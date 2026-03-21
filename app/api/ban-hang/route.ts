@@ -745,12 +745,17 @@ export async function POST(request: NextRequest) {
       const productList: any[] = []
       for (const may of mayList) {
         if (!may) continue
+        const sourceStr = String(
+          may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "",
+        ).toLowerCase()
+        const isPartner = sourceStr.includes("kho ngoài") || sourceStr.includes("đối tác") || sourceStr.includes("partner")
         productList.push({
           ten_san_pham: may.ten_san_pham || may["Tên Sản Phẩm"] || '',
           loai_may: may.loai_may || may["Loại Máy"] || '',
           dung_luong: may.dung_luong || may["Dung Lượng"] || '',
           mau_sac: may.mau_sac || may["Màu Sắc"] || '',
           imei: may.imei || may["IMEI"] || '',
+          nguon: isPartner ? "Kho ngoài" : "Kho trong",
         })
       }
 

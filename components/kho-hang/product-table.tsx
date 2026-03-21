@@ -116,8 +116,16 @@ export function ProductTable({
               </TableCell>
               <TableCell className="hidden md:table-cell">
                 <div className="flex flex-col text-xs font-mono text-slate-600">
-                  <span>{product.imei || "-"}</span>
-                  <span className="text-slate-400">{product.serial}</span>
+                  {product.imei ? (
+                    <span>{product.imei}</span>
+                  ) : product.serial ? null : (
+                    <span>-</span>
+                  )}
+                  {product.serial && (
+                    <span className={product.imei ? "text-slate-400" : "text-slate-600"}>
+                      {product.serial}
+                    </span>
+                  )}
                 </div>
               </TableCell>
               <TableCell className="hidden sm:table-cell">

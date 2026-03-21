@@ -8,6 +8,7 @@ type StockEvent =
   | { type: "send_warranty"; total: number; address: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
   | { type: "complete_warranty"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
   | { type: "send_partner"; total: number; partner: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
+  | { type: "transfer"; total: number; to: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
 
 export function buildStockEventMessage(event: StockEvent): { text: string; threadId: number } {
   const threadId = 22
@@ -19,6 +20,7 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
       case "send_warranty": return "🛠️ Gửi bảo hành"
       case "complete_warranty": return "✅ Hoàn thành bảo hành"
       case "send_partner": return "🤝 Giao đối tác"
+      case "transfer": return "🔄 Chuyển kho"
       default: return "Thông báo kho"
     }
   })()
@@ -33,11 +35,18 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
     const partner = (event as any).partner
     if (partner) lines.push(`Đối tác: ${partner}`)
   }
+  if (event.type === "transfer") {
+    const to = (event as any).to
+    if (to) lines.push(`Kho đích: ${to}`)
+  }
   lines.push(`Số lượng: ${event.total}`)
   const list = (event.devices || []).map((d, idx) => {
     const name = d.name || "Máy"
-    const id = d.imei || d.serial || "?"
-    return `${idx + 1}. ${name}${id ? ` • IMEI/Serial: ${id}` : ""}`
+    const ids = []
+    if (d.imei) ids.push(`IMEI: ${d.imei}`)
+    if (d.serial) ids.push(`Serial: ${d.serial}`)
+    const idStr = ids.join(" - ")
+    return `${idx + 1}. ${name}${idStr ? ` • ${idStr}` : ""}`
   })
   if (list.length) {
     lines.push("Danh sách:")
@@ -372,13 +381,15 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     const dungLuong = p.dung_luong || p.dungLuong
     const mauSac = p.mau_sac || p.mauSac
     const thongSo = [loaiMay, dungLuong, mauSac].filter(Boolean).join("/")
-    const head = thongSo ? `${tenSanPham} (${thongSo})` : tenSanPham
+    const nguonStr = p.nguon ? ` [${p.nguon}]` : ""
+    const head = thongSo ? `${tenSanPham} (${thongSo})${nguonStr}` : `${tenSanPham}${nguonStr}`
     const idLine = (() => {
       const imei = p.imei || p.IMEI
       const serial = p.serial || p.Serial
-      if (imei) return ` | IMEI: ${imei}`
-      if (serial) return ` | Serial: ${serial}`
-      return ""
+      const parts = []
+      if (imei) parts.push(`IMEI: ${imei}`)
+      if (serial) parts.push(`Serial: ${serial}`)
+      return parts.length ? ` | ${parts.join(" - ")}` : ""
     })()
     return `• ${head}${idLine}`
   })

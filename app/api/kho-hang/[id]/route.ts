@@ -1,6 +1,7 @@
 // app/api/kho-hang/[id]/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
+import { sendStockEventNotification } from "@/lib/telegram"
 
 const SHEETS = {
   KHO_HANG: "Kho_Hang",
@@ -59,6 +60,7 @@ function idxKhoHang(header: string[]) {
     giaBan: colIndex(header, "Giá Bán"),
     ghiChu: colIndex(header, "Ghi Chú"),
     trangThai: colIndex(header, "Trạng Thái"),
+    nguon: colIndex(header, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang"),
   }
 }
 
@@ -92,6 +94,7 @@ export async function GET(_request: NextRequest, ctx: { params: { id: string } }
       gia_ban: K.giaBan !== -1 ? Number(r[K.giaBan] || 0) : null, // map 'Giá Bán'
       ghi_chu: K.ghiChu !== -1 ? r[K.ghiChu] : null,
       trang_thai: K.trangThai !== -1 ? r[K.trangThai] : null,
+      nguon: K.nguon !== -1 ? r[K.nguon] : null,
     }
 
     return NextResponse.json(data)
@@ -153,10 +156,25 @@ export async function PUT(request: NextRequest, ctx: { params: { id: string } } 
   if (K.giaBan !== -1 && typeof gia_ban !== "undefined") current[K.giaBan] = String(Number(gia_ban))
     if (K.ghiChu !== -1 && typeof ghi_chu !== "undefined") current[K.ghiChu] = ghi_chu
     if (K.trangThai !== -1 && typeof trang_thai !== "undefined") current[K.trangThai] = trang_thai
+    if (K.nguon !== -1 && typeof body.nguon !== "undefined") current[K.nguon] = body.nguon
 
     const rowNumber = rowIdx + 2
     const lastCol = toColumnLetter(header.length)
     await updateRangeValues(`${SHEETS.KHO_HANG}!A${rowNumber}:${lastCol}${rowNumber}`, [current])
+
+    // Gửi thông báo Telegram nếu có thay đổi nguồn hàng
+    if (typeof body.nguon !== "undefined" && body.nguon !== "") {
+      await sendStockEventNotification({
+        type: "transfer",
+        total: 1,
+        to: body.nguon,
+        devices: [{
+          name: current[K.tenSP] || "Máy",
+          imei: current[K.imei] || current[K.serial] || ""
+        }],
+        employee: body.employeeId || body.employeeName || "NV-UNKNOWN"
+      }).catch(e => console.error("[TG] single transfer notify fail:", e))
+    }
 
     // Trả về theo định dạng snake_case giống GET
     const data = {
@@ -174,6 +192,7 @@ export async function PUT(request: NextRequest, ctx: { params: { id: string } } 
       gia_ban: K.giaBan !== -1 ? Number(current[K.giaBan] || 0) : null,
       ghi_chu: K.ghiChu !== -1 ? current[K.ghiChu] : null,
       trang_thai: K.trangThai !== -1 ? current[K.trangThai] : null,
+      nguon: K.nguon !== -1 ? current[K.nguon] : null,
     }
 
     return NextResponse.json(data)

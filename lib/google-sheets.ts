@@ -578,7 +578,7 @@ export async function logProductHistory(productIds: string[], newStatus: string,
       tenSP = (cncRow && idxCncTenSP !== -1) ? cncRow[idxCncTenSP] : "";
       trangThaiCu = oldStatuses && oldStatuses[i] ? oldStatuses[i] : (cncRow && cncTtIdx !== -1 ? cncRow[cncTtIdx] : "");
     }
-    await appendToGoogleSheets("Lich_Su_Trang_Thai_May", [
+  await appendToGoogleSheets("Lich_Su_Trang_Thai_May", [
       idLast5,
       tenSP,
       trangThaiCu,
@@ -588,4 +588,41 @@ export async function logProductHistory(productIds: string[], newStatus: string,
     ]);
   }
   return { success: true, count: productIds.length }
+}
+
+export async function updateProductsNguon(productIds: string[], newNguon: string, employeeId: string) {
+  const { header, rows } = await readFromGoogleSheets("Kho_Hang")
+  const idxId = colIndex(header, "ID Máy")
+  // Kiểm tra nhiều tên cột khác nhau để tìm cột Nguồn hàng (giống logic trong app/api/kho-hang/route.ts)
+  const idxNguon = colIndex(header, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang", "Trạng Thái Kho", "Trạng thái kho", "Tình Trạng Tồn", "Kho Hiển Thị")
+  const idxTrangThai = colIndex(header, "Trạng Thái")
+
+  if (idxId === -1 || idxNguon === -1) {
+    return { success: false, error: `Không tìm thấy cột ID Máy (${idxId}) hoặc Nguồn hàng (${idxNguon}).` }
+  }
+
+  const oldStatuses: string[] = []
+  const devices: any[] = []
+  const idxTenSP = colIndex(header, "Tên Sản Phẩm")
+  const idxIMEI = colIndex(header, "IMEI")
+
+  const updatedRows = rows.map(row => {
+    if (productIds.includes(row[idxId])) {
+      oldStatuses.push(idxTrangThai !== -1 ? row[idxTrangThai] : "")
+      row[idxNguon] = newNguon
+      devices.push({
+        name: idxTenSP !== -1 ? row[idxTenSP] : "Máy",
+        imei: idxIMEI !== -1 ? row[idxIMEI] : ""
+      })
+    }
+    return row
+  })
+
+  const syncResult = await syncToGoogleSheets("Kho_Hang", updatedRows)
+  if (syncResult.success) {
+    // Ghi lịch sử chuyển kho
+    await logProductHistory(productIds, `Chuyển sang ${newNguon}`, employeeId, oldStatuses)
+    return { ...syncResult, devices }
+  }
+  return syncResult
 }
