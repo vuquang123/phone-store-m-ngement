@@ -226,21 +226,28 @@ export default function BanHangPage() {
   const editPriceRef = useRef<HTMLInputElement|null>(null)
   // Abort previous search requests when user keeps typing
   const searchAbortRef = useRef<AbortController | null>(null)
+  const isCartLoaded = useRef(false)
+  const isWarrantyLoaded = useRef(false)
 
   useEffect(() => {
-    // Khôi phục draft giỏ & bảo hành (9.3)
     try {
       const raw = localStorage.getItem('cart_draft_v1')
       if (raw) {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed)) setCart(parsed)
       }
+    } catch {}
+    isCartLoaded.current = true
+
+    try {
       const sel = localStorage.getItem('cart_warranty_sel_v1')
       if (sel) {
         const parsedSel = JSON.parse(sel)
         if (parsedSel && typeof parsedSel === 'object') setSelectedWarranties(parsedSel)
       }
     } catch {}
+    isWarrantyLoaded.current = true
+
     const loadWarrantyPkgs = async () => {
       try {
         setWarrantyPkgLoading(true)
@@ -262,8 +269,15 @@ export default function BanHangPage() {
     setSelectedWarranties(prev => ({ ...prev, [deviceId]: pkgCode }))
   }
   // Persist cart & selections (9.3)
-  useEffect(()=>{ try { localStorage.setItem('cart_draft_v1', JSON.stringify(cart)) } catch{} }, [cart])
-  useEffect(()=>{ try { localStorage.setItem('cart_warranty_sel_v1', JSON.stringify(selectedWarranties)) } catch{} }, [selectedWarranties])
+  useEffect(()=>{ 
+    if (!isCartLoaded.current) return
+    try { localStorage.setItem('cart_draft_v1', JSON.stringify(cart)) } catch{} 
+  }, [cart])
+
+  useEffect(()=>{ 
+    if (!isWarrantyLoaded.current) return
+    try { localStorage.setItem('cart_warranty_sel_v1', JSON.stringify(selectedWarranties)) } catch{} 
+  }, [selectedWarranties])
 
   // ===== Discount parser (5.2) =====
   function parseDiscount(raw: string, base: number): number {

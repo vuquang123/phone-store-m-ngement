@@ -330,26 +330,42 @@ export default function KhoHangPage() {
       if (!Array.isArray(cart)) cart = []
 
       const newCartItem = {
-        id: p.id || p.ID || p["ID Máy"],
-        ten_san_pham: p.ten_san_pham || p.tenSP || p["Tên Sản Phẩm"],
+        id: p.id || p.ID || p["ID Máy"] || p.imei,
+        type: "product",
+        ten_san_pham: p.ten_san_pham || p.tenSP || p["Tên Sản Phẩm"] || p.model || "",
         imei: p.imei || "",
-        mau_sac: p.mau_sac || "",
-        dung_luong: p.dung_luong || "",
+        serial: p.serial || "",
+        mau_sac: p.mau_sac || p.mau || "",
+        dung_luong: p.dung_luong || p.bo_nho || "",
         loai_may: p.loai_may || "",
-        gia_ban: p.gia_ban || 0,
-        gia_nhap: p.gia_nhap || 0,
-        sl: 1
+        gia_ban: typeof p.gia_ban === 'number' ? p.gia_ban 
+               : typeof p.gia_goi_y_ban === 'number' ? p.gia_goi_y_ban
+               : (parseInt(String(p.gia_ban || p.gia_goi_y_ban || '0').replace(/[^\d]/g, "")) || 0),
+        gia_nhap: typeof p.gia_nhap === 'number' ? p.gia_nhap 
+                : typeof p.gia_chuyen === 'number' ? p.gia_chuyen
+                : (parseInt(String(p.gia_nhap || p.gia_chuyen || '0').replace(/[^\d]/g, "")) || 0),
+        so_luong: 1,
+        max_quantity: 1,
+        source: "Kho ngoài",
+        nguon: "Kho ngoài",
+        partner_sheet: p.partner_sheet || p.sheet || "",
+        partner_row_index: p.partner_row_index || p.row_index || "",
+        ten_doi_tac: p.ten_doi_tac || "",
+        sdt_doi_tac: p.sdt_doi_tac || ""
       }
 
-      // Kiểm tra nếu đã có trong giỏ
-      const exists = cart.find((item: any) => item.id === newCartItem.id)
-      if (!exists) {
-        cart.push(newCartItem)
-        localStorage.setItem('cart_draft_v1', JSON.stringify(cart))
-      }
+      // Cập nhật giỏ hàng: nếu đã có thì thay thế, nếu chưa có thì thêm mới
+      const otherItems = cart.filter((item: any) => !(item.id === newCartItem.id && item.type === "product"))
+      const updatedCart = [...otherItems, newCartItem]
+      localStorage.setItem('cart_draft_v1', JSON.stringify(updatedCart))
 
       toast.success("Đã thêm vào giỏ hàng. Chuyển sang trang bán hàng...")
-      router.push('/dashboard/ban-hang')
+      
+      // Sử dụng window.location.href thay vì router.push để ép trình duyệt tải lại trang Bán hàng,
+      // đảm bảo useEffect LOAD dữ liệu từ localStorage được chạy lại.
+      setTimeout(() => {
+        window.location.href = '/dashboard/ban-hang'
+      }, 100)
     } catch (e) {
       toast.error("Lỗi khi thêm vào giỏ hàng")
     }
