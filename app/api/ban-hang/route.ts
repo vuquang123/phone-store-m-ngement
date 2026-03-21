@@ -642,15 +642,46 @@ export async function POST(request: NextRequest) {
     }
 
     // Xoá các sản phẩm nội bộ đã bán khỏi Kho_Hang
-    if (internalIdsToRemove.length > 0) {
+    if (mayList.length > 0) {
       try {
         const { header, rows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
         const idxIdMay = colIndex(header, "ID Máy")
+        const idxIMEI = colIndex(header, "IMEI")
+        const idxSerial = colIndex(header, "Serial")
+
         if (idxIdMay !== -1) {
-          const originalLength = rows.length
-          const newRows = rows.filter((r) => !internalIdsToRemove.includes(String(r[idxIdMay])))
-          if (newRows.length < originalLength) {
-            await syncToGoogleSheets(SHEETS.KHO_HANG, newRows)
+          // Chuẩn hóa danh sách IDs/IMEIs/Serials cần xóa từ mayList
+          const idsToDelete = mayList
+            .filter((m: any) => {
+              const src = String(m.nguon || m["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || "").toLowerCase()
+              return !src.includes("kho ngoài") && !src.includes("đối tác") && !src.includes("partner")
+            })
+            .map((m: any) => String(m.imei || m.serial || m.id || m.id_may || "").trim().toLowerCase())
+            .filter(Boolean)
+
+          if (idsToDelete.length > 0) {
+            const originalLength = rows.length
+            const newRows = rows.filter((r) => {
+              const imei = String(r[idxIMEI] || "").trim().toLowerCase()
+              const serial = String(r[idxSerial] || "").trim().toLowerCase()
+              const idMay = String(r[idxIdMay] || "").trim().toLowerCase()
+              
+              const imeiLast5 = imei.length >= 5 ? imei.slice(-5) : ""
+              const serialLast5 = serial.length >= 5 ? serial.slice(-5) : ""
+
+              const isMatch = idsToDelete.some((pid: string) => 
+                (imei && pid === imei) || 
+                (serial && pid === serial) || 
+                (idMay && pid === idMay) ||
+                (imeiLast5 && pid === imeiLast5) ||
+                (serialLast5 && pid === serialLast5)
+              )
+              return !isMatch
+            })
+
+            if (newRows.length < originalLength) {
+              await syncToGoogleSheets(SHEETS.KHO_HANG, newRows)
+            }
           }
         }
       } catch (e) {

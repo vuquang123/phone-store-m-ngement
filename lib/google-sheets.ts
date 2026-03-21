@@ -300,23 +300,14 @@ export async function readFromGoogleSheets(sheetName: string, range: string = "A
 // Ghi đè toàn bộ dữ liệu (bỏ qua header)
 export async function syncToGoogleSheets(sheetName: string, data: any[], range: string = "A2") {
   try {
-    // Kiểm tra an toàn: Nếu data rỗng nhưng sheet gốc có dữ liệu thì cảnh báo/ngăn chặn (tùy logic)
-    // Ở đây ta cho phép rỗng nếu thực sự muốn xóa hết, nhưng nên log kỹ
     if (!data || !Array.isArray(data)) {
         return { success: false, error: "Dữ liệu đồng bộ không hợp lệ (không phải mảng)" }
     }
 
-    // Xác định chiều rộng tối đa của dữ liệu để xóa dải cột tương ứng
-    let maxCols = 26; // Mặc định Z
-    if (data.length > 0) {
-        maxCols = Math.max(...data.map(r => r.length), 26);
-    }
-    const endCol = numberToColumnName(maxCols);
-
-    // Xóa dữ liệu cũ trong dải cột tương ứng
+    // Xóa dữ liệu cũ rộng hẳn ra (đến cột ZZ) để chắc chắn không còn dữ liệu "ma"
     await sheets.spreadsheets.values.clear({
       spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
-      range: `${escapeSheetName(sheetName)}!A2:${endCol}`,
+      range: `${escapeSheetName(sheetName)}!A2:ZZ10000`,
     })
     // Thêm dữ liệu mới
     if (data.length > 0) {
@@ -374,17 +365,11 @@ export async function updateRowInGoogleSheets(sheetName: string, key: string, ke
     const keyIndex = colIndex(header, key)
     if (keyIndex === -1) return { success: false, error: `Không tìm thấy cột khóa "${key}"` }
 
-    // Kiểm tra xem newData là gì. 
-    // Nếu newData[0] là mảng, có nghĩa là người dùng truyền vào toàn bộ bảng.
-    // Nếu newData[0] không phải mảng (string/number), có nghĩa là người dùng truyền vào 1 dòng.
-    
     let updatedRows: any[][] = [];
     if (Array.isArray(newData[0])) {
-        // Trường hợp truyền vào toàn bộ bảng
         updatedRows = newData;
     } else {
-        // Trường hợp truyền vào 1 dòng duy nhất (newRow)
-        const rowIndex = rows.findIndex(row => String(row[keyIndex]) === String(keyValue));
+        const rowIndex = rows.findIndex(row => String(row[keyIndex]).trim() === String(keyValue).trim());
         if (rowIndex === -1) {
             return { success: false, error: `Không tìm thấy dòng có ${key} = ${keyValue}` };
         }
@@ -415,7 +400,6 @@ export async function updateRangeValues(range: string, values: any[][]) {
   return { success: true }
 }
 
-// Di chuyển nhiều sản phẩm sang sheet CNC, cập nhật trạng thái, ghi lịch sử
 // Cập nhật trạng thái cho nhiều sản phẩm trong sheet Kho_Hang
 export async function updateProductsStatus(productIds: string[], newStatus: string) {
   const { header, rows } = await readFromGoogleSheets("Kho_Hang")
@@ -423,24 +407,38 @@ export async function updateProductsStatus(productIds: string[], newStatus: stri
   const idxIMEI = colIndex(header, "IMEI")
   const idxSerial = colIndex(header, "Serial")
   const idxTrangThai = colIndex(header, "Trạng Thái")
+  
   if (idxId === -1 || idxTrangThai === -1) return { success: false, error: "Không tìm thấy cột ID Máy hoặc Trạng Thái" }
-  const updatedRows = rows.map(row => {
-    // So sánh 5 số cuối IMEI với ID Máy
-    const imei = idxIMEI !== -1 ? String(row[idxIMEI] || "") : ""
-    const serial = idxSerial !== -1 ? String(row[idxSerial] || "") : ""
-    const idMay = String(row[idxId] || "")
+  
+  // Chuẩn hóa productIds để so khớp
+  const normIds = productIds.map(id => String(id || "").trim().toLowerCase()).filter(Boolean)
 
-    const imeiLast5 = imei ? String(imei).slice(-5) : ""
-    const serialLast5 = serial ? String(serial).slice(-5) : ""
-    if (
-      (imei && (productIds.includes(imei) || (imeiLast5 && productIds.includes(imeiLast5)))) ||
-      (serial && (productIds.includes(serial) || (serialLast5 && productIds.includes(serialLast5)))) ||
-      (idMay && productIds.includes(idMay))
-    ) {
+  const updatedRows = rows.map(row => {
+    const imei = String(row[idxIMEI] || "").trim()
+    const serial = String(row[idxSerial] || "").trim()
+    const idMay = String(row[idxId] || "").trim()
+
+    const imeiLower = imei.toLowerCase()
+    const serialLower = serial.toLowerCase()
+    const idMayLower = idMay.toLowerCase()
+
+    const imeiLast5 = imeiLower.length >= 5 ? imeiLower.slice(-5) : ""
+    const serialLast5 = serialLower.length >= 5 ? serialLower.slice(-5) : ""
+
+    const isMatch = normIds.some(pid => 
+      (imeiLower && pid === imeiLower) ||
+      (serialLower && pid === serialLower) ||
+      (idMayLower && pid === idMayLower) ||
+      (imeiLast5 && pid === imeiLast5) ||
+      (serialLast5 && pid === serialLast5)
+    )
+
+    if (isMatch) {
       row[idxTrangThai] = newStatus
     }
     return row
   })
+  
   const syncResult = await syncToGoogleSheets("Kho_Hang", updatedRows)
   if (!syncResult.success) {
     return { success: false, error: "Lỗi đồng bộ kho hàng: " + syncResult.error }
