@@ -1143,7 +1143,7 @@ export default function BanHangPage() {
                 sdt: selectedCustomer?.so_dien_thoai || '',
                 dia_chi: loaiDon === 'Đơn onl' ? diaChiNhan : ''
               },
-              warrantyPackages: (order.warranties || []).map((w: any) => w.ma_goi || w.packageCode)
+              warrantyPackages: (order.warranties || []).map((w: any) => w.ten_goi || w.ma_goi || w.packageCode)
             };
             const derivedOrderType = loaiDon?.toLowerCase?.() ? (loaiDon.toLowerCase().includes('onl') ? 'online' : 'offline') : undefined;
             try {

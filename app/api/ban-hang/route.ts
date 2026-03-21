@@ -459,10 +459,11 @@ export async function POST(request: NextRequest) {
         const pkgMapPre = await loadWarrantyPackages()
         for (const sel of warrantySelectionsInput) {
           const pkg = pkgMapPre[sel.packageCode]
-            if (pkg) {
-              warrantyPkgCodes.push(pkg.code)
-              warrantyTotalFee += pkg.price || 0
-            }
+          if (pkg) {
+            // Dùng tên gói cho Telegram để rõ ràng hơn
+            warrantyPkgCodes.push(pkg.name || pkg.code)
+            warrantyTotalFee += pkg.price || 0
+          }
         }
       } catch (e) {
         console.warn('[WARRANTY] preload price failed (still continue):', e)
@@ -652,10 +653,6 @@ export async function POST(request: NextRequest) {
         if (idxIdMay !== -1) {
           // Chuẩn hóa danh sách IDs/IMEIs/Serials cần xóa từ mayList
           const idsToDelete = mayList
-            .filter((m: any) => {
-              const src = String(m.nguon || m["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || "").toLowerCase()
-              return !src.includes("kho ngoài") && !src.includes("đối tác") && !src.includes("partner")
-            })
             .map((m: any) => String(m.imei || m.serial || m.id || m.id_may || "").trim().toLowerCase())
             .filter(Boolean)
 
@@ -847,11 +844,12 @@ export async function POST(request: NextRequest) {
     try {
       const selectionsRaw: any = warrantySelectionsInput
       if (Array.isArray(selectionsRaw) && selectionsRaw.length > 0) {
-        // Only keep selections that have imei & packageCode
+        // Chấp nhận cả imei hoặc serial, và bắt buộc có packageCode
         const selections: WarrantySelectionInput[] = selectionsRaw
-          .filter((s: any) => s && s.imei && s.packageCode)
+          .filter((s: any) => s && (s.imei || s.serial) && s.packageCode)
           .map((s: any) => ({
-            imei: String(s.imei),
+            imei: s.imei ? String(s.imei).trim() : '',
+            serial: s.serial ? String(s.serial).trim() : '',
             packageCode: String(s.packageCode).trim(),
             startDate: s.startDate,
             phone: customerPhoneEarly || s.phone,
@@ -901,13 +899,28 @@ export async function POST(request: NextRequest) {
               if (filtered.length) {
                 const contracts = buildContracts(idDonHang, customerPhoneEarly, filtered, pkgMap, body.employeeId)
                 await saveContracts(contracts)
-                warrantySummary = contracts.map(c => ({
+                const newSummary = contracts.map(c => ({
                   ma_hd: c.contractCode,
                   imei: c.imei,
+                  serial: c.serial,
                   ma_goi: c.packageCode,
+                  ten_goi: pkgMap[c.packageCode]?.name || c.packageCode,
                   han_tong: c.overallUntil,
                   trang_thai: c.status
                 }))
+                warrantySummary = [...warrantySummary, ...newSummary]
+              }
+              // Thêm cả các mục bị skip (vì đã có BH active) vào summary để hiển thị ở thông báo
+              if (warrantySkipped.length > 0) {
+                const skippedSummary = warrantySkipped.map(s => ({
+                  ma_hd: 'ALREADY_ACTIVE',
+                  imei: s.imei,
+                  serial: s.serial,
+                  ma_goi: s.packageCode,
+                  ten_goi: pkgMap[s.packageCode]?.name || s.packageCode,
+                  trang_thai: 'active'
+                }))
+                warrantySummary = [...warrantySummary, ...skippedSummary]
               }
             } catch (dupErr) {
               console.warn('[WARRANTY] Duplicate check failed, fallback tạo tất cả:', dupErr)
@@ -916,7 +929,9 @@ export async function POST(request: NextRequest) {
               warrantySummary = contracts.map(c => ({
                 ma_hd: c.contractCode,
                 imei: c.imei,
+                serial: c.serial,
                 ma_goi: c.packageCode,
+                ten_goi: pkgMap[c.packageCode]?.name || c.packageCode,
                 han_tong: c.overallUntil,
                 trang_thai: c.status
               }))
