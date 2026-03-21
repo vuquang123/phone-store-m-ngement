@@ -25,21 +25,20 @@ export async function POST(req: Request) {
     // Đọc header sheet CNC để map đúng thứ tự cột
     const { header } = await import("@/lib/google-sheets").then(m => m.readFromGoogleSheets("CNC"));
     const newRow = header.map(col => {
-      switch (col) {
-        case "ID Máy": return id_may;
-        case "Tên Sản Phẩm": return ten_san_pham;
-        case "IMEI": return imei;
-        case "Nguồn": return body.nguon || "Khách ngoài";
-        case "Tình trạng": return tinh_trang || "";
-        case "Loại Máy": return loai_may || "";
-        case "Trạng Thái": return "Đang CNC";
-        case "Địa chỉ CNC": return dia_chi_cnc;
-        case "Ngày gửi": return ngay_gui;
-        case "Ngày nhận lại": return body.ngay_nhan_lai || "";
-        case "Tên khách hàng": return khach_hang || "";
-        case "Số điện thoại": return so_dien_thoai || "";
-        default: return "";
-      }
+      const c = col.trim().toLowerCase();
+      if (c === "id máy" || c === "id may") return id_may;
+      if (c === "tên sản phẩm" || c === "ten san pham" || c === "tên máy" || c === "ten may" || c === "sản phẩm" || c === "san pham" || c === "model") return ten_san_pham;
+      if (c === "imei") return imei;
+      if (c === "nguồn" || c === "nguon") return body.nguon || "Khách ngoài";
+      if (c === "tình trạng" || c === "tinh trang") return tinh_trang || "";
+      if (c === "loại máy" || c === "loai may") return loai_may || "";
+      if (c === "trạng thái" || c === "trang thai") return "Đang CNC";
+      if (c === "địa chỉ cnc" || c === "dia chi cnc") return dia_chi_cnc;
+      if (c === "ngày gửi" || c === "ngay gui") return ngay_gui;
+      if (c === "ngày nhận lại" || c === "ngay nhan lai") return body.ngay_nhan_lai || "";
+      if (c === "tên khách hàng" || c === "ten khach hang" || c === "khách hàng" || c === "khach hang") return khach_hang || "";
+      if (c === "số điện thoại" || c === "so dien thoai" || c === "sđt" || c === "sdt") return so_dien_thoai || "";
+      return "";
     });
     await appendToGoogleSheets("CNC", newRow);
     // Ghi lịch sử trạng thái

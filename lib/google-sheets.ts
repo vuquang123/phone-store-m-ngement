@@ -492,10 +492,10 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
       if (col === "Nguồn") return nguon
       if (col === "Tình trạng") return tinh_trang
       if (col === "Màu Sắc" || col === "mau_sac") {
-        const idxMau = khoHeader.indexOf("Màu Sắc") !== -1 ? khoHeader.indexOf("Màu Sắc") : khoHeader.indexOf("mau_sac")
+        const idxMau = colIndex(khoHeader, "Màu Sắc", "mau_sac")
         return idxMau !== -1 ? row[idxMau] : ""
       }
-      const idxInKho = khoHeader.indexOf(col)
+      const idxInKho = colIndex(khoHeader, col)
       if (idxInKho !== -1) {
         return row[idxInKho]
       }

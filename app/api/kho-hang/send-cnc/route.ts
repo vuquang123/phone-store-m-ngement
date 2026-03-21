@@ -16,8 +16,8 @@ export async function POST(req: Request) {
     // Lấy trạng thái cũ từ sheet Kho_Hang
     const { header, rows } = await import("@/lib/google-sheets").then(m => m.readFromGoogleSheets("Kho_Hang"))
     const idxId = colIndex(header, "ID Máy")
-    const idxTen = colIndex(header, "Tên Sản Phẩm")
-    const idxSerial = colIndex(header, "Serial")
+    const idxTen = colIndex(header, "Tên Sản Phẩm", "Tên máy", "Sản phẩm", "Model")
+    const idxSerial = colIndex(header, "Serial", "Số sê-ri")
     const idxTrangThai = colIndex(header, "Trạng Thái")
     // Chuẩn hóa danh sách ID Máy cần chuyển: nhận cả IMEI, 5 số cuối IMEI hoặc ID Máy
     const idxIMEI = colIndex(header, "IMEI")

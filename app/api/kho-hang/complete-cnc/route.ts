@@ -14,8 +14,8 @@ export async function POST(req: Request) {
     const { header: cncHeader, rows: cncRows } = await readFromGoogleSheets("CNC")
     const idxIMEI = colIndex(cncHeader, "IMEI")
     const idxIdMay = colIndex(cncHeader, "ID Máy")
-    const idxTen = colIndex(cncHeader, "Tên Sản Phẩm")
-    const idxSerial = colIndex(cncHeader, "Serial")
+    const idxTen = colIndex(cncHeader, "Tên Sản Phẩm", "Tên máy", "Sản phẩm", "Model")
+    const idxSerial = colIndex(cncHeader, "Serial", "Số sê-ri")
     const idxTrangThai = colIndex(cncHeader, "Trạng Thái")
     const idxNgayNhanLai = colIndex(cncHeader, "Ngày nhận lại")
 
@@ -59,6 +59,7 @@ export async function POST(req: Request) {
     const { header: khoHeader, rows: khoRows } = await readFromGoogleSheets("Kho_Hang");
     const idxKhoId = colIndex(khoHeader, "ID Máy");
     const idxKhoIMEI = colIndex(khoHeader, "IMEI");
+    const idxKhoTen = colIndex(khoHeader, "Tên Sản Phẩm", "Tên máy", "Sản phẩm", "Model");
     const idxKhoTrangThai = colIndex(khoHeader, "Trạng Thái");
     const idxKhoGhiChu = colIndex(khoHeader, "Ghi Chú");
 
@@ -123,11 +124,22 @@ export async function POST(req: Request) {
   try {
     const devices = cncRows
       .filter(row => imeisToProcess.includes(row[idxIMEI]))
-      .map(row => ({
-        name: idxTen !== -1 ? row[idxTen] : undefined,
-        imei: row[idxIMEI],
-        serial: idxSerial !== -1 ? row[idxSerial] : undefined,
-      }))
+      .map(row => {
+        let name = idxTen !== -1 ? row[idxTen] : undefined;
+        const imei = row[idxIMEI];
+
+        // Fallback to Kho_Hang if name is missing in CNC sheet
+        if (!name && imei && khoRows && idxKhoIMEI !== -1 && idxKhoTen !== -1) {
+          const khoRow = khoRows.find(k => k[idxKhoIMEI] === imei);
+          if (khoRow) name = khoRow[idxKhoTen];
+        }
+
+        return {
+          name,
+          imei,
+          serial: idxSerial !== -1 ? row[idxSerial] : undefined,
+        };
+      })
     await sendStockEventNotification({
       type: "complete_cnc",
       total: imeisToProcess.length,
