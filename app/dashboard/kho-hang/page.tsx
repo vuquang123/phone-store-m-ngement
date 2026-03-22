@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
+import { useQueryClient } from "@tanstack/react-query"
+import { PullToRefresh } from "@/components/ui/pull-to-refresh"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -371,8 +373,23 @@ export default function KhoHangPage() {
     }
   }
 
+  const queryClient = useQueryClient()
+
+  const handleRefresh = async () => {
+    try {
+      await queryClient.invalidateQueries({ queryKey: ["inventory"] })
+      await queryClient.invalidateQueries({ queryKey: ["partner-inventory"] })
+      await queryClient.invalidateQueries({ queryKey: ["cnc-inventory"] })
+      await queryClient.invalidateQueries({ queryKey: ["accessories-inventory"] })
+      toast.success("Đã làm mới dữ liệu")
+    } catch (error) {
+      toast.error("Lỗi khi làm mới dữ liệu")
+    }
+  }
+
   return (
-    <div className="space-y-6 px-4 pb-8 max-w-[1600px] mx-auto">
+    <PullToRefresh onRefresh={handleRefresh}>
+      <div className="space-y-6 px-4 pb-8 max-w-[1600px] mx-auto">
       <InventoryStats {...stats} />
 
       <InventoryTabs />
@@ -835,5 +852,6 @@ export default function KhoHangPage() {
         }}
       />
     </div>
+    </PullToRefresh>
   )
 }

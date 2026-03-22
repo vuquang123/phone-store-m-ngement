@@ -66,7 +66,7 @@ export function CNCTable({
                 </Badge>
               </div>
             </TableHead>
-            <TableHead className="font-semibold text-slate-700">IMEI</TableHead>
+            <TableHead className="font-semibold text-slate-700 hidden sm:table-cell">IMEI</TableHead>
             <TableHead className="font-semibold text-slate-700 hidden md:table-cell">Địa chỉ CNC</TableHead>
             <TableHead className="font-semibold text-slate-700 hidden lg:table-cell">Tình trạng</TableHead>
             <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
@@ -85,13 +85,46 @@ export function CNCTable({
                   />
                 </TableCell>
               )}
-              <TableCell>
+              <TableCell className="py-3">
                 <div className="flex flex-col">
-                  <span className="font-medium text-slate-900">{p.ten_san_pham}</span>
-                  <span className="text-xs text-slate-500">{p.mau_sac} • {p.loai_may}</span>
+                  <span className="font-medium text-slate-900 leading-tight">{p.ten_san_pham}</span>
+                  <span className="text-xs text-slate-500 mt-0.5">{p.mau_sac} • {p.loai_may}</span>
+                  
+                  {/* Additional info for Mobile */}
+                  <div className="flex flex-col gap-1 mt-1.5 sm:hidden">
+                    {p.imei && (
+                      <span className="text-[10px] font-mono text-slate-500 bg-slate-50 self-start px-1 rounded">
+                        {p.imei}
+                      </span>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-1 rounded">
+                        CNC: {p.dia_chi_cnc}
+                      </span>
+                    </div>
+                    {p.tinh_trang && (
+                      <p className="text-[10px] text-slate-500 italic bg-slate-50 p-1 rounded border border-slate-100">
+                        {p.tinh_trang}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Info for tablets (where hidden classes still apply) */}
+                  <div className="hidden sm:block md:hidden mt-1">
+                    <span className="text-[10px] text-blue-600 font-medium truncate max-w-[150px] inline-block">
+                      CNC: {p.dia_chi_cnc}
+                    </span>
+                  </div>
+                  <div className="hidden sm:block lg:hidden mt-0.5">
+                    {p.tinh_trang && (
+                      <p className="text-[10px] text-slate-500 italic truncate max-w-[200px]">
+                        {p.tinh_trang}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </TableCell>
-              <TableCell className="text-sm font-mono text-slate-600">{p.imei}</TableCell>
+              <TableCell className="text-sm font-mono text-slate-600 hidden sm:table-cell">{p.imei}</TableCell>
               <TableCell className="hidden md:table-cell text-sm text-slate-600 font-medium text-blue-600">{p.dia_chi_cnc}</TableCell>
               <TableCell className="hidden lg:table-cell text-sm text-slate-600">{p.tinh_trang}</TableCell>
               <TableCell>

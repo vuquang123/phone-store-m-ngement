@@ -58,12 +58,33 @@ export function AccessoryTable({
         <TableBody>
           {items.map((item, idx) => (
             <TableRow key={item.id || idx} className="hover:bg-slate-50/50 transition-colors group">
-              <TableCell>
+              <TableCell className="py-3">
                 <div className="flex flex-col">
-                  <span className="font-medium text-slate-900">{item.ten_phu_kien || "(Không tên)"}</span>
+                  <span className="font-medium text-slate-900 leading-tight">{item.ten_phu_kien || "(Không tên)"}</span>
                   {item.updated_at && (
-                    <span className="text-[10px] text-slate-400">Cập nhật: {item.updated_at}</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">Cập nhật: {item.updated_at}</span>
                   )}
+                  
+                  {/* Additional info for Mobile */}
+                  <div className="flex flex-col gap-1 mt-1.5 sm:hidden">
+                    <Badge variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-4 py-0 px-1 self-start leading-none font-normal">
+                      {item.loai_phu_kien || "Khác"}
+                    </Badge>
+                    {item.ghi_chu && (
+                      <p className="text-[10px] text-slate-500 italic bg-slate-50 p-1 rounded border border-slate-100">
+                        {item.ghi_chu}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Note for Medium screens where the column is still hidden */}
+                  <div className="hidden sm:block md:hidden mt-1">
+                    {item.ghi_chu && (
+                      <p className="text-[10px] text-slate-500 italic truncate max-w-[200px]">
+                        {item.ghi_chu}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </TableCell>
               <TableCell className="hidden sm:table-cell">

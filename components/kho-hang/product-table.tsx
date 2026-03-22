@@ -79,7 +79,7 @@ export function ProductTable({
             <TableHead className="font-semibold text-slate-700 hidden md:table-cell">IMEI/Serial</TableHead>
             <TableHead className="font-semibold text-slate-700 hidden sm:table-cell">Loại</TableHead>
             <TableHead className="font-semibold text-slate-700 hidden lg:table-cell">Pin</TableHead>
-            <TableHead className="font-semibold text-slate-700">Tình trạng</TableHead>
+            <TableHead className="font-semibold text-slate-700 hidden md:table-cell">Tình trạng</TableHead>
             <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
 
             <TableHead className="font-semibold text-slate-700 text-right">Giá bán</TableHead>
@@ -97,19 +97,39 @@ export function ProductTable({
                   />
                 </TableCell>
               )}
-              <TableCell>
+              <TableCell className="py-3">
                 <div className="flex flex-col">
-                  <span className="font-medium text-slate-900">{product.ten_san_pham}</span>
+                  <span className="font-medium text-slate-900 leading-tight">{product.ten_san_pham}</span>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs text-slate-500">{product.mau_sac}</span>
                     <span className="text-xs text-slate-400">•</span>
                     <span className="text-xs text-slate-500">{product.dung_luong}</span>
+                    {String(product.nguon || "").toLowerCase().includes("kho ngoài") ? (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 text-[10px] h-4 px-1 py-0 leading-none">Kho ngoài</Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[10px] h-4 px-1 py-0 leading-none">Kho trong</Badge>
+                    )}
+                  </div>
+                  
+                  {/* Additional info for Mobile */}
+                  <div className="flex flex-col gap-1 mt-2 md:hidden">
                     {(product.imei || product.serial) && (
-                      String(product.nguon || "").toLowerCase().includes("kho ngoài") ? (
-                        <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-600 border-blue-100 text-[10px] h-4">Kho ngoài</Badge>
-                      ) : (
-                        <Badge variant="outline" className="ml-2 bg-emerald-50 text-emerald-600 border-emerald-100 text-[10px] h-4">Kho trong</Badge>
-                      )
+                      <span className="text-[10px] font-mono text-slate-500 bg-slate-50 self-start px-1 rounded">
+                        {product.imei || product.serial}
+                      </span>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-4 py-0 px-1 leading-none font-normal">
+                        {getLoaiMayLabel(product.loai_may)}
+                      </Badge>
+                      {product.pin && (
+                        <span className="text-[10px] text-slate-500">Pin: {product.pin}%</span>
+                      )}
+                    </div>
+                    {product.tinh_trang && (
+                      <p className="text-[11px] text-slate-600 italic bg-orange-50/50 p-1 rounded border border-orange-100/50">
+                        {product.tinh_trang}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -137,7 +157,7 @@ export function ProductTable({
                 <span className="text-sm font-medium text-slate-700">{product.pin ? `${product.pin}%` : "-"}</span>
               </TableCell>
 
-              <TableCell>
+              <TableCell className="hidden md:table-cell">
                 <span className="text-sm text-slate-600">{product.tinh_trang || "-"}</span>
               </TableCell>
               <TableCell>

@@ -71,7 +71,7 @@ export function PartnerTable({
                 </Badge>
               </div>
             </TableHead>
-            <TableHead className="font-semibold text-slate-700">IMEI</TableHead>
+            <TableHead className="font-semibold text-slate-700 hidden sm:table-cell">IMEI</TableHead>
             <TableHead className="font-semibold text-slate-700">Đối tác & Ngày giao</TableHead>
             <TableHead className="font-semibold text-slate-700 hidden lg:table-cell">Tình trạng</TableHead>
             {(onReturnStock || onCompleteSale) && <TableHead className="w-32 text-right">Thao tác</TableHead>}
@@ -88,13 +88,36 @@ export function PartnerTable({
                   />
                 </TableCell>
               )}
-              <TableCell>
+              <TableCell className="py-3">
                 <div className="flex flex-col">
-                  <span className="font-medium text-slate-900">{p.ten_san_pham}</span>
-                  <span className="text-xs text-slate-500">{p.mau_sac} • {p.dung_luong}</span>
+                  <span className="font-medium text-slate-900 leading-tight">{p.ten_san_pham}</span>
+                  <span className="text-xs text-slate-500 mt-0.5">{p.mau_sac} • {p.dung_luong}</span>
+                  
+                  {/* Additional info for Mobile */}
+                  <div className="flex flex-col gap-1 mt-1.5 sm:hidden">
+                    {p.imei && (
+                      <span className="text-[10px] font-mono text-slate-500 bg-slate-50 self-start px-1 rounded">
+                        {p.imei}
+                      </span>
+                    )}
+                    {p.tinh_trang && (
+                      <p className="text-[10px] text-slate-500 italic bg-purple-50/30 p-1 rounded border border-purple-100/50">
+                        {p.tinh_trang}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Condition for tablets (where lg is still hidden) */}
+                  <div className="hidden sm:block lg:hidden mt-1">
+                    {p.tinh_trang && (
+                      <p className="text-[10px] text-slate-500 italic truncate max-w-[200px]">
+                        {p.tinh_trang}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </TableCell>
-              <TableCell className="text-sm font-mono text-slate-600">{p.imei || "—"}</TableCell>
+              <TableCell className="text-sm font-mono text-slate-600 hidden sm:table-cell">{p.imei || "—"}</TableCell>
               <TableCell>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-1.5 text-sm font-medium text-purple-700">
