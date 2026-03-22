@@ -210,9 +210,26 @@ export default function KhoHangPage() {
     if (productNameFilter !== "all") result = result.filter((p: any) => p.ten_san_pham === productNameFilter)
     if (colorFilter !== "all") result = result.filter((p: any) => p.mau_sac === colorFilter)
     if (capacityFilter !== "all") result = result.filter((p: any) => p.dung_luong === capacityFilter)
+    
+    // Pin Filter Logic
+    if (pinFilter !== "all") {
+      result = result.filter((p: any) => {
+        const pinVal = parseInt(String(p.pin || "0"))
+        if (!pinVal) return false
+        
+        switch (pinFilter) {
+          case "100": return pinVal === 100
+          case "9x": return pinVal >= 90 && pinVal < 100
+          case "8x": return pinVal >= 80 && pinVal < 90
+          case "7x": return pinVal >= 70 && pinVal < 80
+          case "lt70": return pinVal < 70
+          default: return true
+        }
+      })
+    }
 
     return result
-  }, [baseFilteredProducts, productNameFilter, colorFilter, capacityFilter])
+  }, [baseFilteredProducts, productNameFilter, colorFilter, capacityFilter, pinFilter])
 
   const filteredAccessories = useMemo(() => {
     let result = accessories

@@ -23,6 +23,7 @@ export function FilterBar({ productNames, colors, capacities, maxPrice }: Filter
     productNameFilter, setProductNameFilter,
     colorFilter, setColorFilter,
     capacityFilter, setCapacityFilter,
+    pinFilter, setPinFilter,
     khoFilter, setKhoFilter,
     priceRange, setPriceRange,
     resetFilters
@@ -96,6 +97,20 @@ export function FilterBar({ productNames, colors, capacities, maxPrice }: Filter
             {capacities.map((cap: string) => (
               <SelectItem key={cap} value={cap}>{cap}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={pinFilter} onValueChange={setPinFilter as any}>
+          <SelectTrigger className="h-10 bg-white text-xs">
+            <SelectValue placeholder="Pin" />
+          </SelectTrigger>
+          <SelectContent className="bg-white">
+            <SelectItem value="all">Pin: Tất cả</SelectItem>
+            <SelectItem value="100">Pin 100%</SelectItem>
+            <SelectItem value="9x">Pin 9x (90-99)</SelectItem>
+            <SelectItem value="8x">Pin 8x (80-89)</SelectItem>
+            <SelectItem value="7x">Pin 7x (70-79)</SelectItem>
+            <SelectItem value="lt70">Dưới 70%</SelectItem>
           </SelectContent>
         </Select>
       </div>
