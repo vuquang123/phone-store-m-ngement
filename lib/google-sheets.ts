@@ -450,6 +450,7 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
   const { header: khoHeader, rows } = await readFromGoogleSheets("Kho_Hang")
   const idxId = colIndex(khoHeader, "ID Máy")
   const idxTrangThai = colIndex(khoHeader, "Trạng Thái")
+  const idxNguonKho = colIndex(khoHeader, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang", "Trạng Thái Kho")
   if (idxId === -1 || idxTrangThai === -1) return { success: false, error: "Không tìm thấy cột ID Máy hoặc Trạng Thái" }
 
   // Tìm các sản phẩm cần chuyển
@@ -484,7 +485,7 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
     const idMay = row[idxId]
     // Map các trường đặc biệt nếu thiếu
     const imei = row[khoHeader.indexOf("IMEI")] || ""
-  const nguon = "Kho shop"
+    const nguon = (idxNguonKho !== -1 && row[idxNguonKho]) ? row[idxNguonKho] : "Kho trong"
     const tinh_trang = row[khoHeader.indexOf("Tình Trạng Máy")] || row[khoHeader.indexOf("Tình trạng")] || ""
     // Tạo dòng mới đúng thứ tự cột CNC
     const newRow = cncHeader.map(col => {

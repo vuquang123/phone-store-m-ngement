@@ -138,7 +138,19 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
             <Label className="font-medium text-slate-700">Tình trạng</Label>
             <Input name="tinh_trang" value={form.tinh_trang} onChange={handleChange} placeholder="Nhập tình trạng" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
-          {/* Ẩn trường Loại Máy, vẫn giữ giá trị mặc định là Lock trong form */}
+          <div className="flex flex-col gap-2">
+            <Label className="font-medium text-slate-700">Nguồn hàng</Label>
+            <Select value={form.nguon} onValueChange={v => setForm(f => ({ ...f, nguon: v }))}>
+              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-slate-800 font-medium">
+                <SelectValue placeholder="Chọn nguồn" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border border-slate-200 shadow-lg text-slate-800">
+                <SelectItem value="Khách ngoài">Khách ngoài</SelectItem>
+                <SelectItem value="Kho trong">Kho trong</SelectItem>
+                <SelectItem value="Kho ngoài">Kho ngoài</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="hidden">
             <Input name="loai_may" value={form.loai_may} readOnly />
           </div>

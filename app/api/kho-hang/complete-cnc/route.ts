@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
     // Tạo danh sách IMEI máy nguồn 'Kho shop'
     const imeisKhoShop = cncRows
-      .filter(row => imeisToProcess.includes(row[idxIMEI]) && row[idxNguonCNC] === "Kho shop")
+      .filter(row => imeisToProcess.includes(row[idxIMEI]) && (row[idxNguonCNC] === "Kho shop" || row[idxNguonCNC] === "Kho trong"))
       .map(row => row[idxIMEI]);
 
     const updatedKhoRows = khoRows.map(row => {

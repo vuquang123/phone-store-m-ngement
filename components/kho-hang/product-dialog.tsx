@@ -334,7 +334,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         ghi_chu: r.ghi_chu,
         trang_thai: "Còn hàng",
         nguon: r.nguon || "Kho trong",
-        trang_thai_kho: "Có sẵn",
+        trang_thai_kho: r.nguon || "Kho trong",
       }))
 
       const response = await fetch("/api/kho-hang", {

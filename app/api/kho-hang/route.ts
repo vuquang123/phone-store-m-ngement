@@ -65,7 +65,10 @@ function getValForHeader(
   if (k === "IMEI") return opts.imeiStr
   if (k === "Serial") return opts.serialStr
   if (k === "Trạng Thái") return body.trang_thai || bodyNormMap["trangthai"] || "Còn hàng"
-  if (k === "Trạng Thái Kho") return body.trang_thai_kho || bodyNormMap["trangthaikho"] || body.trang_thai_ton || bodyNormMap["trangthaiton"] || "Có sẵn"
+  if (k === "Trạng Thái Kho") {
+    const source = body.nguon || bodyNormMap["nguon"] || bodyNormMap["nguonhang"] || ""
+    return body.trang_thai_kho || bodyNormMap["trangthaikho"] || body.trang_thai_ton || bodyNormMap["trangthaiton"] || source || "Có sẵn"
+  }
 
   if (k === "Ngày Nhập") {
     const input = body.ngay_nhap || bodyNormMap["ngaynhap"]

@@ -140,8 +140,8 @@ export default function KhoHangPage() {
       ...it,
       id: `DT-${it.row_index}-${it.imei}`,
       trang_thai: "Còn hàng",
-      trang_thai_kho: "Có sẵn",
-      nguon: "Kho ngoài"
+      trang_thai_kho: it.nguon || "Kho ngoài",
+      nguon: it.nguon || "Kho ngoài"
     }))
     return [...rawInventory, ...partnerMapped]
   }, [rawInventory, partnerInventory])
@@ -163,7 +163,8 @@ export default function KhoHangPage() {
     // Kho Filter
     if (khoFilter !== "all") {
       result = result.filter((p: any) => {
-        const isReady = (p.trang_thai_kho || "").toLowerCase().includes("có sẵn")
+        const status = (p.trang_thai_kho || "").toLowerCase()
+        const isReady = status.includes("có sẵn") || status.includes("kho trong") || status.includes("kho ngoài")
         return khoFilter === "co_san" ? isReady : !isReady
       })
     }
