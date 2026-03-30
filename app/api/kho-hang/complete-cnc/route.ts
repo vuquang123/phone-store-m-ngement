@@ -64,22 +64,17 @@ export async function POST(req: Request) {
     const idxKhoGhiChu = colIndex(khoHeader, "Ghi Chú");
 
 
-    // Lấy nguồn từ sheet CNC
-    const idxNguonCNC = colIndex(cncHeader, "Nguồn");
-
-    // Tạo danh sách IMEI máy nguồn 'Kho shop'
-    const imeisKhoShop = cncRows
-      .filter(row => imeisToProcess.includes(row[idxIMEI]) && (row[idxNguonCNC] === "Kho shop" || row[idxNguonCNC] === "Kho trong"))
-      .map(row => row[idxIMEI]);
-
+    // Cập nhật trạng thái trong sheet Kho_Hang cho tất cả sản phẩm hoàn thành CNC
     const updatedKhoRows = khoRows.map(row => {
       // Tạo lại ID Máy từ IMEI nếu cần
       if (idxKhoIMEI !== -1 && row[idxKhoIMEI]) {
         row[idxKhoId] = row[idxKhoIMEI].slice(-5);
       }
-      if (imeisKhoShop.includes(row[idxKhoIMEI])) {
+
+      // Nếu IMEI nằm trong danh sách hoàn thành CNC, cập nhật trạng thái và ghi chú
+      if (idxKhoIMEI !== -1 && imeisToProcess.includes(row[idxKhoIMEI])) {
         if (idxKhoTrangThai !== -1) row[idxKhoTrangThai] = "Còn hàng";
-        if (idxKhoGhiChu !== -1) row[idxKhoGhiChu] = "đã CNC";
+        if (idxKhoGhiChu !== -1) row[idxKhoGhiChu] = "Đã CNC";
       }
       return row;
     });
