@@ -2,7 +2,7 @@
 // app/api/ban-hang/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
-import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
@@ -451,6 +451,7 @@ export async function POST(request: NextRequest) {
     let allResults = []
     let errorFlag = false
     let internalIdsToRemove: string[] = []
+    let newRowsToAppend: any[][] = []
     // Tính tổng phí bảo hành theo selections (sẽ dùng cho dòng đầu tiên)
     let warrantyPkgCodes: string[] = []
     let warrantyTotalFee = 0
@@ -616,29 +617,40 @@ export async function POST(request: NextRequest) {
           newRow[idxReceiptImageCol] = receiptFileId
         }
       }
-      const result = await appendToGoogleSheets(SHEETS.BAN_HANG, newRow)
-      allResults.push(result)
-      if (!result.success) errorFlag = true
+      newRowsToAppend.push(newRow)
+    }
 
-      // Sau khi ghi đơn thành công: nếu là máy đối tác thì xoá khỏi sheet đối tác
-      try {
-        const sourceStr = String(
-          may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "",
-        ).toLowerCase()
-        const isPartner = sourceStr.includes("kho ngoài") || sourceStr.includes("đối tác") || sourceStr.includes("partner")
-        if (isPartner) {
-          const partnerSheetName = may.partner_sheet || may.sheet || body.partner_sheet || ""
-          const partnerRowIndex = Number(may.partner_row_index || may.row_index || body.partner_row_index)
-          if (partnerSheetName && Number.isFinite(partnerRowIndex) && partnerRowIndex > 1) {
-            await tryRemoveRowByIndex(partnerSheetName, partnerRowIndex)
-          } else if (may.imei) {
-            await tryRemovePartnerRowByIMEI(String(may.imei))
+    // Ghi nhiều dòng vào Google Sheets
+    if (newRowsToAppend.length > 0) {
+      const result = await appendMultipleToGoogleSheets(SHEETS.BAN_HANG, newRowsToAppend)
+      if (!result.success) {
+        errorFlag = true
+      }
+    }
+
+    // Sau khi ghi đơn thành công: nếu là máy đối tác thì xoá khỏi sheet đối tác
+    if (!errorFlag) {
+      for (let i = 0; i < mayList.length; i++) {
+        const may = mayList[i]
+        try {
+          const sourceStr = String(
+            may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "",
+          ).toLowerCase()
+          const isPartner = sourceStr.includes("kho ngoài") || sourceStr.includes("đối tác") || sourceStr.includes("partner")
+          if (isPartner) {
+            const partnerSheetName = may.partner_sheet || may.sheet || body.partner_sheet || ""
+            const partnerRowIndex = Number(may.partner_row_index || may.row_index || body.partner_row_index)
+            if (partnerSheetName && Number.isFinite(partnerRowIndex) && partnerRowIndex > 1) {
+              await tryRemoveRowByIndex(partnerSheetName, partnerRowIndex)
+            } else if (may.imei) {
+              await tryRemovePartnerRowByIMEI(String(may.imei))
+            }
+          } else if (may.id_may && may.id_may !== "PHU_KIEN_ONLY") {
+            internalIdsToRemove.push(String(may.id_may))
           }
-        } else if (may.id_may && may.id_may !== "PHU_KIEN_ONLY") {
-          internalIdsToRemove.push(String(may.id_may))
+        } catch (e) {
+          console.warn("[Partner] Không thể xoá dòng đối tác sau khi bán:", e)
         }
-      } catch (e) {
-        console.warn("[Partner] Không thể xoá dòng đối tác sau khi bán:", e)
       }
     }
 

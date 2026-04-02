@@ -358,6 +358,26 @@ export async function appendToGoogleSheets(sheetName: string, data: any[]) {
   }
 }
 
+// Thêm nhiều dòng mới vào sheet
+export async function appendMultipleToGoogleSheets(sheetName: string, data: any[][]) {
+  if (!data || data.length === 0) return { success: true }
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+      range: escapeSheetName(sheetName),
+      valueInputOption: "RAW",
+      requestBody: {
+        values: data,
+      },
+    })
+    invalidateSheetCache(sheetName)
+    return { success: true }
+  } catch (error: any) {
+    console.error("Lỗi bulk thêm vào Google Sheets:", error)
+    return { success: false, error: error.message || "Lỗi bulk thêm vào Google Sheets" }
+  }
+}
+
 // Cập nhật một dòng theo giá trị khóa
 export async function updateRowInGoogleSheets(sheetName: string, key: string, keyValue: string, newData: any[]) {
   try {
