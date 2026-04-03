@@ -50,16 +50,23 @@ export function CartItemRow({
         {(item.imei || item.serial) && (
           <p className="text-[11px] text-muted-foreground font-mono">{item.imei ? 'IMEI' : 'Serial'}: {item.imei || item.serial}</p>
         )}
-        {isPartner && (
-          <div className="mt-1">
-            <Badge className="bg-teal-600 text-white text-[10px] h-4">Kho ngoài</Badge>
-            {(item.ten_doi_tac || item.sdt_doi_tac) && (
-              <span className="ml-2 text-[10px] text-muted-foreground">
-                {(item.ten_doi_tac || '')}{item.ten_doi_tac && item.sdt_doi_tac ? ' • ' : ''}{(item.sdt_doi_tac || '')}
-              </span>
-            )}
-          </div>
-        )}
+        <div className="mt-1 flex gap-1.5 flex-wrap items-center">
+          {item.do_sim && (
+            <Badge className="bg-orange-50 text-orange-700 border-orange-200 border text-[10px] h-4 leading-none py-0" variant="outline">
+              {item.do_sim}
+            </Badge>
+          )}
+          {isPartner && (
+            <>
+              <Badge className="bg-teal-600 text-white border-teal-600 text-[10px] h-4 leading-none py-0">Kho ngoài</Badge>
+              {(item.ten_doi_tac || item.sdt_doi_tac) && (
+                <span className="text-[10px] text-muted-foreground ml-1">
+                  {(item.ten_doi_tac || '')}{item.ten_doi_tac && item.sdt_doi_tac ? ' • ' : ''}{(item.sdt_doi_tac || '')}
+                </span>
+              )}
+            </>
+          )}
+        </div>
         {item.type === 'accessory' && (
           <div className="mt-1 sm:hidden text-[11px] text-muted-foreground space-y-1">
             {item.loai_phu_kien && (

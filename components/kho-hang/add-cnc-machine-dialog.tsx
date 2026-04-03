@@ -29,6 +29,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
     ngay_nhan_lai: "",
     khach_hang: "",
     so_dien_thoai: "",
+    do_sim: "Không rõ",
     employeeId: ""
   })
 
@@ -137,6 +138,23 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-slate-700">Tình trạng</Label>
             <Input name="tinh_trang" value={form.tinh_trang} onChange={handleChange} placeholder="Nhập tình trạng" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label className="font-medium text-slate-700">Kiểu Dạng Sim</Label>
+            <Select value={form.do_sim} onValueChange={v => setForm(f => ({ ...f, do_sim: v }))}>
+              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-slate-800 font-medium">
+                <SelectValue placeholder="Chọn kiểu dạng sim..." />
+              </SelectTrigger>
+              <SelectContent className="bg-white border border-slate-200 shadow-lg text-slate-800">
+                <SelectItem value="Không rõ">Để trống</SelectItem>
+                <SelectItem value="Nguyên bản">Nguyên bản</SelectItem>
+                <SelectItem value="Sim ghép">Sim ghép</SelectItem>
+                <SelectItem value="2 sim vật lý">2 sim vật lý</SelectItem>
+                <SelectItem value="2 esim">2 esim</SelectItem>
+                <SelectItem value="sim vật lý + esim">sim vật lý + esim</SelectItem>
+                <SelectItem value="Chưa CNC">Chưa CNC</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-slate-700">Nguồn hàng</Label>

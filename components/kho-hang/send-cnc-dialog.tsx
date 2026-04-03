@@ -26,6 +26,7 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false)
   const [newAddress, setNewAddress] = useState("")
   const [employeeId, setEmployeeId] = useState("")
+  const [doSim, setDoSim] = useState("Không rõ")
 
   // Lấy danh sách địa chỉ từ window (giống AddCNCMachineDialog)
   const [addresses, setAddresses] = useState<{ label: string, value: string }[]>([])
@@ -61,7 +62,8 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
         productIds,
         cncAddress: finalAddress,
         employeeId,
-        products: selectedProducts
+        products: selectedProducts,
+        doSim: doSim === "Không rõ" ? "" : doSim
       })
       toast.success(`Đã gửi ${selectedProducts.length} sản phẩm đi CNC`)
       if (onSuccess) onSuccess()
@@ -103,6 +105,24 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
                 ))}
               </div>
             </ScrollArea>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Kiểu Dạng Sim</Label>
+            <Select value={doSim} onValueChange={setDoSim}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Chọn kiểu dạng sim..." />
+              </SelectTrigger>
+              <SelectContent className="bg-white">
+                <SelectItem value="Không rõ">Để trống</SelectItem>
+                <SelectItem value="Nguyên bản">Nguyên bản</SelectItem>
+                <SelectItem value="Sim ghép">Sim ghép</SelectItem>
+                <SelectItem value="2 sim vật lý">2 sim vật lý</SelectItem>
+                <SelectItem value="2 esim">2 esim</SelectItem>
+                <SelectItem value="sim vật lý + esim">sim vật lý + esim</SelectItem>
+                <SelectItem value="Chưa CNC">Chưa CNC</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

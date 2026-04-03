@@ -23,9 +23,9 @@ interface Product {
   trang_thai: string
   trang_thai_kho?: string
   ngay_nhap: string
-  ghi_chu?: string
   loai_may?: string
   nguon?: string
+  do_sim?: string
 }
 
 interface ProductTableProps {
@@ -108,6 +108,11 @@ export function ProductTable({
                       <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 text-[10px] h-4 px-1 py-0 leading-none">Kho ngoài</Badge>
                     ) : (
                       <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[10px] h-4 px-1 py-0 leading-none">Kho trong</Badge>
+                    )}
+                    {product.do_sim && (
+                      <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-100 text-[10px] h-4 px-1 py-0 leading-none truncate max-w-[80px]" title={product.do_sim}>
+                        {product.do_sim}
+                      </Badge>
                     )}
                   </div>
                   

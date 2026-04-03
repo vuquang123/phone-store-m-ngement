@@ -37,6 +37,7 @@ interface Product {
   giam_gia: number
   ngay_nhap: string
   ghi_chu?: string
+  do_sim?: string
 }
 
 interface ProductDialogProps {
@@ -114,6 +115,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     giam_gia: "",
     ngay_nhap: new Date().toISOString().slice(0, 10),
     ghi_chu: "",
+    do_sim: "Không rõ",
   })
 
   const today = new Date().toISOString().slice(0, 10)
@@ -135,6 +137,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     giam_gia: "",
     ngay_nhap: today,
     ghi_chu: "",
+    do_sim: "Không rõ",
   })
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [bulkRows, setBulkRows] = useState<BulkRow[]>([newBulkRow(), newBulkRow()])
@@ -178,6 +181,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
           return isNaN(d.getTime()) ? new Date().toISOString().slice(0, 10) : d.toISOString().slice(0, 10)
         })() : new Date().toISOString().slice(0, 10),
         ghi_chu: product.ghi_chu || "",
+        do_sim: product.do_sim || "Không rõ",
       })
       setIsBulkMode(false)
     } else {
@@ -197,6 +201,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         giam_gia: "",
         ngay_nhap: new Date().toISOString().slice(0, 10),
         ghi_chu: "",
+        do_sim: "Không rõ",
       })
     }
   }, [product, isOpen])
@@ -258,6 +263,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
           giam_gia: Number(formData.giam_gia || 0),
           ngay_nhap: formData.ngay_nhap,
           trang_thai: formData.trang_thai, // Lưu trạng thái tiếng Việt
+          do_sim: formData.do_sim === "Không rõ" ? "" : formData.do_sim,
         }),
       });
 
@@ -332,6 +338,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         giam_gia: Number(r.giam_gia || 0),
         ngay_nhap: r.ngay_nhap,
         ghi_chu: r.ghi_chu,
+        do_sim: r.do_sim === "Không rõ" ? "" : r.do_sim,
         trang_thai: "Còn hàng",
         nguon: r.nguon || "Kho trong",
         trang_thai_kho: r.nguon || "Kho trong",
@@ -437,6 +444,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                     <th className="px-2 py-2 text-left min-w-[100px]">Loại*</th>
                     <th className="px-2 py-2 text-left min-w-[90px]">Dung lượng*</th>
                     <th className="px-2 py-2 text-left min-w-[100px]">Màu*</th>
+                    <th className="px-2 py-2 text-left min-w-[90px]">Dạng Sim</th>
                     <th className="px-2 py-2 text-left min-w-[70px]">Pin</th>
                     <th className="px-2 py-2 text-left min-w-[180px]">
                       <div className="flex flex-col leading-tight">
@@ -496,6 +504,19 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                               {ensureOption(colorOptions[row.ten_san_pham] || [], row.mau_sac).map((color) => (
                                 <SelectItem key={color} value={color} className="text-xs">{color}</SelectItem>
                               ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-1 py-1">
+                          <Select value={row.do_sim || "Không rõ"} onValueChange={(v) => setField("do_sim", v)}>
+                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 w-full min-w-[80px]"><SelectValue placeholder="Dạng Sim" /></SelectTrigger>
+                            <SelectContent className="bg-white">
+                              <SelectItem value="Không rõ" className="text-xs">Trống</SelectItem>
+                              <SelectItem value="Nguyên bản" className="text-xs">Nguyên bản</SelectItem>
+                              <SelectItem value="Sim ghép" className="text-xs">Sim ghép</SelectItem>
+                              <SelectItem value="2 sim vật lý" className="text-xs">2 sim vật lý</SelectItem>
+                              <SelectItem value="2 esim" className="text-xs">2 esim</SelectItem>
+                              <SelectItem value="sim vật lý + esim" className="text-xs">sim vật lý + esim</SelectItem>
                             </SelectContent>
                           </Select>
                         </td>
@@ -658,6 +679,22 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                       </SelectTrigger>
                       <SelectContent className="bg-gray-50">
                         {storageOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="do_sim_select">Dạng Sim</Label>
+                    <Select value={formData.do_sim} onValueChange={(value) => setFormData({ ...formData, do_sim: value })}>
+                      <SelectTrigger id="do_sim_select">
+                        <SelectValue placeholder="Chọn dạng sim" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-50">
+                        <SelectItem value="Không rõ">Trống</SelectItem>
+                        <SelectItem value="Nguyên bản">Nguyên bản</SelectItem>
+                        <SelectItem value="Sim ghép">Sim ghép</SelectItem>
+                        <SelectItem value="2 sim vật lý">2 sim vật lý</SelectItem>
+                        <SelectItem value="2 esim">2 esim</SelectItem>
+                        <SelectItem value="sim vật lý + esim">sim vật lý + esim</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

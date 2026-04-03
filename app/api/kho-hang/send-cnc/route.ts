@@ -6,7 +6,7 @@ import { sendStockEventNotification } from "@/lib/telegram"
 
 export async function POST(req: Request) {
   try {
-  const { productIds, cncAddress, employeeId } = await req.json()
+  const { productIds, cncAddress, employeeId, doSim } = await req.json()
     if (!Array.isArray(productIds) || productIds.length === 0) {
       return NextResponse.json({ error: "Vui lòng chọn sản phẩm cần gửi CNC." }, { status: 400 })
     }
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       return row ? row[idxTrangThai] : ""
     })
     // Di chuyển sản phẩm sang sheet CNC, cập nhật trạng thái, ghi lịch sử
-    const moveResult = await moveProductsToCNC(idsToMove, cncAddress)
+    const moveResult = await moveProductsToCNC(idsToMove, cncAddress, doSim)
     if (!moveResult.success) {
       return NextResponse.json({ error: moveResult.error || "Lỗi khi chuyển sản phẩm sang CNC." }, { status: 500 })
     }

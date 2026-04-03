@@ -24,6 +24,7 @@ const PRODUCT_HEADERS = [
   "Giá Bán",
   "Ghi Chú",
   "Trạng Thái",
+  "Dạng Sim",
 ] as const
 
 // Header thực tế trong Phu_Kien
@@ -108,6 +109,7 @@ export async function GET(request: NextRequest) {
       const giaBanCol = h("Giá Bán")
       const idMayCol = h("ID Máy")
       const trangThaiCol = h("Trạng Thái")
+      const doSimCol = h("Dạng Sim")
 
       productResults = pAll
         .slice(1)
@@ -144,6 +146,7 @@ export async function GET(request: NextRequest) {
             gia_ban,
             ghi_chu: ghiChu,
             trang_thai: trangThaiCol >= 0 ? row[trangThaiCol] : "",
+            do_sim: doSimCol >= 0 ? row[doSimCol] : "",
           };
         })
     }

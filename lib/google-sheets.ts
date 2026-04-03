@@ -465,12 +465,13 @@ export async function updateProductsStatus(productIds: string[], newStatus: stri
   }
   return { success: true, count: productIds.length }
 }
-export async function moveProductsToCNC(productIds: string[], cncAddress: string) {
+export async function moveProductsToCNC(productIds: string[], cncAddress: string, doSim?: string) {
   // Đọc dữ liệu kho hàng
   const { header: khoHeader, rows } = await readFromGoogleSheets("Kho_Hang")
   const idxId = colIndex(khoHeader, "ID Máy")
   const idxTrangThai = colIndex(khoHeader, "Trạng Thái")
   const idxNguonKho = colIndex(khoHeader, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang", "Trạng Thái Kho")
+  const idxDoSim = colIndex(khoHeader, "Dạng Sim", "Dạng sim", "Kiểu dạng sim")
   if (idxId === -1 || idxTrangThai === -1) return { success: false, error: "Không tìm thấy cột ID Máy hoặc Trạng Thái" }
 
   // Tìm các sản phẩm cần chuyển
@@ -481,6 +482,9 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
   const updatedRows = rows.map(row => {
     if (productIds.includes(row[idxId])) {
       row[idxTrangThai] = "Đang CNC"
+      if (doSim && idxDoSim !== -1) {
+        row[idxDoSim] = doSim
+      }
     }
     return row
   })

@@ -71,10 +71,9 @@ export async function POST(req: Request) {
         row[idxKhoId] = row[idxKhoIMEI].slice(-5);
       }
 
-      // Nếu IMEI nằm trong danh sách hoàn thành CNC, cập nhật trạng thái và ghi chú
+      // Nếu IMEI nằm trong danh sách hoàn thành CNC, cập nhật trạng thái
       if (idxKhoIMEI !== -1 && imeisToProcess.includes(row[idxKhoIMEI])) {
         if (idxKhoTrangThai !== -1) row[idxKhoTrangThai] = "Còn hàng";
-        if (idxKhoGhiChu !== -1) row[idxKhoGhiChu] = "Đã CNC";
       }
       return row;
     });

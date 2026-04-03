@@ -115,6 +115,9 @@ function getValForHeader(
   if (k === "Nguồn" || k === "Nguồn Hàng") {
     return body.nguon || bodyNormMap["nguon"] || bodyNormMap["nguonhang"] || ""
   }
+  if (k === "Dạng Sim" || k === "Dạng sim" || k === "Kiểu dạng sim") {
+    return body.do_sim || bodyNormMap["dangsim"] || bodyNormMap["kieudangsim"] || ""
+  }
   return (
     body[k] ??
     body[k.replace(/\s/g, "_").toLowerCase()] ??
@@ -143,6 +146,7 @@ function idxKho(header: string[]) {
     trangThai: colIndex(header, "Trạng Thái"),
     trangThaiKho: colIndex(header, "Trạng Thái Kho", "Trạng thái kho", "Tình Trạng Tồn", "Kho Hiển Thị"),
     nguon: colIndex(header, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang"),
+    doSim: colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim"),
   }
 }
 
@@ -168,6 +172,7 @@ export async function GET(request: NextRequest) {
       trang_thai_kho: idx.trangThaiKho !== -1 ? row[idx.trangThaiKho] : (row[idx.trangThai] === "Còn hàng" ? "Có sẵn" : ""),
       nguon: (idx.nguon !== -1 && row[idx.nguon]) ? row[idx.nguon] : (idx.trangThaiKho !== -1 ? row[idx.trangThaiKho] : ""),
       ghi_chu: row[idx.ghiChu],
+      do_sim: idx.doSim !== -1 ? row[idx.doSim] : "",
       ngay_nhap: row[idx.ngayNhap],
     }))
     return NextResponse.json({ data: products })

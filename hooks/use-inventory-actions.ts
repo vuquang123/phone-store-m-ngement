@@ -28,11 +28,11 @@ export function useInventoryActions() {
   })
 
   const sendCNCMutation = useMutation({
-    mutationFn: async ({ productIds, cncAddress, employeeId, products }: any) => {
+    mutationFn: async ({ productIds, cncAddress, employeeId, products, doSim }: any) => {
       const res = await fetch("/api/kho-hang/send-cnc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productIds, cncAddress, employeeId, products })
+        body: JSON.stringify({ productIds, cncAddress, employeeId, products, doSim })
       })
       if (!res.ok) throw new Error("Gửi CNC thất bại")
       return res.json()

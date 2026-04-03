@@ -176,6 +176,11 @@ export function SearchArea({
                                 <Badge variant="outline" className="border-emerald-600 text-emerald-700">Kho trong</Badge>
                               )
                             )}
+                            {!isAccessoryItem && product.do_sim && (
+                              <Badge variant="outline" className="border-orange-200 text-orange-700 bg-orange-50 truncate max-w-[80px]">
+                                {product.do_sim}
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -295,6 +300,11 @@ export function SearchArea({
                                 <div className="flex items-center gap-2 justify-start opacity-70">
                                    <Badge variant="outline">{product.loai_may || '-'}</Badge>
                                    <Badge variant="outline">{hasPin ? formattedPin : '-'}</Badge>
+                                   {product.do_sim && (
+                                     <Badge variant="outline" className="border-orange-200 text-orange-700 bg-orange-50 truncate max-w-[80px]" title={product.do_sim}>
+                                       {product.do_sim}
+                                     </Badge>
+                                   )}
                                    <span className="truncate max-w-[100px]" title={tinhTrang}>{tinhTrang}</span>
                                 </div>
                               ) : (

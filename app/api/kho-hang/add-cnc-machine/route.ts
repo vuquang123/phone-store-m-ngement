@@ -38,6 +38,8 @@ export async function POST(req: Request) {
       if (c === "ngày nhận lại" || c === "ngay nhan lai") return body.ngay_nhan_lai || "";
       if (c === "tên khách hàng" || c === "ten khach hang" || c === "khách hàng" || c === "khach hang") return khach_hang || "";
       if (c === "số điện thoại" || c === "so dien thoai" || c === "sđt" || c === "sdt") return so_dien_thoai || "";
+      if (c === "màu sắc" || c === "mau sac" || c === "màu" || c === "mau") return body.mau_sac || "";
+      if (c === "dạng sim" || c === "dang sim" || c === "kiểu dạng sim") return body.do_sim || "";
       return "";
     });
     await appendToGoogleSheets("CNC", newRow);

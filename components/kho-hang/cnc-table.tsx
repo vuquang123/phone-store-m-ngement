@@ -20,6 +20,7 @@ interface CNCProduct {
   ngay_nhan_lai: string
   ten_khach_hang?: string
   so_dien_thoai?: string
+  do_sim?: string
 }
 
 interface CNCTableProps {
@@ -88,7 +89,14 @@ export function CNCTable({
               <TableCell className="py-3">
                 <div className="flex flex-col">
                   <span className="font-medium text-slate-900 leading-tight">{p.ten_san_pham}</span>
-                  <span className="text-xs text-slate-500 mt-0.5">{p.mau_sac} • {p.loai_may}</span>
+                  <span className="text-xs text-slate-500 mt-0.5">
+                    {p.mau_sac} • {p.loai_may}
+                    {p.do_sim && (
+                      <Badge variant="outline" className="ml-2 bg-orange-50 text-orange-600 border-orange-100 text-[10px] h-4 px-1 py-0 leading-none" title={p.do_sim}>
+                        {p.do_sim}
+                      </Badge>
+                    )}
+                  </span>
                   
                   {/* Additional info for Mobile */}
                   <div className="flex flex-col gap-1 mt-1.5 sm:hidden">

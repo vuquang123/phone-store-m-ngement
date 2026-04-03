@@ -23,8 +23,9 @@ export async function GET() {
       dia_chi_cnc: colIndex(header, "Địa chỉ CNC"),
       ngay_gui: colIndex(header, "Ngày gửi"),
       ngay_nhan_lai: colIndex(header, "Ngày nhận lại"),
-      ten_khach_hang: colIndex(header, "Tên khách hàng"),
-      so_dien_thoai: colIndex(header, "Số điện thoại"),
+      ten_khach_hang: colIndex(header, "Tên khách hàng", "Khách hàng", "Tên khách"),
+      so_dien_thoai: colIndex(header, "Số điện thoại", "SĐT", "sdt", "SDT"),
+      do_sim: colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim"),
     }
 
     const data = rows.map(row => ({
@@ -41,6 +42,7 @@ export async function GET() {
       ngay_nhan_lai: row[idx.ngay_nhan_lai],
       ten_khach_hang: row[idx.ten_khach_hang],
       so_dien_thoai: row[idx.so_dien_thoai],
+      do_sim: idx.do_sim !== -1 ? row[idx.do_sim] : "",
     }))
     return NextResponse.json({ data })
   } catch (error) {

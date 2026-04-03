@@ -53,7 +53,7 @@ export async function loadWarrantyPackages(): Promise<Record<string, WarrantyPac
   const idx = (name: string) => header.indexOf(name)
   const C = {
     code: idx("Mã Gói"), name: idx("Tên Gói"), price: idx("Giá (VND)"), ex: idx("Ngày Đổi 1-1"),
-    hw: idx("Tháng BH Phần Cứng"), cnc: idx("Tháng BH CNC/Độ Sim"), lifetime: idx("Hỗ Trợ Trọn Đời"), active: idx("Kích Hoạt (TRUE/FALSE)"), notes: idx("Ghi Chú")
+    hw: idx("Tháng BH Phần Cứng"), cnc: idx("Tháng BH CNC/Dạng Sim"), lifetime: idx("Hỗ Trợ Trọn Đời"), active: idx("Kích Hoạt (TRUE/FALSE)"), notes: idx("Ghi Chú")
   }
   for (const r of rows) {
     const code = (r[C.code] || '').trim(); if (!code) continue
@@ -140,7 +140,7 @@ export async function saveContracts(rows: WarrantyContractRow[]) {
         case 'Ngày Bắt Đầu': return row.startDate
         case 'Hạn 1 Đổi 1': return row.exchangeUntil
         case 'Hạn Phần Cứng': return row.hardwareUntil
-        case 'Hạn CNC/Độ Sim': return row.cncUntil
+        case 'Hạn CNC/Dạng Sim': return row.cncUntil
         case 'Hạn Tổng': return row.overallUntil
         case 'Hỗ Trợ Trọn Đời': return row.lifetime ? 'TRUE' : 'FALSE'
         case 'Trạng Thái': return row.status
@@ -170,7 +170,7 @@ export async function queryContracts(filter: WarrantyQueryFilter = {}) {
   const idx = (name: string) => header.indexOf(name)
   const C = {
     contractCode: idx('Mã HĐ'), orderId: idx('Mã Đơn'), imei: idx('IMEI'), serial: idx('Serial'), phone: idx('SĐT Khách'), pkg: idx('Mã Gói'),
-    exchange: idx('Hạn 1 Đổi 1'), hw: idx('Hạn Phần Cứng'), cnc: idx('Hạn CNC/Độ Sim'), overall: idx('Hạn Tổng'), lifetime: idx('Hỗ Trợ Trọn Đời'), status: idx('Trạng Thái')
+    exchange: idx('Hạn 1 Đổi 1'), hw: idx('Hạn Phần Cứng'), cnc: idx('Hạn CNC/Dạng Sim'), overall: idx('Hạn Tổng'), lifetime: idx('Hỗ Trợ Trọn Đời'), status: idx('Trạng Thái')
   }
   const today = new Date()
   const expDays = filter.expiringDays && filter.expiringDays > 0 ? filter.expiringDays : null
@@ -218,7 +218,7 @@ export async function loadWarrantyContracts(filter: WarrantyContractFilter = {})
   const idx = (name: string) => header.indexOf(name)
   const C = {
     maHd: idx('Mã HĐ'), maDon: idx('Mã Đơn'), imei: idx('IMEI'), serial: idx('Serial'), phone: idx('SĐT Khách'), maGoi: idx('Mã Gói'),
-    hanDoi1: idx('Hạn 1 Đổi 1'), hw: idx('Hạn Phần Cứng'), cnc: idx('Hạn CNC/Độ Sim'), hanTong: idx('Hạn Tổng'),
+    hanDoi1: idx('Hạn 1 Đổi 1'), hw: idx('Hạn Phần Cứng'), cnc: idx('Hạn CNC/Dạng Sim'), hanTong: idx('Hạn Tổng'),
     trangThai: idx('Trạng Thái'), lifetime: idx('Hỗ Trợ Trọn Đời')
   }
   const now = Date.now()
