@@ -28,7 +28,9 @@ export async function POST(req: Request) {
         const imei = row[idxIMEI] || ""
         const idMay = idxIdMay !== -1 ? row[idxIdMay] : ""
         const imeiLast5 = imei.slice(-5)
-        return productIds.includes(imei) || productIds.includes(idMay) || productIds.includes(imeiLast5)
+        const isMatch = productIds.includes(imei) || productIds.includes(idMay) || productIds.includes(imeiLast5)
+        const isProcessing = idxTrangThai !== -1 && row[idxTrangThai] === "Đang CNC"
+        return isMatch && isProcessing
       })
       .map(row => row[idxIMEI])
     if (imeisToProcess.length === 0) {
@@ -37,13 +39,13 @@ export async function POST(req: Request) {
     // Chuẩn hóa: lấy 5 số cuối IMEI cho logProductHistory
     const productIds5 = imeisToProcess.map(imei => imei.slice(-5));
     // Lấy trạng thái cũ từ sheet CNC
-    const trangThaiCuArr = cncRows.filter(row => imeisToProcess.includes(row[idxIMEI])).map(row => idxTrangThai !== -1 ? row[idxTrangThai] : "");
+    const trangThaiCuArr = cncRows.filter(row => imeisToProcess.includes(row[idxIMEI]) && idxTrangThai !== -1 && row[idxTrangThai] === "Đang CNC").map(row => idxTrangThai !== -1 ? row[idxTrangThai] : "");
 
     // Cập nhật trạng thái trong sheet CNC sang 'Hoàn thành CNC' và ngày nhận lại
     let updatedCncRows = cncRows;
     if (idxTrangThai !== -1 || idxNgayNhanLai !== -1) {
       updatedCncRows = cncRows.map(row => {
-        if (imeisToProcess.includes(row[idxIMEI])) {
+        if (imeisToProcess.includes(row[idxIMEI]) && row[idxTrangThai] === "Đang CNC") {
           if (idxTrangThai !== -1) row[idxTrangThai] = "Hoàn thành CNC";
           if (idxNgayNhanLai !== -1) row[idxNgayNhanLai] = new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN");
         }
@@ -116,8 +118,15 @@ export async function POST(req: Request) {
     })
   } catch (e) { console.warn('[NOTIFY] complete-cnc fail:', e) }
   try {
+    const processedImeis = new Set<string>();
     const devices = cncRows
-      .filter(row => imeisToProcess.includes(row[idxIMEI]))
+      .filter(row => {
+        const imei = row[idxIMEI] as string;
+        if (!imeisToProcess.includes(imei)) return false;
+        if (processedImeis.has(imei)) return false; // Prevent duplicates for Telegram notification
+        processedImeis.add(imei);
+        return true;
+      })
       .map(row => {
         let name = idxTen !== -1 ? row[idxTen] : undefined;
         const imei = row[idxIMEI];
@@ -136,7 +145,7 @@ export async function POST(req: Request) {
       })
     await sendStockEventNotification({
       type: "complete_cnc",
-      total: imeisToProcess.length,
+      total: devices.length, // use actual deduplicated length
       devices,
       employee: employeeId,
     })

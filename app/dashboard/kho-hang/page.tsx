@@ -118,6 +118,11 @@ export default function KhoHangPage() {
   const isManager = userRole === "quan_ly"
 
   useEffect(() => {
+    setSelectedIds([])
+    setIsEditMode(false)
+  }, [activeTab])
+
+  useEffect(() => {
     const checkRole = async () => {
       try {
         const raw = localStorage.getItem("auth_user")

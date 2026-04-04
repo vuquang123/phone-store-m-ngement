@@ -55,7 +55,7 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
     }
 
     const finalAddress = isAddingNewAddress ? newAddress : cncAddress
-    const productIds = selectedProducts.map(p => p.id_may || p.imei || p.id)
+    const productIds = selectedProducts.map(p => p.id || p.id_may || p.imei)
 
     try {
       await sendCNC({

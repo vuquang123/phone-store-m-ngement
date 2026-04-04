@@ -22,16 +22,19 @@ export async function POST(req: Request) {
     // Chuẩn hóa danh sách ID Máy cần chuyển: nhận cả IMEI, 5 số cuối IMEI hoặc ID Máy
     const idxIMEI = colIndex(header, "IMEI")
 
-    const idsToMove = rows
+    const idsToMove = Array.from(new Set(rows
       .filter(r => {
         const idMay = r[idxId] || ""
         const imei = r[idxIMEI] || ""
         const imeiLast5 = imei.slice(-5)
-        return productIds.includes(idMay) || productIds.includes(imei) || productIds.includes(imeiLast5)
+        const isMatch = productIds.includes(idMay) || productIds.includes(imei) || productIds.includes(imeiLast5)
+        const trangThai = (r[idxTrangThai] || "").toLowerCase()
+        const isAvailable = trangThai.includes("còn hàng") || trangThai.includes("sẵn") || trangThai.includes("dự kiến") || trangThai.includes("đang về")
+        return isMatch && isAvailable
       })
-      .map(r => r[idxId])
+      .map(r => r[idxId])))
     if (idsToMove.length === 0) {
-      return NextResponse.json({ error: "Không tìm thấy sản phẩm cần chuyển" }, { status: 400 })
+      return NextResponse.json({ error: "Không tìm thấy sản phẩm cần chuyển, hoặc sản phẩm không có sẵn." }, { status: 400 })
     }
     const trangThaiCuArr = idsToMove.map(id => {
       const row = rows.find(r => r[idxId] === id)
