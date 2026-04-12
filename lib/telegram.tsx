@@ -354,7 +354,8 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     return Number.isFinite(n) ? n : 0;
   })();
   const isDeposit = type === "new" && cocNum > 0
-  const action = isDeposit ? "ĐƠN ĐẶT CỌC MỚI" : (type === "new" ? "TẠO ĐƠN HÀNG MỚI" : "HOÀN TRẢ ĐƠN HÀNG")
+  const isSettlement = !!order.is_settlement
+  const action = isSettlement ? "TẤT TOÁN ĐƠN ĐẶT CỌC" : (isDeposit ? "ĐƠN ĐẶT CỌC MỚI" : (type === "new" ? "TẠO ĐƠN HÀNG MỚI" : "HOÀN TRẢ ĐƠN HÀNG"))
 
   // Chuẩn hóa danh sách sản phẩm (nếu có)
   const products = Array.isArray(order.products)

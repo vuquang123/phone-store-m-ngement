@@ -1136,9 +1136,14 @@ export default function BanHangPage() {
               // Bổ sung các key phổ biến để formatOrderMessage luôn lấy đúng
               employeeName: employeeId,
               nhan_vien_ban: employeeId,
-              final_total: finalThanhToan,
-              tong_tien: finalThanhToan,
-              total: finalThanhToan,
+              // Sửa: Hiện tổng tiền thật (đã cọc + còn lại) thay vì chỉ phần còn lại
+              final_total: tongTien + warrantyTotal - giamGiaToUse,
+              tong_tien: tongTien + warrantyTotal - giamGiaToUse,
+              total: tongTien + warrantyTotal - giamGiaToUse,
+              // Thêm chi tiết cọc để Telegram hiện breakdown
+              so_tien_coc: depositAmountAlreadyPaid,
+              so_tien_con_lai: finalThanhToan,
+              is_settlement: !!currentDepositOrderId,
               dia_chi_nhan: loaiDon === 'Đơn onl' ? diaChiNhan : '',
               address: loaiDon === 'Đơn onl' ? diaChiNhan : '',
               shippingAddress: loaiDon === 'Đơn onl' ? diaChiNhan : '',
