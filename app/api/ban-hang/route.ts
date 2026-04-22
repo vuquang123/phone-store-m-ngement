@@ -237,37 +237,73 @@ export async function GET(request: NextRequest) {
 
     const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
     const idx = idxBanHang(header)
-    const mapped = rows.map((row) => ({
-      id: row[idx.idDon],
-      ma_don_hang: row[idx.idDon],
-      ngay_xuat: row[idx.ngayXuat],
-      ten_khach_hang: row[idx.tenKH],
-      so_dien_thoai: row[idx.sdt],
-      dia_chi_nhan: idx.diaChiNhan !== -1 ? row[idx.diaChiNhan] : undefined,
-      ten_san_pham: row[idx.tenSP],
-      loai_may: row[idx.loaiMay],
-      dung_luong: row[idx.dungLuong],
-      pin: row[idx.pin],
-      mau_sac: row[idx.mauSac],
-      imei: row[idx.imei],
-      tinh_trang_may: row[idx.tinhTrang],
-      phu_kien: row[idx.phuKien],
-      gia_ban: row[idx.giaBan],
-      hinh_thuc_thanh_toan: row[idx.hinhThucTT],
-      gia_nhap: row[idx.giaNhap],
-      lai: row[idx.lai],
-      nhan_vien: row[idx.nguoiBan] ? { id: row[idx.nguoiBan] } : undefined,
-      loai_don: row[header.indexOf("Loại Đơn")],
-    }))
+    const idxLoaiDon = header.indexOf("Loại Đơn")
+    const idxTrangThai = colIndex(header, "Trạng Thái", "trang_thai")
+    
+    // Group rows by order ID
+    const groupedOrdersMap = new Map<string, any[]>()
+    
+    rows.forEach((row, rowIndex) => {
+      const orderId = String(row[idx.idDon] || "").trim() || `row-${rowIndex}`
+      if (!groupedOrdersMap.has(orderId)) {
+        groupedOrdersMap.set(orderId, [])
+      }
+      
+      const giaBanRaw = row[idx.giaBan] || ""
+      const giaBanNum = typeof giaBanRaw === "number" ? giaBanRaw : (parseInt(String(giaBanRaw).replace(/[^\d]/g, "")) || 0)
+      
+      groupedOrdersMap.get(orderId)!.push({
+        id: orderId,
+        ma_don_hang: orderId,
+        ngay_xuat: row[idx.ngayXuat],
+        ten_khach_hang: row[idx.tenKH],
+        so_dien_thoai: row[idx.sdt],
+        dia_chi_nhan: idx.diaChiNhan !== -1 ? row[idx.diaChiNhan] : undefined,
+        ten_san_pham: row[idx.tenSP],
+        loai_may: row[idx.loaiMay],
+        dung_luong: row[idx.dungLuong],
+        pin: row[idx.pin],
+        mau_sac: row[idx.mauSac],
+        imei: row[idx.imei],
+        tinh_trang_may: row[idx.tinhTrang],
+        phu_kien: row[idx.phuKien],
+        gia_ban: giaBanNum,
+        hinh_thuc_thanh_toan: row[idx.hinhThucTT],
+        gia_nhap: row[idx.giaNhap],
+        lai: row[idx.lai],
+        nhan_vien: row[idx.nguoiBan] ? { id: row[idx.nguoiBan] } : undefined,
+        loai_don: idxLoaiDon !== -1 ? row[idxLoaiDon] : "",
+        trang_thai: idxTrangThai !== -1 ? row[idxTrangThai] : "hoan_thanh",
+      })
+    })
 
-    const total = mapped.length
+    // Create a list of order summaries (one entry per order ID)
+    const orderSummaries = Array.from(groupedOrdersMap.entries()).map(([ma_don_hang, items]) => {
+      const first = items[0]
+      // Sum up the total price for all items in the order
+      const totalThanhToan = items.reduce((sum, item) => sum + (Number(item.gia_ban) || 0), 0)
+      
+      return {
+        ...first,
+        thanh_toan: totalThanhToan,
+        tong_tien: totalThanhToan,
+        items_count: items.length,
+        // Collect all IMEIs for filtering
+        imeis: items.map(it => it.imei).filter(Boolean)
+      }
+    })
+
+    // Reverse to get newest first (new rows are appended naturally)
+    orderSummaries.reverse()
+
+    const total = orderSummaries.length
     const totalPages = Math.max(1, Math.ceil(total / limit))
     const start = (page - 1) * limit
     const end = start + limit
-    const sliced = mapped.slice(start, end)
+    const paginatedOrders = orderSummaries.slice(start, end)
 
     return NextResponse.json({
-      data: sliced,
+      data: paginatedOrders,
       pagination: {
         page,
         limit,

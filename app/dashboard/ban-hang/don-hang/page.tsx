@@ -59,97 +59,29 @@ export default function DonHangPage() {
       if (!response.ok) throw new Error("Failed to fetch orders")
 
       const data = await response.json()
-      // Helper: tách danh sách phương thức từ chuỗi tổng hợp (không lấy số tiền)
-      const parseMethodList = (raw: any): string[] => {
-        const s0 = String(raw || '')
-        if (!s0) return []
-        // Chuẩn hoá: bỏ dấu, lowercase, chỉ giữ chữ & số & khoảng trắng
-        const s = s0
-          .normalize('NFD')
-          .replace(/\p{Diacritic}/gu, '')
-          .toLowerCase()
-          .replace(/[^a-z0-9\s|]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-        const methods: string[] = []
-        const add = (label: string) => { if (!methods.includes(label)) methods.push(label) }
-        // Hỗ trợ alias/viết tắt
-        if (/(tra\s*gop|tragop|mira|the\s*tin\s*dung|tindung|installment|credit)/.test(s)) add('Trả góp')
-        if (/(chuyen\s*khoan|chuyenkhoan|ck\b|\bck\b|bank|stk|mbbank|vietcom|vcb|acb)/.test(s)) add('Chuyển khoản')
-        if (/(\bthe\b|card|pos|quet\s*the|swipe)/.test(s)) add('Thẻ')
-        if (/(tien\s*mat|tm\b|cash)/.test(s)) add('Tiền mặt')
-        return methods
-      }
-      // Map lại dữ liệu từ sheet
-      const mappedRaw = Array.isArray(data.data)
-        ? data.data.map((item: any, idx: number) => {
-            // Chuyển giá trị tiền từ chuỗi sang số
-            const giaBanRaw = item.gia_ban || "";
-            const giaBanNum = typeof giaBanRaw === "string" ? parseInt(giaBanRaw.replace(/[^\d]/g, "")) || 0 : Number(giaBanRaw) || 0;
-            // Chuyển ngày bán từ chuỗi sang Date
-            let ngayBanRaw = item.ngay_xuat || "";
-            let ngayBanDate = "";
-            if (typeof ngayBanRaw === "string" && ngayBanRaw.match(/\d{1,2}\/\d{1,2}\/\d{4}/)) {
-              const [d, m, y] = ngayBanRaw.split("/");
-              ngayBanDate = new Date(Number(y), Number(m) - 1, Number(d)).toISOString();
-            } else {
-              ngayBanDate = ngayBanRaw;
-            }
-            return {
-              id: item.id || item.ma_don_hang || String(idx),
-              ma_don_hang: item.ma_don_hang || item.id || "",
-              tong_tien: giaBanNum,
-              giam_gia: 0, // Sheet chưa có trường này
-              thanh_toan: giaBanNum,
-              phuong_thuc_thanh_toan: String(item["Hình Thức Thanh Toán"] || item.hinh_thuc_thanh_toan || ""),
-              phuong_thuc_list: parseMethodList(item["Hình Thức Thanh Toán"] || item.hinh_thuc_thanh_toan || ""),
-              trang_thai: item.trang_thai || "hoan_thanh",
-              ngay_ban: ngayBanDate,
-              khach_hang: item["Tên Khách Hàng"] || item.ten_khach_hang || item.so_dien_thoai
-                ? { ho_ten: item["Tên Khách Hàng"] || item.ten_khach_hang || "Khách lẻ", so_dien_thoai: item["Số Điện Thoại"] || item.so_dien_thoai || "" }
-                : undefined,
-              nhan_vien: item["Người Bán"] || item.nhan_vien ? { id: item["Người Bán"] || (item.nhan_vien && item.nhan_vien.id) || "" } : undefined,
-              loai_don: item["Loại Đơn"] || item.loai_don || "",
-              hinh_thuc_van_chuyen: item["Hình Thức Vận Chuyển"] || item.hinh_thuc_van_chuyen || "",
-              imei: item.imei || item["IMEI"] || item.san_pham?.imei || item.serial || item["Serial"] || item.san_pham?.serial || "",
-              // Có thể bổ sung thêm các trường khác nếu cần
-            };
-          })
-        : [];
-      // Gộp theo mã đơn hàng, cộng tổng thanh toán (thanh_toan)
-      const groupedMap = new Map<string, Order & { _ids: string[] }>()
-      for (const o of mappedRaw) {
-        const key = o.ma_don_hang || o.id
-        if (!key) continue
-        const ex = groupedMap.get(key)
-        if (!ex) {
-          groupedMap.set(key, { ...o, imeis: o.imei ? [o.imei] : [], _ids: [o.id] })
+      // Map lại dữ liệu đã gộp từ API
+      const orders = Array.isArray(data.data) ? data.data.map((o: any) => {
+        // Chuyển ngày bán từ chuỗi sang ISO nếu cần
+        let ngayBanRaw = o.ngay_xuat || "";
+        let ngayBanDate = "";
+        if (typeof ngayBanRaw === "string" && ngayBanRaw.match(/\d{1,2}\/\d{1,2}\/\d{4}/)) {
+          const [d, m, y] = ngayBanRaw.split("/");
+          ngayBanDate = new Date(Number(y), Number(m) - 1, Number(d)).toISOString();
         } else {
-          ex.thanh_toan = (Number(ex.thanh_toan) || 0) + (Number(o.thanh_toan) || 0)
-          ex.tong_tien = (Number(ex.tong_tien) || 0) + (Number(o.tong_tien) || 0)
-          // Giữ ngày bán sớm nhất cho ổn định hiển thị (hoặc muộn nhất tuỳ nhu cầu)
-          if (o.ngay_ban && (!ex.ngay_ban || new Date(o.ngay_ban) < new Date(ex.ngay_ban))) {
-            ex.ngay_ban = o.ngay_ban
-          }
-          // Ưu tiên thông tin khách nếu trống
-          if (!ex.khach_hang && o.khach_hang) ex.khach_hang = o.khach_hang
-          if (!ex.nhan_vien && o.nhan_vien) ex.nhan_vien = o.nhan_vien
-          if (!ex.phuong_thuc_thanh_toan && o.phuong_thuc_thanh_toan) ex.phuong_thuc_thanh_toan = o.phuong_thuc_thanh_toan
-          // Gom danh sách phương thức (duy nhất)
-          const list = new Set<string>([...(ex.phuong_thuc_list || []), ...(o.phuong_thuc_list || [])])
-          ex.phuong_thuc_list = Array.from(list)
-          if (o.imei) {
-            const imeiSet = new Set<string>([...(ex.imeis || []), o.imei])
-            ex.imeis = Array.from(imeiSet)
-          }
-          ex._ids.push(o.id)
+          ngayBanDate = ngayBanRaw;
         }
-      }
-      const grouped = Array.from(groupedMap.values()).map(g => ({
-        ...g,
-        id: g.ma_don_hang || g.id // đảm bảo mở dialog dùng mã đơn hàng
-      }))
-      setOrders(grouped)
+        
+        return {
+          ...o,
+          id: o.ma_don_hang || o.id,
+          ngay_ban: ngayBanDate,
+          khach_hang: o.ten_khach_hang || o.so_dien_thoai
+            ? { ho_ten: o.ten_khach_hang || "Khách lẻ", so_dien_thoai: o.so_dien_thoai || "" }
+            : undefined,
+        }
+      }) : []
+      
+      setOrders(orders)
       setTotalPages(data.pagination?.totalPages || 1)
     } catch (error) {
       console.error("Error fetching orders:", error)

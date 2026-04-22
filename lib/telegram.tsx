@@ -392,7 +392,19 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
       if (serial) parts.push(`Serial: ${serial}`)
       return parts.length ? ` | ${parts.join(" - ")}` : ""
     })()
-    return `• ${head}${idLine}`
+
+    // Thêm giá niêm yết và giảm giá máy
+    const giaNiemYet = p.gia_niemyet || p.gia_niem_yet
+    const giaBan = p.gia_ban
+    let priceLine = ""
+    if (giaNiemYet && giaNiemYet > giaBan) {
+      const giamGiaMay = giaNiemYet - giaBan
+      priceLine = `\n   <i>Niêm yết: ₫${giaNiemYet.toLocaleString('vi-VN')} | Bán: ₫${giaBan.toLocaleString('vi-VN')} (Giảm ₫${giamGiaMay.toLocaleString('vi-VN')})</i>`
+    } else if (giaBan > 0) {
+      priceLine = `\n   <i>Giá bán: ₫${giaBan.toLocaleString('vi-VN')}</i>`
+    }
+
+    return `• ${head}${idLine}${priceLine}`
   })
 
   // Gói bảo hành: ưu tiên mảng codes, hoặc chuỗi có sẵn

@@ -42,8 +42,8 @@ import { useAuthMe } from "@/hooks/use-auth-me"
 import { toast } from "sonner"
 
 // Utils
-import { isConHangProduct } from "@/lib/utils/inventory-helpers"
 import { uploadTelegramProof } from "@/lib/utils/telegram"
+import { isConHangProduct, extractPartnerInfo } from "@/lib/utils/inventory-helpers"
 
 
 export default function KhoHangPage() {
@@ -396,6 +396,64 @@ export default function KhoHangPage() {
     }
   }
 
+  const handleBulkCompleteSalePartner = () => {
+    try {
+      const selectedProducts = partnerProducts.filter((p: any) => selectedIds.includes(p.id))
+      if (selectedProducts.length === 0) return
+
+      // Kiểm tra xem tất cả có cùng đối tác không
+      const partners = new Set(selectedProducts.map((p: any) => extractPartnerInfo(p.ghi_chu)))
+      if (partners.size > 1) {
+        toast.error("Vui lòng chỉ chọn các máy của cùng một đối tác để chốt hàng loạt")
+        return
+      }
+
+      const cartRaw = localStorage.getItem('cart_draft_v1')
+      let cart = cartRaw ? JSON.parse(cartRaw) : []
+      if (!Array.isArray(cart)) cart = []
+
+      const newItems = selectedProducts.map((p: any) => ({
+        id: p.id || p.ID || p["ID Máy"] || p.imei,
+        type: "product",
+        ten_san_pham: p.ten_san_pham || p.tenSP || p["Tên Sản Phẩm"] || p.model || "",
+        imei: p.imei || "",
+        serial: p.serial || "",
+        mau_sac: p.mau_sac || p.mau || "",
+        dung_luong: p.dung_luong || p.bo_nho || "",
+        loai_may: p.loai_may || "",
+        gia_ban: typeof p.gia_ban === 'number' ? p.gia_ban 
+               : typeof p.gia_goi_y_ban === 'number' ? p.gia_goi_y_ban
+               : (parseInt(String(p.gia_ban || p.gia_goi_y_ban || '0').replace(/[^\d]/g, "")) || 0),
+        gia_nhap: typeof p.gia_nhap === 'number' ? p.gia_nhap 
+                : typeof p.gia_chuyen === 'number' ? p.gia_chuyen
+                : (parseInt(String(p.gia_nhap || p.gia_chuyen || '0').replace(/[^\d]/g, "")) || 0),
+        so_luong: 1,
+        max_quantity: 1,
+        source: "Kho ngoài",
+        nguon: "Kho ngoài",
+        partner_sheet: p.partner_sheet || p.sheet || "",
+        partner_row_index: p.partner_row_index || p.row_index || "",
+        ten_doi_tac: p.ten_doi_tac || "",
+        sdt_doi_tac: p.sdt_doi_tac || ""
+      }))
+
+      // Lọc bỏ các sản phẩm trùng ID đã có trong giỏ
+      const newItemIds = new Set(newItems.map(i => i.id))
+      const otherItems = cart.filter((item: any) => !(newItemIds.has(item.id) && item.type === "product"))
+      
+      const updatedCart = [...otherItems, ...newItems]
+      localStorage.setItem('cart_draft_v1', JSON.stringify(updatedCart))
+
+      toast.success(`Đã thêm ${newItems.length} máy vào giỏ hàng. Chuyển sang trang bán hàng...`)
+      
+      setTimeout(() => {
+        window.location.href = '/dashboard/ban-hang'
+      }, 100)
+    } catch (e) {
+      toast.error("Lỗi khi chốt hàng loạt")
+    }
+  }
+
   const queryClient = useQueryClient()
 
   const handleRefresh = async () => {
@@ -723,18 +781,25 @@ export default function KhoHangPage() {
                 <Badge variant="secondary" className="px-3 py-1 bg-purple-50 text-purple-700 border-purple-100">
                   Đã chọn {selectedIds.length} máy
                 </Badge>
-                <Button
-                  size="sm"
-                  className="h-8 bg-orange-600 hover:bg-orange-700 shadow-sm"
-                  onClick={async () => {
-                    await returnPartner({ productIds: selectedIds, employeeId: me?.employeeId || "NV-UNKNOWN" });
-                    setSelectedIds([]);
-                    setIsEditMode(false);
-                  }}
-                  disabled={isReturningPartner}
-                >
-                  Hoàn kho đồng loạt ({selectedIds.length})
-                </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 bg-orange-600 hover:bg-orange-700 shadow-sm"
+                    onClick={async () => {
+                      await returnPartner({ productIds: selectedIds, employeeId: me?.employeeId || "NV-UNKNOWN" });
+                      setSelectedIds([]);
+                      setIsEditMode(false);
+                    }}
+                    disabled={isReturningPartner}
+                  >
+                    Hoàn kho ({selectedIds.length})
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 bg-purple-600 hover:bg-purple-700 shadow-sm"
+                    onClick={handleBulkCompleteSalePartner}
+                  >
+                    Chốt hàng loạt ({selectedIds.length})
+                  </Button>
               </div>
             )}
 

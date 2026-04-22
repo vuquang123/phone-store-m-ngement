@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { RotateCcw, ShoppingCart, User } from "lucide-react"
-import { getTrangThaiColor } from "@/lib/utils/inventory-helpers"
+import { getTrangThaiColor, extractPartnerInfo } from "@/lib/utils/inventory-helpers"
 
 interface PartnerProduct {
   id: string
@@ -45,10 +45,6 @@ export function PartnerTable({
   isReturning
 }: PartnerTableProps) {
   
-  const extractPartnerInfo = (note: string = "") => {
-    const match = note.match(/\[GiaoĐốiTác: (.*?)\]/)
-    return match ? match[1] : "Chưa xác định"
-  }
 
   return (
     <div className="rounded-md border border-slate-200 overflow-hidden bg-white shadow-sm">

@@ -52,3 +52,8 @@ export function getLoaiMayLabel(loai?: string) {
   if (norm.includes("qte") || norm.includes("qt") || norm.includes("quoc te") || norm.includes("quocte") || norm.includes("quoc-te")) return "QTE"
   return raw
 }
+
+export function extractPartnerInfo(note: string = "") {
+  const match = note.match(/\[GiaoĐốiTác: (.*?)\]/)
+  return match ? match[1] : "Chưa xác định"
+}

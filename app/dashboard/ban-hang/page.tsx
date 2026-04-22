@@ -511,7 +511,8 @@ export default function BanHangPage() {
             id: accessoryId,
             type: "accessory",
             ten_san_pham: product.ten_san_pham,
-            gia_ban: product.gia_ban,
+            gia_niemyet: Number(product.gia_ban) || 0,
+            gia_ban: Number(product.gia_ban) || 0,
             gia_nhap: giaNhap,
             so_luong: 1,
             max_quantity: product.so_luong_ton || 1,
@@ -545,6 +546,7 @@ export default function BanHangPage() {
             "Màu Sắc": product.mau_sac,
             "Pin (%)": product.pin,
             "Tình Trạng Máy": product.tinh_trang,
+            gia_niemyet: Number(product.gia_ban) || 0,
             gia_ban: (Number(product.gia_ban) || 0) - (Number(product.giam_gia) || 0)
           }
         ]
@@ -580,6 +582,7 @@ export default function BanHangPage() {
       id,
       type: 'product',
       ten_san_pham: p.model || p.ten_san_pham || '',
+      gia_niemyet: typeof p.gia_goi_y_ban === 'number' && p.gia_goi_y_ban > 0 ? p.gia_goi_y_ban : 0,
       gia_ban: typeof p.gia_goi_y_ban === 'number' && p.gia_goi_y_ban > 0 ? p.gia_goi_y_ban : 0,
       gia_nhap: typeof p.gia_chuyen === 'number' ? p.gia_chuyen : 0,
       so_luong: 1,
@@ -1155,14 +1158,26 @@ export default function BanHangPage() {
               customerName: selectedCustomer?.ho_ten || 'Khách lẻ',
               customerPhone: selectedCustomer?.so_dien_thoai || '',
               // Đảm bảo khach_hang có đầy đủ thông tin
-              khach_hang: {
-                ten: selectedCustomer?.ho_ten || 'Khách lẻ',
-                ho_ten: selectedCustomer?.ho_ten || 'Khách lẻ',
-                so_dien_thoai: selectedCustomer?.so_dien_thoai || '',
-                sdt: selectedCustomer?.so_dien_thoai || '',
-                dia_chi: loaiDon === 'Đơn onl' ? diaChiNhan : ''
-              },
-              warrantyPackages: (order.warranties || []).map((w: any) => w.ten_goi || w.ma_goi || w.packageCode)
+                khach_hang: {
+                  ten: selectedCustomer?.ho_ten || 'Khách lẻ',
+                  ho_ten: selectedCustomer?.ho_ten || 'Khách lẻ',
+                  so_dien_thoai: selectedCustomer?.so_dien_thoai || '',
+                  sdt: selectedCustomer?.so_dien_thoai || '',
+                  dia_chi: loaiDon === 'Đơn onl' ? diaChiNhan : ''
+                },
+                products: cart.map(i => ({
+                  ten_san_pham: i.ten_san_pham || (i as any)["Tên Sản Phẩm"] || '',
+                  loai_may: i.loai_may || (i as any)["Loại Máy"] || '',
+                  dung_luong: i.dung_luong || (i as any)["Dung Lượng"] || '',
+                  mau_sac: i.mau_sac || (i as any)["Màu Sắc"] || '',
+                  imei: i.imei || '',
+                  serial: i.serial || '',
+                  gia_niemyet: i.gia_niemyet,
+                  gia_ban: i.gia_ban,
+                  so_luong: i.so_luong,
+                  nguon: String(i.nguon || i.source || '').toLowerCase().includes('kho ngoài') ? 'Kho ngoài' : 'Kho trong'
+                })),
+                warrantyPackages: (order.warranties || []).map((w: any) => w.ten_goi || w.ma_goi || w.packageCode)
             };
             const derivedOrderType = loaiDon?.toLowerCase?.() ? (loaiDon.toLowerCase().includes('onl') ? 'online' : 'offline') : undefined;
             try {
