@@ -4,7 +4,8 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    // Type-check bật lại: `npx tsc --noEmit` sạch lỗi (2026-06). Không che giấu lỗi type nữa.
+    ignoreBuildErrors: false,
   },
   images: {
     unoptimized: true,

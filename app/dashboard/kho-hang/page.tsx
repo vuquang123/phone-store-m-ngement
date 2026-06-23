@@ -438,7 +438,7 @@ export default function KhoHangPage() {
       }))
 
       // Lọc bỏ các sản phẩm trùng ID đã có trong giỏ
-      const newItemIds = new Set(newItems.map(i => i.id))
+      const newItemIds = new Set(newItems.map((i: any) => i.id))
       const otherItems = cart.filter((item: any) => !(newItemIds.has(item.id) && item.type === "product"))
       
       const updatedCart = [...otherItems, ...newItems]

@@ -5,9 +5,9 @@ export const dynamic = "force-dynamic"
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = params.id
+  const id = (await params).id
   try {
     const body = await req.json().catch(() => ({}))
     const { trang_thai } = body || {}

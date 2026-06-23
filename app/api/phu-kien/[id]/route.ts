@@ -218,7 +218,7 @@ async function getUserRole(userId: string) {
 }
 
 // ================== ROUTES ==================
-export async function GET(request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
       ? await (ctx as any).params
@@ -240,7 +240,7 @@ export async function GET(request: NextRequest, ctx: { params: { id: string } } 
   }
 }
 
-export async function PUT(request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
       ? await (ctx as any).params
@@ -269,7 +269,7 @@ export async function PUT(request: NextRequest, ctx: { params: { id: string } } 
   }
 }
 
-export async function DELETE(request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
       ? await (ctx as any).params
