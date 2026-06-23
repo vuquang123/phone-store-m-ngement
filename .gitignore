@@ -2,9 +2,11 @@
 
 # dependencies
 /node_modules
+node_modules/
 
 # next.js
 /.next/
+.next/
 /out/
 
 # production
@@ -16,11 +18,23 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
+# logs & build output
+*.log
+build_out*.txt
+ts_errors.txt
+
+# env files (keep .env.example committed)
 .env*
+!.env.example
 
 # vercel
 .vercel
+
+# IDE / editor
+.vs/
+
+# OS files
+.DS_Store
 
 # typescript
 *.tsbuildinfo
