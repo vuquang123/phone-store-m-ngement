@@ -23,6 +23,11 @@ async function getKeyFingerprint(rawKey: string) {
 }
 
 export async function GET() {
+  // Chỉ cho phép ở môi trường non-production (công cụ chẩn đoán nội bộ)
+  if (process.env.NODE_ENV === "production") {
+    return new NextResponse(null, { status: 404 })
+  }
+
   const email = process.env.GOOGLE_CLIENT_EMAIL || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || ""
   const rawKey = process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_KEY || ""
   const sheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEETS_ID || ""
