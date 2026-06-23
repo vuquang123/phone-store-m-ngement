@@ -187,7 +187,7 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
                 <p>Không tìm thấy khách hàng</p>
                 {search.trim().length >= 3 && (
                   <Button variant="default" size="sm" onClick={() => setShowCreate(true)}>
-                    + Tạo khách mới với SĐT "{search.trim()}"
+                    + Tạo khách mới với SĐT &quot;{search.trim()}&quot;
                   </Button>
                 )}
               </div>

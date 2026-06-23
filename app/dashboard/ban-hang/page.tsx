@@ -1408,7 +1408,7 @@ export default function BanHangPage() {
                       {cart.length === 0 ? (
                         <div className="flex-1 flex flex-col items-center justify-center gap-1 text-muted-foreground text-sm">
                           <span>Giỏ hàng đang trống</span>
-                          <span className="text-xs text-slate-500">Chọn sản phẩm và bấm "Thêm" để đưa vào giỏ</span>
+                          <span className="text-xs text-slate-500">Chọn sản phẩm và bấm &quot;Thêm&quot; để đưa vào giỏ</span>
                         </div>
                       ) : (
                         <CartItemList
