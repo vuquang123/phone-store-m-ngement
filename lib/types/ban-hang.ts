@@ -28,3 +28,6 @@ export interface Customer {
   ho_ten: string
   so_dien_thoai: string
 }
+
+// Khóa sắp xếp bảng tìm kiếm sản phẩm (tách từ ban-hang/page.tsx)
+export type SortKey = 'san_pham' | 'imei_loai' | 'nguon' | 'trang_thai' | 'gia'

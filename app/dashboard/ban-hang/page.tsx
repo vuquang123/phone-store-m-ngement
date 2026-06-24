@@ -20,7 +20,11 @@ dayjs.extend(customParseFormat)
 import { useIsMobile } from "@/hooks/use-mobile"
 import ImagePicker from '@/components/tele/ImagePicker'
 
-import { CartItem, WarrantyPackageUI, Customer } from "@/lib/types/ban-hang"
+import { CartItem, WarrantyPackageUI, Customer, SortKey } from "@/lib/types/ban-hang"
+import { computeDynamicDiscount } from "@/lib/ban-hang/discount"
+import { isWarrantyEligible, computeCartSubtotal, computeWarrantyTotal } from "@/lib/ban-hang/totals"
+import { useCart } from "@/hooks/ban-hang/use-cart"
+import { useDiscount } from "@/hooks/ban-hang/use-discount"
 import { CartItemList } from "@/components/ban-hang/cart-item-list"
 import { SearchArea } from "@/components/ban-hang/search-area"
 
@@ -135,9 +139,21 @@ export default function BanHangPage() {
   const [khoHangProducts, setKhoHangProducts] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<any[]>([])
-  const [cart, setCart] = useState<CartItem[]>([])
+  // Giỏ hàng + chọn bảo hành tách sang hook useCart (giữ nguyên hành vi load/persist/mutators)
+  const {
+    cart, setCart,
+    addToCart, addPartnerItemToCart, updateQuantity, removeFromCart,
+    warrantyPackages, warrantyPkgLoading,
+    selectedWarranties, setSelectedWarranties, handleSelectWarranty,
+  } = useCart({ toast, setSearchQuery, setActiveTab })
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [giamGia, setGiamGia] = useState(0)
+  // Giảm giá tách sang hook useDiscount (giữ nguyên hành vi)
+  const {
+    giamGia, setGiamGia,
+    giamGiaInput, setGiamGiaInput,
+    discountParseMsg, setDiscountParseMsg,
+    handleDiscountInput, commitDiscount, applyQuickDiscount, handleDiscountPreset,
+  } = useDiscount()
   // Thanh toán: hỗ trợ nhiều phương thức + trả góp
   const [cashEnabled, setCashEnabled] = useState(false)
   const [cashAmount, setCashAmount] = useState(0)
@@ -156,8 +172,7 @@ export default function BanHangPage() {
   const [copiedImei, setCopiedImei] = useState<string | null>(null)
   const [justAddedKey, setJustAddedKey] = useState<string | null>(null)
   // Discount input string (5.2)
-  const [giamGiaInput, setGiamGiaInput] = useState("")
-  const [discountParseMsg, setDiscountParseMsg] = useState<string>("")
+  // giamGiaInput/discountParseMsg chuyển sang hook useDiscount
   const [isLoading, setIsLoading] = useState(false)
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
   const [isCustomerSelectOpen, setIsCustomerSelectOpen] = useState(false)
@@ -172,7 +187,6 @@ export default function BanHangPage() {
   // Cache phụ kiện để tránh gọi API lặp khi query ngắn
   const [accessoryProducts, setAccessoryProducts] = useState<any[]>([])
   // Desktop search table UX enhancements
-  type SortKey = 'san_pham' | 'imei_loai' | 'nguon' | 'trang_thai' | 'gia'
   const [sortKey, setSortKey] = useState<SortKey>('san_pham')
   const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc')
   const [selectedIndex, setSelectedIndex] = useState<number>(-1)
@@ -216,103 +230,16 @@ export default function BanHangPage() {
   const [receiptBase64, setReceiptBase64] = useState<string | null>(null)
   const [receiptBlob, setReceiptBlob] = useState<Blob | null>(null)
   const [receiptBlobs, setReceiptBlobs] = useState<Blob[] | null>(null)
-  /* ===== Warranty state ===== */
-  const [warrantyPackages, setWarrantyPackages] = useState<WarrantyPackageUI[]>([])
-  const [warrantyPkgLoading, setWarrantyPkgLoading] = useState(false)
-  const [selectedWarranties, setSelectedWarranties] = useState<Record<string,string|null>>({}) // deviceId (IMEI/Serial) -> packageCode
+  /* ===== Warranty state (packages/loading/selectedWarranties chuyển sang useCart) ===== */
   const [openWarrantyInfo, setOpenWarrantyInfo] = useState<string|null>(null)
   // Inline edit price (3.1)
   const [editingPriceId, setEditingPriceId] = useState<string|null>(null)
   const editPriceRef = useRef<HTMLInputElement|null>(null)
   // Abort previous search requests when user keeps typing
   const searchAbortRef = useRef<AbortController | null>(null)
-  const isCartLoaded = useRef(false)
-  const isWarrantyLoaded = useRef(false)
+  // load/persist giỏ hàng + chọn bảo hành + load gói BH đã chuyển sang useCart
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('cart_draft_v1')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed)) setCart(parsed)
-      }
-    } catch {}
-    isCartLoaded.current = true
-
-    try {
-      const sel = localStorage.getItem('cart_warranty_sel_v1')
-      if (sel) {
-        const parsedSel = JSON.parse(sel)
-        if (parsedSel && typeof parsedSel === 'object') setSelectedWarranties(parsedSel)
-      }
-    } catch {}
-    isWarrantyLoaded.current = true
-
-    const loadWarrantyPkgs = async () => {
-      try {
-        setWarrantyPkgLoading(true)
-        const res = await fetch('/api/warranties/packages')
-        if (!res.ok) throw new Error('Fetch warranty packages failed')
-        const data = await res.json()
-        setWarrantyPackages(Array.isArray(data.data) ? data.data : [])
-      } catch (e) {
-        console.warn('[WARRANTY] Load packages fail', e)
-        setWarrantyPackages([])
-      } finally {
-        setWarrantyPkgLoading(false)
-      }
-    }
-    loadWarrantyPkgs()
-  }, [])
-
-  function handleSelectWarranty(deviceId: string, pkgCode: string | null) {
-    setSelectedWarranties(prev => ({ ...prev, [deviceId]: pkgCode }))
-  }
-  // Persist cart & selections (9.3)
-  useEffect(()=>{ 
-    if (!isCartLoaded.current) return
-    try { localStorage.setItem('cart_draft_v1', JSON.stringify(cart)) } catch{} 
-  }, [cart])
-
-  useEffect(()=>{ 
-    if (!isWarrantyLoaded.current) return
-    try { localStorage.setItem('cart_warranty_sel_v1', JSON.stringify(selectedWarranties)) } catch{} 
-  }, [selectedWarranties])
-
-  // ===== Discount parser (5.2) =====
-  function parseDiscount(raw: string, base: number): number {
-    const s = raw.trim().toLowerCase()
-    if (!s) return 0
-    if (/^\d+(\.\d+)?%$/.test(s)) {
-      const pct = parseFloat(s.replace('%',''))
-      return Math.min(Math.round(base * pct / 100), base)
-    }
-    if (/^\d+(\.\d+)?k$/.test(s)) {
-      return Math.min(Math.round(parseFloat(s.replace('k','')) * 1000), base)
-    }
-    if (/^\d+(\.\d+)?m$/.test(s)) {
-      return Math.min(Math.round(parseFloat(s.replace('m','')) * 1_000_000), base)
-    }
-    const num = parseInt(s.replace(/[^\d]/g,''),10)
-    if (!Number.isFinite(num)) return 0
-    return Math.min(num, base)
-  }
-
-  function handleDiscountInput(v: string){
-    setGiamGiaInput(v)
-    setDiscountParseMsg('')
-  }
-  function commitDiscount(){
-    const parsed = parseDiscount(giamGiaInput, discountBase)
-    setGiamGia(parsed)
-    setGiamGiaInput(parsed ? `${parsed.toLocaleString('vi-VN')}đ` : "")
-  }
-  function applyQuickDiscount(tag: string){
-    const parsed = parseDiscount(tag, discountBase)
-    setGiamGia(parsed)
-    setGiamGiaInput(parsed ? `${parsed.toLocaleString('vi-VN')}đ` : '')
-    setDiscountParseMsg('')
-  }
+  // Discount parser handlers chuyển sang hook useDiscount
 
   // === SEARCH SẢN PHẨM (dựa trên cache + server search khi query >= 2) ===
   useEffect(() => {
@@ -485,205 +412,18 @@ export default function BanHangPage() {
     return () => { alive = false }
   }, [reloadFlag])
 
-  // === CART ===
-  const addToCart = (product: any) => {
-    const prevCart = cart
-    let nextCart = prevCart
-    let didChange = false
-    if (product.type === "accessory") {
-      const accessoryId = product.id || `${product.ten_san_pham}_${product.loai_may || ""}`
-      const existingItem = prevCart.find((item) => item.type === "accessory" && item.id === accessoryId)
-      let giaNhap = 0
-      if (typeof product.gia_nhap === "number") giaNhap = product.gia_nhap
-      else if (typeof product["Giá Nhập"] === "number") giaNhap = product["Giá Nhập"]
-      else if (typeof product.gia_nhap === "string") giaNhap = parseInt(product.gia_nhap.replace(/[^\d]/g, "")) || 0
-      else if (typeof product["Giá Nhập"] === "string") giaNhap = parseInt(product["Giá Nhập"].replace(/[^\d]/g, "")) || 0
-      if (existingItem) {
-        const maxQty = product.so_luong_ton || 1
-        if (existingItem.so_luong < maxQty) {
-          nextCart = prevCart.map((item) => item.id === accessoryId ? { ...item, so_luong: item.so_luong + 1 } : item)
-          didChange = true
-        }
-      } else {
-        nextCart = [
-          ...prevCart,
-          {
-            id: accessoryId,
-            type: "accessory",
-            ten_san_pham: product.ten_san_pham,
-            gia_niemyet: Number(product.gia_ban) || 0,
-            gia_ban: Number(product.gia_ban) || 0,
-            gia_nhap: giaNhap,
-            so_luong: 1,
-            max_quantity: product.so_luong_ton || 1,
-            imei: product.imei || "",
-            trang_thai: product.trang_thai || "",
-            // preserve accessory descriptors for cart display
-            loai_phu_kien: product.loai_phu_kien || product.loai || "",
-            mau_sac: product.mau_sac || product.mau || ""
-          }
-        ]
-        didChange = true
-      }
-    } else {
-      const exists = prevCart.find((item) => item.id === product.id && item.type === "product")
-      if (!exists) {
-        const isPartner = String(product.nguon || product.source || '').toLowerCase().includes('kho ngoài')
-        nextCart = [
-          ...prevCart,
-          {
-            ...product,
-            type: "product",
-            so_luong: 1,
-            max_quantity: 1,
-            // Track initial IMEI state for partner items to skip extra confirmation if it already existed
-            imei_initial: product.imei || '',
-            imei_confirmed: isPartner && product.imei ? true : (product as any).imei_confirmed,
-            "Tên Sản Phẩm": product.ten_san_pham,
-            "Loại Máy": product.loai_may,
-            "Dung Lượng": product.dung_luong,
-            "IMEI": product.imei,
-            "Màu Sắc": product.mau_sac,
-            "Pin (%)": product.pin,
-            "Tình Trạng Máy": product.tinh_trang,
-            gia_niemyet: Number(product.gia_ban) || 0,
-            gia_ban: (Number(product.gia_ban) || 0) - (Number(product.giam_gia) || 0)
-          }
-        ]
-        didChange = true
-      }
-    }
-    if (didChange) {
-      setCart(nextCart)
-      try {
-        toast({
-          title: "Đã thêm vào giỏ",
-          description: product.ten_san_pham || product.imei || product.serial || "Sản phẩm",
-          action: (
-            <button
-              onClick={() => setCart(prevCart)}
-              className="inline-flex h-8 items-center justify-center rounded-md border px-3 text-sm font-medium hover:bg-secondary"
-            >
-              Hoàn tác
-            </button>
-          ) as any,
-        })
-      } catch {}
-    }
-    setSearchQuery("")
-  }
-
-  // Thêm máy kho ngoài vào giỏ từ dialog
-  function addPartnerItemToCart(p: any) {
-    const id = p.imei || p.id
-    const exists = cart.find((it) => it.type === 'product' && (it.imei === p.imei || it.id === id))
-    if (exists) return
-    const item: CartItem = {
-      id,
-      type: 'product',
-      ten_san_pham: p.model || p.ten_san_pham || '',
-      gia_niemyet: typeof p.gia_goi_y_ban === 'number' && p.gia_goi_y_ban > 0 ? p.gia_goi_y_ban : 0,
-      gia_ban: typeof p.gia_goi_y_ban === 'number' && p.gia_goi_y_ban > 0 ? p.gia_goi_y_ban : 0,
-      gia_nhap: typeof p.gia_chuyen === 'number' ? p.gia_chuyen : 0,
-      so_luong: 1,
-      max_quantity: 1,
-      imei: p.imei || '',
-      imei_initial: p.imei || '',
-      imei_confirmed: (p.imei ? true : false) as any,
-      trang_thai: 'Còn hàng',
-      loai_may: p.loai_may || '',
-      dung_luong: p.bo_nho || p.dung_luong || '',
-      mau_sac: p.mau || '',
-      pin: p.pin_pct || p.pin || '',
-      tinh_trang: p.tinh_trang || '',
-      // Metadata cho API ban-hang xử lý xóa dòng kho ngoài
-      source: 'Kho ngoài',
-      nguon: 'Kho ngoài',
-      partner_sheet: p.sheet,
-      partner_row_index: p.row_index,
-      ten_doi_tac: p.ten_doi_tac || '',
-      sdt_doi_tac: p.sdt_doi_tac || ''
-    }
-    setCart(prev => [...prev, item])
-    setActiveTab('ban-hang')
-  }
-
-  const updateQuantity = (id: string, type: string, newQty: number) => {
-    if (newQty <= 0) {
-      removeFromCart(id, type)
-      return
-    }
-    setCart(cart.map((item) =>
-      item.id === id && item.type === type
-        ? { ...item, so_luong: Math.min(newQty, item.max_quantity || 1) }
-        : item
-    ))
-  }
-
-  const removeFromCart = (id: string, type: string) => {
-    setCart(cart.filter((item) => !(item.id === id && item.type === type)))
-  }
+  // === CART === addToCart/addPartnerItemToCart/updateQuantity/removeFromCart chuyển sang useCart
 
   // === CHECKOUT ===
-  const isWarrantyEligible = (item: CartItem): boolean => {
-    if (item.type !== 'product') return false
-    const isPartner = String(item.nguon || item.source || '').toLowerCase().includes('kho ngoài')
-    const isIpad = String(item.ten_san_pham || '').toLowerCase().includes('ipad') || String(item.loai_may || '').toLowerCase().includes('ipad')
-    if (isIpad) {
-      const hasId = !!(item.imei || item.serial)
-      if (!hasId) return false
-      if (isPartner && item.imei && !(item as any).imei_confirmed && !(item as any).imei_initial) return false
-      return true
-    }
-    if (!isPartner) return !!item.imei
-    return !!(item.imei && (((item as any).imei_confirmed) || ((item as any).imei_initial)))
-  }
-  const tongTien = cart.reduce((sum, item) => sum + item.gia_ban * item.so_luong, 0)
+  // isWarrantyEligible/computeCartSubtotal/computeWarrantyTotal tách sang lib/ban-hang/totals.ts
+  const tongTien = computeCartSubtotal(cart)
   const thanhToan = tongTien - giamGia // (chưa cộng phí bảo hành)
-  const warrantyTotal = cart.reduce((sum, i) => {
-    if (!isWarrantyEligible(i)) return sum
-    const key = (i.imei || i.serial || i.id) as string
-    if (!key) return sum
-    const code = selectedWarranties[key]
-    if (!code) return sum
-    const pkg = warrantyPackages.find(p => p.code === code)
-    return sum + (pkg?.price || 0)
-  }, 0)
+  const warrantyTotal = computeWarrantyTotal(cart, selectedWarranties, warrantyPackages)
   // Cơ sở tính giảm giá: tổng tiền hàng + phí bảo hành trước giảm
   const discountBase = Math.max(tongTien + warrantyTotal, 0)
   
-  // Tính toán Giảm giá động
-  let computedGiamGia = 0;
-  let computedDiscountMsg = '';
-  if (giamGiaInput) {
-    const s = giamGiaInput.trim().toLowerCase();
-    if (s.endsWith('%')) {
-      const pct = parseFloat(s.replace('%', ''));
-      if (!isNaN(pct) && pct > 0 && pct <= 100) {
-        computedGiamGia = discountBase * (pct / 100);
-        computedDiscountMsg = `Giảm ${pct}% (-₫${computedGiamGia.toLocaleString('vi-VN')})`;
-      } else {
-        computedDiscountMsg = 'Phần trăm không hợp lệ';
-      }
-    } else if (s.endsWith('k') || s.endsWith('tr')) {
-      let multiplier = 1000;
-      if (s.endsWith('tr')) multiplier = 1000000;
-      const numStr = s.replace(/k|tr/g, '');
-      const num = parseFloat(numStr);
-      if (!isNaN(num) && num > 0) {
-        computedGiamGia = num * multiplier;
-        computedDiscountMsg = `Giảm ₫${computedGiamGia.toLocaleString('vi-VN')}`;
-      } else {
-        computedDiscountMsg = 'Số tiền giảm không hợp lệ';
-      }
-    } else {
-      const num = parseFloat(s.replace(/[^\d]/g, ''));
-      if (!isNaN(num) && num > 0) {
-         computedGiamGia = num;
-         computedDiscountMsg = `Giảm ₫${computedGiamGia.toLocaleString('vi-VN')}`;
-      }
-    }
-  }
+  // Tính toán Giảm giá động (logic tách sang lib/ban-hang/discount.ts, giữ nguyên hành vi)
+  const { amount: computedGiamGia, msg: computedDiscountMsg } = computeDynamicDiscount(giamGiaInput, discountBase);
 
   const giamGiaToUse = computedGiamGia > 0 ? computedGiamGia : giamGia;
   
@@ -691,14 +431,7 @@ export default function BanHangPage() {
   const expectedCollect = loaiThanhToan === 'Đặt cọc' ? Math.max(Number(soTienCoc)||0, 0) : finalThanhToan
 
   
-  // Handlers cho input Giảm giá
-  const handleDiscountPreset = (preset: string) => {
-    if (preset === 'Reset') {
-      setGiamGiaInput(''); setGiamGia(0); setDiscountParseMsg('');
-    } else {
-      setGiamGiaInput(preset);
-    }
-  };
+  // handleDiscountPreset chuyển sang hook useDiscount
   // Tổng thanh toán ngay (không bao gồm phần góp): Tiền mặt + Chuyển khoản + Thẻ
   const immediateSum = (cashEnabled ? (cashAmount||0) : 0)
     + (transferEnabled ? (transferAmount||0) : 0)
