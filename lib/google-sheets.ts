@@ -117,10 +117,10 @@ const GOOGLE_SHEETS_SPREADSHEET_ID =
   (process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEETS_ID || "") as string
 
 if (!GOOGLE_SHEETS_CLIENT_EMAIL || !GOOGLE_SHEETS_PRIVATE_KEY || !GOOGLE_SHEETS_SPREADSHEET_ID) {
-  console.error("[Google Sheets] Thiếu biến môi trường cần thiết.")
-  console.error("  GOOGLE_SHEETS_CLIENT_EMAIL:", GOOGLE_SHEETS_CLIENT_EMAIL ? "OK" : "MISSING")
-  console.error("  PRIVATE_KEY present:", RAW_PRIVATE_KEY ? "YES" : "NO")
-  console.error("  SPREADSHEET_ID:", GOOGLE_SHEETS_SPREADSHEET_ID ? "OK" : "MISSING")
+  console.error("[Google Sheets] Thiếu biến môi trường cần thiết (đặt trong .env.local — xem .env.example).")
+  console.error("  GOOGLE_CLIENT_EMAIL (hoặc GOOGLE_SERVICE_ACCOUNT_EMAIL):", GOOGLE_SHEETS_CLIENT_EMAIL ? "OK" : "MISSING")
+  console.error("  GOOGLE_PRIVATE_KEY (hoặc GOOGLE_SERVICE_ACCOUNT_KEY):", RAW_PRIVATE_KEY ? "OK" : "MISSING")
+  console.error("  GOOGLE_SHEETS_SPREADSHEET_ID (hoặc GOOGLE_SHEETS_ID):", GOOGLE_SHEETS_SPREADSHEET_ID ? "OK" : "MISSING")
 }
 
 
