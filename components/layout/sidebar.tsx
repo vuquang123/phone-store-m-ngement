@@ -28,6 +28,7 @@ import {
   UserCheck,
   RotateCcw,
   BookOpen,
+  Receipt,
 } from "lucide-react"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
@@ -49,7 +50,7 @@ const getNavigation = () => [
     title: "Bán hàng",
     items: [
       { title: "Bán hàng", href: "/dashboard/ban-hang", icon: ShoppingCart, roles: ["quan_ly", "nhan_vien"] as Role[] },
-      { title: "Đơn hàng", href: "/dashboard/ban-hang/don-hang", icon: ShoppingCart, roles: ["quan_ly", "nhan_vien"] as Role[] },
+      { title: "Đơn hàng", href: "/dashboard/ban-hang/don-hang", icon: Receipt, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Khách hàng", href: "/dashboard/khach-hang", icon: Users, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Hoàn trả", href: "/dashboard/hoan-tra", icon: RotateCcw, roles: ["quan_ly", "nhan_vien"] as Role[] },
     ],

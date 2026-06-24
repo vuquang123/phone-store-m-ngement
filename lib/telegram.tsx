@@ -97,6 +97,14 @@ function getBotToken() {
   return token
 }
 
+// Chat riêng/DM (chat_id > 0) KHÔNG có topic => phải bỏ message_thread_id, nếu
+// không Telegram trả "message thread not found" và tin nhắn/ảnh bị mất.
+function effectiveThreadId(chatId: number, desired: number): number {
+  return chatId > 0 ? 0 : (desired || 0)
+}
+
+// Ưu tiên TELEGRAM_CHAT_ID trong .env (cấu hình của cửa hàng); chỉ rơi về số
+// hardcoded khi cả TELEGRAM_CHAT_ID lẫn các biến theo loại đơn đều không có.
 const DEFAULT_CHAT = -1002895849744
 const ORDER_TYPE_CHAT_MAP: Record<string, number> = {
   offline: parseEnvChat('TELEGRAM_CHAT_OFFLINE', DEFAULT_CHAT),
@@ -116,6 +124,7 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
+    messageThreadId = effectiveThreadId(chatId, messageThreadId)
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
       return { success: false, error: "Thiếu cấu hình Telegram" }
@@ -173,6 +182,7 @@ export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'i
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
+    messageThreadId = effectiveThreadId(chatId, messageThreadId)
 
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
@@ -195,9 +205,9 @@ export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'i
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="parse_mode"${nl}${nl}` +
       `HTML${nl}` +
-      `--${boundary}${nl}` +
-      `Content-Disposition: form-data; name="message_thread_id"${nl}${nl}` +
-      `${String(messageThreadId)}${nl}` +
+      (messageThreadId
+        ? `--${boundary}${nl}Content-Disposition: form-data; name="message_thread_id"${nl}${nl}${String(messageThreadId)}${nl}`
+        : '') +
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="photo"; filename="${filename}"${nl}` +
       `Content-Type: application/octet-stream${nl}${nl}`
@@ -233,6 +243,7 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
+    messageThreadId = effectiveThreadId(chatId, messageThreadId)
 
     const boundary = '----telegramboundary' + Date.now()
     const nl = '\r\n'
@@ -246,9 +257,9 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="parse_mode"${nl}${nl}` +
       `HTML${nl}` +
-      `--${boundary}${nl}` +
-      `Content-Disposition: form-data; name="message_thread_id"${nl}${nl}` +
-      `${String(messageThreadId)}${nl}` +
+      (messageThreadId
+        ? `--${boundary}${nl}Content-Disposition: form-data; name="message_thread_id"${nl}${nl}${String(messageThreadId)}${nl}`
+        : '') +
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="photo"; filename="${filename}"${nl}` +
       `Content-Type: application/octet-stream${nl}${nl}`
@@ -279,6 +290,7 @@ export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: strin
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
+    messageThreadId = effectiveThreadId(chatId, messageThreadId)
 
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
@@ -302,9 +314,9 @@ export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: strin
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="chat_id"${nl}${nl}` +
       `${String(chatId)}${nl}` +
-      `--${boundary}${nl}` +
-      `Content-Disposition: form-data; name="message_thread_id"${nl}${nl}` +
-      `${String(messageThreadId)}${nl}` +
+      (messageThreadId
+        ? `--${boundary}${nl}Content-Disposition: form-data; name="message_thread_id"${nl}${nl}${String(messageThreadId)}${nl}`
+        : '') +
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="media"${nl}${nl}` +
       `${JSON.stringify(mediaArray)}${nl}`

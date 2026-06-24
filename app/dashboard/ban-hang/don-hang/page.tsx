@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { RefreshButton } from "@/components/ui/refresh-button"
 import { Search, Eye, FileText } from "lucide-react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
@@ -46,7 +47,7 @@ export default function DonHangPage() {
   const [loaiDonFilter, setLoaiDonFilter] = useState<"all" | "online" | "offline">("all")
   const [timeFilter, setTimeFilter] = useState<"all" | "this_month" | "last_month">("all")
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (force = false) => {
     try {
       setIsLoading(true)
       const params = new URLSearchParams({
@@ -55,6 +56,7 @@ export default function DonHangPage() {
         // Chỉ lấy đơn hàng đã thanh toán
         trang_thai: "hoan_thanh",
       })
+      if (force) params.set("refresh", "1")
 
       const response = await fetchWithTimeout(`/api/ban-hang?${params}`)
       if (!response.ok) throw new Error("Failed to fetch orders")
@@ -100,16 +102,29 @@ export default function DonHangPage() {
     setIsDetailDialogOpen(true)
   }
 
-  const getTrangThaiColor = (trangThai: string) => {
-    switch (trangThai) {
-      case "hoan_thanh":
-        return "bg-green-100 text-green-800"
-      case "huy":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-muted text-foreground"
-    }
-  }
+  // Chuẩn hoá chuỗi trạng thái thô từ sheet (bỏ dấu, thường hoá) để so khớp.
+  const normTrangThai = (s: string) =>
+    String(s || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/gi, "d")
+      .toLowerCase()
+      .trim()
+
+  const isCancelled = (s: string) => normTrangThai(s).includes("huy")
+  const isReturned = (s: string) => normTrangThai(s).includes("hoan tra")
+
+  // Màu: đã huỷ -> đỏ; đã hoàn -> vàng; còn lại -> xanh lá.
+  const getTrangThaiColor = (trangThai: string) =>
+    isCancelled(trangThai)
+      ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+      : isReturned(trangThai)
+        ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300"
+        : "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
+
+  // Nhãn: "Hoàn trả" -> "Đã hoàn"; đã huỷ -> "Đã hủy"; còn lại -> "Thành công".
+  const getTrangThaiLabel = (trangThai: string) =>
+    isReturned(trangThai) ? "Đã hoàn" : isCancelled(trangThai) ? "Đã hủy" : "Thành công"
 
   const getPhuongThucColor = (label: string) => {
     const s = (label || '').toLowerCase()
@@ -128,6 +143,7 @@ export default function DonHangPage() {
             <h2 className="text-2xl font-bold tracking-tight">Danh sách đơn hàng</h2>
             <p className="text-muted-foreground">Quản lý và theo dõi các đơn hàng đã bán</p>
           </div>
+          <RefreshButton onRefresh={() => fetchOrders(true)} loading={isLoading} label />
         </div>
 
         <Card>
@@ -275,7 +291,7 @@ export default function DonHangPage() {
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge className={getTrangThaiColor(order.trang_thai)}>
-                              {order.trang_thai === "hoan_thanh" ? "Hoàn thành" : "Đã hủy"}
+                              {getTrangThaiLabel(order.trang_thai)}
                             </Badge>
                             {(order.phuong_thuc_list && order.phuong_thuc_list.length > 0
                               ? order.phuong_thuc_list
@@ -434,7 +450,7 @@ export default function DonHangPage() {
                             </TableCell>
                             <TableCell>
                               <Badge className={getTrangThaiColor(order.trang_thai)}>
-                                {order.trang_thai === "hoan_thanh" ? "Hoàn thành" : "Đã hủy"}
+                                {getTrangThaiLabel(order.trang_thai)}
                               </Badge>
                             </TableCell>
                             <TableCell>{new Date(order.ngay_ban).toLocaleDateString("vi-VN")}</TableCell>

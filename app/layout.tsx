@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/toaster"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Quản lý Cửa hàng iPhone Lock",
+  title: "Quản lý DEV PỒ",
   description: "Hệ thống quản lý cửa hàng điện thoại iPhone Lock",
   generator: "v0.app",
   manifest: "/manifest.webmanifest",

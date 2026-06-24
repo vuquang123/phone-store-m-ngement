@@ -236,8 +236,9 @@ export async function GET(request: NextRequest) {
     const limitRaw = Number(searchParams.get("limit") || 10)
     const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 100) : 10
+    const force = searchParams.get("refresh") === "1"
 
-    const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
+    const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force })
     const idx = idxBanHang(header)
     const idxLoaiDon = header.indexOf("Loại Đơn")
     const idxTrangThai = colIndex(header, "Trạng Thái", "trang_thai")

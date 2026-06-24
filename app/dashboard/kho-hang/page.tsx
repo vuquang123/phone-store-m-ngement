@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
+import { RefreshButton } from "@/components/ui/refresh-button"
 import { useQueryClient } from "@tanstack/react-query"
 import { PullToRefresh } from "@/components/ui/pull-to-refresh"
 import { Input } from "@/components/ui/input"
@@ -455,16 +456,24 @@ export default function KhoHangPage() {
   }
 
   const queryClient = useQueryClient()
+  const [refreshing, setRefreshing] = useState(false)
 
   const handleRefresh = async () => {
+    setRefreshing(true)
     try {
-      await queryClient.invalidateQueries({ queryKey: ["inventory"] })
-      await queryClient.invalidateQueries({ queryKey: ["partner-inventory"] })
-      await queryClient.invalidateQueries({ queryKey: ["cnc-inventory"] })
-      await queryClient.invalidateQueries({ queryKey: ["accessories-inventory"] })
+      // Bust cache server (TTL 15s) trước để chắc chắn lấy dữ liệu mới nhất từ sheet
+      await fetch("/api/kho-hang?refresh=1", { cache: "no-store" }).catch(() => {})
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["partner-inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["cnc-inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["accessories-inventory"] }),
+      ])
       toast.success("Đã làm mới dữ liệu")
     } catch (error) {
       toast.error("Lỗi khi làm mới dữ liệu")
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -494,6 +503,7 @@ export default function KhoHangPage() {
                 >
                   <ListChecks className="w-4 h-4" />
                 </Button>
+                <RefreshButton onRefresh={handleRefresh} loading={refreshing} />
               </div>
               {isEditMode && selectedIds.length > 0 && (
                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">

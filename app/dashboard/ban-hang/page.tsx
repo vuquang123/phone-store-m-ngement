@@ -1071,7 +1071,7 @@ export default function BanHangPage() {
     <ProtectedRoute>
       <div className="space-y-6 pb-28 md:pb-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="sticky top-0 z-30 bg-card shadow-sm">
+          <TabsList className="z-30 bg-card shadow-sm">
             <TabsTrigger
               value="ban-hang"
               className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500"

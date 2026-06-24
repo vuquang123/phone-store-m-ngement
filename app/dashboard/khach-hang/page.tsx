@@ -2,6 +2,7 @@
 
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Button } from "@/components/ui/button"
+import { RefreshButton } from "@/components/ui/refresh-button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -34,10 +35,13 @@ export default function KhachHangPage() {
   const pageSize = 10
   const isMobile = useIsMobile()
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (force = false) => {
     try {
       setIsLoading(true);
-      const response = await fetchWithTimeout(`/api/khach-hang${search ? `?search=${encodeURIComponent(search)}` : ""}`);
+      const qs = new URLSearchParams();
+      if (search) qs.set("search", search);
+      if (force) qs.set("refresh", "1");
+      const response = await fetchWithTimeout(`/api/khach-hang${qs.toString() ? `?${qs}` : ""}`);
       if (!response.ok) throw new Error("Failed to fetch customers");
       const data = await response.json();
       const mapped = Array.isArray(data)
@@ -75,6 +79,7 @@ export default function KhachHangPage() {
             <h2 className="text-2xl font-bold tracking-tight">Danh sách khách hàng</h2>
             <p className="text-muted-foreground">Quản lý thông tin khách hàng của cửa hàng</p>
           </div>
+          <RefreshButton onRefresh={() => fetchCustomers(true)} loading={isLoading} label />
         </div>
 
         <Card>

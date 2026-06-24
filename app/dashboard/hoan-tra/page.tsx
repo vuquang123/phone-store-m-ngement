@@ -18,6 +18,10 @@ interface ReturnOrder {
   khach_hang: string
   so_dien_thoai?: string
   san_pham?: string
+  ten_san_pham?: string
+  loai_may?: string
+  dung_luong?: string
+  mau_sac?: string
   imei?: string
   serial?: string
   ly_do?: string
@@ -51,10 +55,10 @@ export default function HoanTraPage() {
     return {}
   }
   // local fetch so we can reuse on demand (after create)
-  const fetchReturns = useCallback(async () => {
+  const fetchReturns = useCallback(async (force = false) => {
     setLoading(true)
     try {
-      const response = await fetchWithTimeout("/api/hoan-tra")
+      const response = await fetchWithTimeout(`/api/hoan-tra${force ? "?refresh=1" : ""}`)
       const result = await response.json()
       const data = Array.isArray(result.data) ? result.data : []
       const mapped: ReturnOrder[] = data.map((item: any, idx: number) => {
@@ -72,7 +76,11 @@ export default function HoanTraPage() {
           ma_don_hang: item.ma_don_hang || maDon || "",
           khach_hang: item.khach_hang || "",
           so_dien_thoai: item.so_dien_thoai || "",
-          san_pham: item.san_pham || "",
+          san_pham: item.san_pham || item.ten_san_pham || "",
+          ten_san_pham: item.ten_san_pham || item.san_pham || "",
+          loai_may: item.loai_may || "",
+          dung_luong: item.dung_luong || "",
+          mau_sac: item.mau_sac || "",
           imei: item.imei || "",
           serial: item.serial || item.Serial || "",
           ly_do: item.ly_do || "",
@@ -207,7 +215,7 @@ export default function HoanTraPage() {
           <p className="text-muted-foreground">Quản lý các yêu cầu hoàn trả từ khách hàng</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={fetchReturns} title="Làm mới danh sách">
+          <Button variant="outline" onClick={() => fetchReturns(true)} title="Làm mới danh sách">
             <RotateCcw className="w-4 h-4 mr-2" />
             Làm mới
           </Button>
@@ -251,11 +259,19 @@ export default function HoanTraPage() {
                       <span className="font-medium">{r.khach_hang}</span>
                       {r.so_dien_thoai && <span className="text-muted-foreground"> • {r.so_dien_thoai}</span>}
                     </div>
-                    {(r.san_pham || r.imei || r.serial) && (
-                      <div className="text-muted-foreground">
-                        {r.san_pham && <span>{r.san_pham}</span>}
-                        {(r.imei || r.serial) && <span>{r.san_pham ? ' • ' : ''}{r.imei || r.serial}</span>}
+                    {(r.ten_san_pham || r.san_pham) && (
+                      <div className="font-medium text-foreground">
+                        {r.ten_san_pham || r.san_pham}
+                        {r.loai_may && <span className="text-muted-foreground font-normal"> • {r.loai_may}</span>}
                       </div>
+                    )}
+                    {(r.dung_luong || r.mau_sac) && (
+                      <div className="text-muted-foreground">
+                        {[r.dung_luong, r.mau_sac].filter(Boolean).join(" • ")}
+                      </div>
+                    )}
+                    {(r.imei || r.serial) && (
+                      <div className="text-muted-foreground font-mono text-xs">{r.imei || r.serial}</div>
                     )}
                     {typeof r.so_tien_hoan === 'number' && r.so_tien_hoan > 0 && (
                       <div className="font-semibold text-red-600">{formatCurrency(r.so_tien_hoan)}</div>
@@ -305,7 +321,17 @@ export default function HoanTraPage() {
           <div className="space-y-2 text-sm">
             <div><span className="text-muted-foreground">Khách hàng:</span> <span className="font-medium">{selected?.khach_hang || '-'}</span></div>
             {selected?.so_dien_thoai && <div><span className="text-muted-foreground">SĐT:</span> {selected.so_dien_thoai}</div>}
-            {selected?.san_pham && <div><span className="text-muted-foreground">Sản phẩm:</span> {selected.san_pham}</div>}
+            {(selected?.ten_san_pham || selected?.san_pham) && (
+              <div>
+                <span className="text-muted-foreground">Sản phẩm:</span> {selected.ten_san_pham || selected.san_pham}
+                {selected?.loai_may ? ` • ${selected.loai_may}` : ""}
+              </div>
+            )}
+            {(selected?.dung_luong || selected?.mau_sac) && (
+              <div>
+                <span className="text-muted-foreground">Cấu hình:</span> {[selected?.dung_luong, selected?.mau_sac].filter(Boolean).join(" • ")}
+              </div>
+            )}
             {(selected?.imei || selected?.serial) && (
               <div>
                 <span className="text-muted-foreground">IMEI/Serial:</span> {selected.imei || selected.serial}

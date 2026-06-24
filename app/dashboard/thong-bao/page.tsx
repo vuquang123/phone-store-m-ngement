@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { RefreshButton } from "@/components/ui/refresh-button"
 import { Bell, Clock, AlertCircle, Info, ShoppingCart } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatDistanceToNow, parseISO } from "date-fns"
@@ -30,9 +31,9 @@ export default function ThongBaoPage() {
     fetchNotifications()
   }, [])
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (force = false) => {
     try {
-      const response = await fetchWithTimeout("/api/thong-bao")
+      const response = await fetchWithTimeout(`/api/thong-bao${force ? "?refresh=1" : ""}`)
       if (response.ok) {
         const data = await response.json()
         setNotifications(data)
@@ -122,6 +123,7 @@ export default function ThongBaoPage() {
             {unreadCount > 0 ? `${unreadCount} thông báo chưa đọc` : "Tất cả thông báo đã được đọc"}
           </p>
         </div>
+        <RefreshButton onRefresh={() => fetchNotifications(true)} label />
       </div>
 
       <div className="space-y-4">

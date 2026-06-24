@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { UserAvatar } from "@/components/user-avatar"
+import { RefreshButton } from "@/components/ui/refresh-button"
 import { Search, Plus, Edit, Trash2, UserCheck, UserX } from "lucide-react"
 import { EmployeeDialog } from "@/components/nhan-vien/employee-dialog"
 import { useToast } from "@/hooks/use-toast"
@@ -96,9 +97,9 @@ export default function NhanVienPage() {
     }
   }
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (force = false) => {
     try {
-      const response = await fetchWithTimeout("/api/nhan-vien", {
+      const response = await fetchWithTimeout(`/api/nhan-vien${force ? "?refresh=1" : ""}`, {
         headers: getAuthHeaders(),
       })
       if (response.ok) {
@@ -220,12 +221,15 @@ export default function NhanVienPage() {
           <h1 className="text-2xl sm:text-3xl font-bold">Quản lý Nhân viên</h1>
           <p className="text-muted-foreground">Quản lý tài khoản và phân quyền nhân viên</p>
         </div>
-        {userRole === "quan_ly" && (
-          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
-            <Plus className="w-4 h-4 mr-2" />
-            Thêm nhân viên
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <RefreshButton onRefresh={() => fetchEmployees(true)} label />
+          {userRole === "quan_ly" && (
+            <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+              <Plus className="w-4 h-4 mr-2" />
+              Thêm nhân viên
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>

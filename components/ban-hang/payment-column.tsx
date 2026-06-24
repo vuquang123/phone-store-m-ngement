@@ -81,21 +81,21 @@ export function PaymentColumn(props: PaymentColumnProps) {
             <label className="text-sm font-medium">Phương thức thanh toán</label>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer w-28">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={cashEnabled} onChange={(e) => { setCashEnabled(e.target.checked); if (!e.target.checked) setCashAmount(0); }} />
                   <span className="text-sm">Tiền mặt</span>
                 </label>
                 {cashEnabled && <Input className="flex-1" placeholder="₫0" value={cashAmount ? cashAmount.toLocaleString('vi-VN') : ''} onChange={(e) => setCashAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />}
               </div>
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer w-28">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={transferEnabled} onChange={(e) => { setTransferEnabled(e.target.checked); if (!e.target.checked) setTransferAmount(0); }} />
                   <span className="text-sm">Chuyển khoản</span>
                 </label>
                 {transferEnabled && <Input className="flex-1" placeholder="₫0" value={transferAmount ? transferAmount.toLocaleString('vi-VN') : ''} onChange={(e) => setTransferAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />}
               </div>
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer w-28">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={cardEnabled} onChange={(e) => { setCardEnabled(e.target.checked); if (!e.target.checked) setCardAmount(0); }} />
                   <span className="text-sm">Thẻ</span>
                 </label>
@@ -103,7 +103,7 @@ export function PaymentColumn(props: PaymentColumnProps) {
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer w-28">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={installmentEnabled} onChange={(e) => { setInstallmentEnabled(e.target.checked); if (!e.target.checked) { setInstallmentDown(0); setInstallmentLoan(0); setInstallmentType(''); } }} />
                     <span className="text-sm">Trả góp</span>
                   </label>

@@ -294,7 +294,7 @@ const BarChartComponent = ({
               onChange={(e) => onYearChange?.(Number(e.target.value))}
               aria-label="Chọn năm"
             >
-              {Array.from({ length: 6 }, (_, i) => 2020 + i).map((y) => (
+              {Array.from({ length: 7 }, (_, i) => 2020 + i).map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>

@@ -309,6 +309,41 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
     return out
   }
 
+  // Gửi yêu cầu hoàn trả (dùng chung cho nút desktop + mobile). Hiện lỗi THẬT từ API.
+  const submitReturn = async () => {
+    if (!order || !returnImei) return
+    try {
+      setReturnLoading(true)
+      const res = await fetch('/api/hoan-tra', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ma_don_hang: order.ma_don_hang,
+          khach_hang: order.khach_hang?.ho_ten,
+          so_dien_thoai: order.khach_hang?.so_dien_thoai,
+          imei: returnImei,
+          ly_do: returnReason,
+          so_tien_hoan: returnAmount ? Number(returnAmount) : undefined,
+          nguoi_xu_ly: order.nhan_vien?.ho_ten,
+          restock_inhouse: !isPartner,
+          partner_return: isPartner,
+          ghi_chu: note,
+        })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data?.error || data?.code || `Hoàn trả thất bại (HTTP ${res.status})`)
+      }
+      fetchWarranties(order.ma_don_hang)
+      onClose()
+    } catch (e: any) {
+      console.error('[RETURN][UI] error:', e)
+      alert(e?.message || 'Hoàn trả thất bại, vui lòng thử lại.')
+    } finally {
+      setReturnLoading(false)
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto bg-card">
@@ -712,79 +747,14 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               </div>
 
               <div className="mt-4 hidden md:flex justify-end">
-                <Button
-                  disabled={returnLoading || !returnImei}
-                  onClick={async () => {
-                    if (!order) return
-                    try {
-                      setReturnLoading(true)
-                      const res = await fetch('/api/hoan-tra', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          ma_don_hang: order.ma_don_hang,
-                          khach_hang: order.khach_hang?.ho_ten,
-                          so_dien_thoai: order.khach_hang?.so_dien_thoai,
-                          imei: returnImei,
-                          ly_do: returnReason,
-                          so_tien_hoan: returnAmount ? Number(returnAmount) : undefined,
-                          nguoi_xu_ly: order.nhan_vien?.ho_ten,
-                          restock_inhouse: !isPartner,
-                          partner_return: isPartner,
-                          ghi_chu: note,
-                        })
-                      })
-                      if (!res.ok) throw new Error('Hoàn trả thất bại')
-                      // Có thể fetch lại bảo hành sau hoàn trả
-                      fetchWarranties(order.ma_don_hang)
-                      onClose()
-                    } catch (e) {
-                      console.error('[RETURN][UI] error:', e)
-                      alert('Hoàn trả thất bại, vui lòng thử lại.')
-                    } finally {
-                      setReturnLoading(false)
-                    }
-                  }}
-                >
+                <Button disabled={returnLoading || !returnImei} onClick={submitReturn}>
                   {returnLoading ? (<span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Đang hoàn trả...</span>) : 'Xác nhận hoàn trả'}
                 </Button>
               </div>
               {/* Sticky action bar for mobile */}
               {isMobile && (
                 <div className="md:hidden sticky bottom-0 left-0 right-0 bg-card border-t mt-2 py-3 flex justify-end">
-                  <Button
-                    disabled={returnLoading || !returnImei}
-                    onClick={async () => {
-                      if (!order) return
-                      try {
-                        setReturnLoading(true)
-                        const res = await fetch('/api/hoan-tra', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            ma_don_hang: order.ma_don_hang,
-                            khach_hang: order.khach_hang?.ho_ten,
-                            so_dien_thoai: order.khach_hang?.so_dien_thoai,
-                            imei: returnImei,
-                            ly_do: returnReason,
-                            so_tien_hoan: returnAmount ? Number(returnAmount) : undefined,
-                            nguoi_xu_ly: order.nhan_vien?.ho_ten,
-                            restock_inhouse: !isPartner,
-                            partner_return: isPartner,
-                            ghi_chu: note,
-                          })
-                        })
-                        if (!res.ok) throw new Error('Hoàn trả thất bại')
-                        fetchWarranties(order.ma_don_hang)
-                        onClose()
-                      } catch (e) {
-                        console.error('[RETURN][UI] error:', e)
-                        alert('Hoàn trả thất bại, vui lòng thử lại.')
-                      } finally {
-                        setReturnLoading(false)
-                      }
-                    }}
-                  >
+                  <Button disabled={returnLoading || !returnImei} onClick={submitReturn}>
                     {returnLoading ? (<span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Đang hoàn trả...</span>) : 'Xác nhận hoàn trả'}
                   </Button>
                 </div>

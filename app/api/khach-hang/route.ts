@@ -53,7 +53,8 @@ function parseToEpoch(v: any): number {
 /* ============== GET ============== */
 export async function GET(request: NextRequest) {
   try {
-    const { header, rows } = await readFromGoogleSheets(SHEET)
+    const force = new URL(request.url).searchParams.get("refresh") === "1"
+    const { header, rows } = await readFromGoogleSheets(SHEET, undefined, { force })
     const keyMap: { [key: string]: string } = {
       "Ngày tạo": "created_at",
       "Tên Khách Hàng": "ten_khach",

@@ -13,11 +13,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Bell, Settings, User, LogOut, Menu } from "lucide-react"
+import { Settings, User, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
 import { ModeToggle } from "./mode-toggle"
+import { NotificationsBell } from "./notifications-bell"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 interface HeaderProps {
@@ -128,17 +129,7 @@ export function Header({ title, onMenuClick }: HeaderProps) {
         <div className="flex items-center gap-2 sm:gap-3">
           <ModeToggle />
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative h-9 w-9 sm:h-10 sm:w-10 rounded-full hover:bg-accent transition-colors"
-            disabled={isLoading}
-            onClick={() => router.push("/dashboard/thong-bao")}
-            aria-label="Mở trang thông báo"
-            title="Thông báo"
-          >
-            <Bell className="h-5 w-5 text-muted-foreground" />
-          </Button>
+          <NotificationsBell disabled={isLoading} />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

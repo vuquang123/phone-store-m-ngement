@@ -194,9 +194,11 @@ function invalidateSheetCache(sheetName: string) {
 
 // Đọc dữ liệu, trả về { header, rows }
 // Mặc định đọc rộng tới cột ZZ để tránh thiếu cột (sheet này vượt quá Z)
-export async function readFromGoogleSheets(sheetName: string, range: string = "A1:ZZ10000", options?: { silent?: boolean }): Promise<SheetData> {
+export async function readFromGoogleSheets(sheetName: string, range: string = "A1:ZZ10000", options?: { silent?: boolean; force?: boolean }): Promise<SheetData> {
   const cacheKey = `${sheetName}::${range}`
-  const cacheEntry = SHEETS_CACHE.get(cacheKey)
+  // force = bỏ qua cache (dùng cho nút "Làm mới" để lấy data mới nhất từ sheet)
+  if (options?.force) invalidateSheetCache(sheetName)
+  const cacheEntry = options?.force ? undefined : SHEETS_CACHE.get(cacheKey)
   const now = Date.now()
 
   if (cacheEntry?.data && cacheEntry.expiresAt > now) {

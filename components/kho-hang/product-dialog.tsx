@@ -392,7 +392,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={`${isBulkMode ? "sm:max-w-[1800px] w-[98vw]" : "sm:max-w-[1200px] w-[94vw]"} max-h-[90vh] overflow-y-auto bg-card`}>
+      <DialogContent className={`${isBulkMode ? "sm:max-w-[1400px] w-[90vw]" : "sm:max-w-[1400px] w-[90vw]"} max-h-[90vh] overflow-y-auto bg-card`}>
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">{product ? "Sửa sản phẩm" : "Thêm sản phẩm mới"}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
