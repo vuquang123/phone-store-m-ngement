@@ -6,6 +6,8 @@ import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { addNotification } from "@/lib/notifications"
 import { cancelContractsByIMEIs } from "@/lib/warranty"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
+import { Journal } from "@/lib/tx/journal"
+import { peekIdempotentDone, beginIdempotent, completeIdempotent, failIdempotent } from "@/lib/tx/idempotency"
 
 const SHEET_CANDIDATES = [
   "Hoan_Tra",
@@ -109,6 +111,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  let clientRequestId = "" // hoist để outer catch giải phóng khóa idempotency
   try {
     const body = await req.json()
     const {
@@ -157,6 +160,37 @@ export async function POST(req: NextRequest) {
     }
     const newId = `RT${String(maxNum + 1).padStart(5, "0")}`
 
+    // ===== Idempotency replay sớm =====
+    clientRequestId = String(body.clientRequestId || body.idempotencyKey || req.headers.get("x-idempotency-key") || "")
+    const __nowTx = Date.now()
+    {
+      const replay = peekIdempotentDone(clientRequestId, __nowTx)
+      if (replay) return NextResponse.json(replay.result, { status: 200 })
+    }
+
+    // ===== VALIDATE — natural idempotency: chặn hoàn trả 2 lần cùng IMEI =====
+    // (đơn đã ở trạng thái "Hoàn trả" trong Ban_Hang => đã refund => chặn double-refund/restock)
+    if (imei) {
+      try {
+        const { header: BH, rows: BR } = await readFromGoogleSheets("Ban_Hang")
+        const bImei = colIndex(BH, "IMEI")
+        const bTrang = colIndex(BH, "Trạng Thái")
+        if (bImei !== -1 && bTrang !== -1) {
+          const already = BR.some(
+            (r) => String(r[bImei] || "") === String(imei) && String(r[bTrang] || "").trim() === "Hoàn trả",
+          )
+          if (already) {
+            return NextResponse.json(
+              { ok: false, code: "ALREADY_RETURNED", error: `Máy ${imei} đã được hoàn trả trước đó` },
+              { status: 409 },
+            )
+          }
+        }
+      } catch (e) {
+        console.warn("[RETURN VALIDATE] đọc Ban_Hang thất bại (bỏ qua chặn cứng):", e)
+      }
+    }
+
     const line = Array(header.length).fill("")
     if (H.id !== -1) line[H.id] = newId
     if (H.ngayYC !== -1) line[H.ngayYC] = DateTime.now().setZone('Asia/Ho_Chi_Minh').toFormat('HH:mm:ss dd/MM/yyyy')
@@ -177,7 +211,57 @@ export async function POST(req: NextRequest) {
     const noteStr = extraNotes.join(" | ")
     if (H.ghiChu !== -1) line[H.ghiChu] = noteStr
 
-    const result = await appendToGoogleSheets(sheet, line)
+    // ===== Khóa in_flight trước khi ghi =====
+    {
+      const lock = beginIdempotent(clientRequestId, __nowTx)
+      if (lock.state === "done") return NextResponse.json(lock.result, { status: 200 })
+      if (lock.state === "in_flight") {
+        return NextResponse.json({ ok: false, error: "Yêu cầu đang được xử lý, vui lòng đợi" }, { status: 409 })
+      }
+    }
+
+    // ===== COMMIT qua journal: ghi Hoan_Tra + trừ Tổng Mua khách (money, có undo) =====
+    const journal = new Journal()
+    let result: any = { success: true }
+    let customerAdjust: any = { adjusted: false }
+    try {
+      await journal.run({
+        name: "append-hoan-tra",
+        do: async () => {
+          result = await appendToGoogleSheets(sheet, line)
+          if (result?.success === false) throw new Error("Ghi Hoan_Tra thất bại")
+        },
+        undo: async () => {
+          const { header: h, rows: rws } = await readFromGoogleSheets(sheet)
+          const ci = colIndex(h, "ID")
+          if (ci !== -1) {
+            const kept = rws.filter((r) => String(r[ci] || "") !== newId)
+            if (kept.length !== rws.length) await syncToGoogleSheets(sheet, kept)
+          }
+        },
+      })
+      if (so_tien_hoan) {
+        await journal.run({
+          name: "adjust-customer",
+          do: async () => {
+            customerAdjust = await adjustCustomerTotal(so_dien_thoai, -Math.abs(Number(so_tien_hoan)))
+          },
+          undo: async () => {
+            await adjustCustomerTotal(so_dien_thoai, +Math.abs(Number(so_tien_hoan)))
+          },
+        })
+      }
+    } catch (commitErr: any) {
+      console.error("[RETURN COMMIT] Lỗi, đang rollback:", commitErr?.message || commitErr)
+      const report = await journal.rollback()
+      failIdempotent(clientRequestId)
+      return NextResponse.json(
+        { ok: false, error: "Lỗi tạo hoàn trả, đã hoàn tác", needsManualFix: report.some((r) => !r.ok), rollback: report },
+        { status: 500 },
+      )
+    }
+
+    // Thông báo (post-commit best-effort)
     try {
       await addNotification({
         tieu_de: "Tạo yêu cầu hoàn trả",
@@ -187,12 +271,6 @@ export async function POST(req: NextRequest) {
         nguoi_nhan_id: "all",
       })
     } catch (e) { console.warn('[NOTIFY] hoan-tra POST fail:', e) }
-
-    // Nếu có số tiền hoàn, cập nhật Khach_Hang (Tổng Mua -= so_tien_hoan)
-    let customerAdjust: any = { adjusted: false }
-    if (so_tien_hoan) {
-      customerAdjust = await adjustCustomerTotal(so_dien_thoai, -Math.abs(Number(so_tien_hoan)))
-    }
 
     // 1) Mark Ban_Hang rows as Hoàn trả; zero out Lãi & Tổng Thu; add note; and reconstruct Kho_Hang row for in-house items
     try {
@@ -350,8 +428,11 @@ export async function POST(req: NextRequest) {
 
     // Telegram: CHUYỂN sang chỉ gửi khi quản lý xác nhận (PATCH)
 
-    return NextResponse.json({ ok: true, id: newId, sheet, appended: result?.success !== false, customerAdjust })
+    const __responsePayload = { ok: true, id: newId, sheet, appended: result?.success !== false, customerAdjust }
+    completeIdempotent(clientRequestId, __responsePayload, __nowTx)
+    return NextResponse.json(__responsePayload)
   } catch (e: any) {
+    failIdempotent(clientRequestId)
     return NextResponse.json({ error: e?.message || "Internal error" }, { status: 500 })
   }
 }
