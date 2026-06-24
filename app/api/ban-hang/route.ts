@@ -6,6 +6,8 @@ import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheet
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
+import { Journal } from "@/lib/tx/journal"
+import { peekIdempotentDone, beginIdempotent, completeIdempotent, failIdempotent } from "@/lib/tx/idempotency"
 
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
@@ -319,6 +321,7 @@ export async function GET(request: NextRequest) {
 
 /* =================== POST: Xuất hàng 1 máy =================== */
 export async function POST(request: NextRequest) {
+  let clientRequestId = "" // hoist để outer catch giải phóng khóa idempotency
   try {
   const body = await request.json()
   // Phân tách nếu FE gửi cấu trúc tối ưu: coreTotal, warrantySelections, warrantyTotal, finalThanhToan
@@ -330,6 +333,17 @@ export async function POST(request: NextRequest) {
     // Extract phone early for reuse (customer update + warranty contracts)
     const rawPhone = body.customerPhone || body.so_dien_thoai || body.sdt || body["Số Điện Thoại"] || (body.khach_hang && (body.khach_hang.so_dien_thoai || body.khach_hang.sdt))
     const customerPhoneEarly = rawPhone ? normalizePhone(String(rawPhone)) : ""
+
+    // ===== A0 — Idempotency: replay sớm nếu đơn đã xử lý xong (TRƯỚC khi validate,
+    // để retry hợp lệ không bị validate "máy đã bán" chặn nhầm) =====
+    clientRequestId = String(
+      body.clientRequestId || body.idempotencyKey || request.headers.get("x-idempotency-key") || "",
+    )
+    const __nowTx = Date.now()
+    {
+      const replay = peekIdempotentDone(clientRequestId, __nowTx)
+      if (replay) return NextResponse.json(replay.result, { status: 201 })
+    }
     // Tính tổng giá nhập
     let tongGiaNhap = 0
 
@@ -714,16 +728,42 @@ export async function POST(request: NextRequest) {
       newRowsToAppend.push(newRow)
     }
 
-    // Ghi nhiều dòng vào Google Sheets
-    if (newRowsToAppend.length > 0) {
-      const result = await appendMultipleToGoogleSheets(SHEETS.BAN_HANG, newRowsToAppend)
-      if (!result.success) {
-        errorFlag = true
+    // ===== A0b — Khóa in_flight ngay trước commit (chống double-submit đồng thời) =====
+    {
+      const lock = beginIdempotent(clientRequestId, __nowTx)
+      if (lock.state === "done") return NextResponse.json(lock.result, { status: 201 })
+      if (lock.state === "in_flight") {
+        return NextResponse.json({ ok: false, error: "Đơn đang được xử lý, vui lòng đợi" }, { status: 409 })
       }
     }
 
-    // Sau khi ghi đơn thành công: nếu là máy đối tác thì xoá khỏi sheet đối tác
-    if (!errorFlag) {
+    // ===== PHA B — COMMIT qua journal (fail bất kỳ bước -> rollback theo thứ tự ngược) =====
+    // Nhóm atomic: B1 ghi đơn + B3 xóa kho + B4 trừ phụ kiện (tài nguyên tồn kho money-critical).
+    // B2 (xóa dòng đối tác) giữ best-effort: không chụp được dòng để hoàn lại an toàn.
+    const journal = new Journal()
+    let removedKhoRows: any[][] = [] // snapshot dòng kho đã xóa -> undo: append lại
+    const accessoryUndo: { range: string; oldQty: number }[] = [] // snapshot Số Lượng cũ -> undo
+    try {
+      // B1: Ghi đơn vào Ban_Hang
+      await journal.run({
+        name: "append-ban-hang",
+        do: async () => {
+          if (newRowsToAppend.length > 0) {
+            const result = await appendMultipleToGoogleSheets(SHEETS.BAN_HANG, newRowsToAppend)
+            if (!result.success) throw new Error("Ghi Ban_Hang thất bại")
+          }
+        },
+        undo: async () => {
+          const { header: h, rows: rws } = await readFromGoogleSheets(SHEETS.BAN_HANG)
+          const ci = h.indexOf("ID Đơn Hàng")
+          if (ci !== -1 && idDonHang) {
+            const kept = rws.filter((r) => String(r[ci] || "") !== idDonHang)
+            if (kept.length !== rws.length) await syncToGoogleSheets(SHEETS.BAN_HANG, kept)
+          }
+        },
+      })
+
+      // B2 (best-effort, NGOÀI journal): xoá dòng kho đối tác (giữ nguyên hành vi cũ)
       for (let i = 0; i < mayList.length; i++) {
         const may = mayList[i]
         try {
@@ -746,80 +786,91 @@ export async function POST(request: NextRequest) {
           console.warn("[Partner] Không thể xoá dòng đối tác sau khi bán:", e)
         }
       }
-    }
 
-    // FIX AN TOÀN (W3): nếu ghi đơn Ban_Hang lỗi thì DỪNG NGAY, KHÔNG xóa máy khỏi kho.
-    // (Trước đây return 500 nằm SAU bước xóa kho -> máy bị mất dù đơn không tạo được.)
-    if (errorFlag) {
-      return NextResponse.json({ error: "Lỗi ghi Google Sheets" }, { status: 500 })
-    }
-
-    // Xoá các sản phẩm nội bộ đã bán khỏi Kho_Hang
-    if (mayList.length > 0) {
-      try {
-        const { header, rows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
-        const idxIdMay = colIndex(header, "ID Máy")
-        const idxIMEI = colIndex(header, "IMEI")
-        const idxSerial = colIndex(header, "Serial")
-
-        if (idxIdMay !== -1) {
-          // Chuẩn hóa danh sách IDs/IMEIs/Serials cần xóa từ mayList
+      // B3: Xoá máy nội bộ khỏi Kho_Hang (chụp dòng bị xoá để undo: append lại)
+      await journal.run({
+        name: "remove-kho",
+        do: async () => {
+          if (mayList.length === 0) return
+          const { header, rows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
+          const idxIdMay = colIndex(header, "ID Máy")
+          const idxIMEI = colIndex(header, "IMEI")
+          const idxSerial = colIndex(header, "Serial")
+          if (idxIdMay === -1) return
           const idsToDelete = mayList
             .map((m: any) => String(m.imei || m.serial || m.id || m.id_may || "").trim().toLowerCase())
             .filter(Boolean)
-
-          if (idsToDelete.length > 0) {
-            const originalLength = rows.length
-            const newRows = rows.filter((r) => {
-              const imei = String(r[idxIMEI] || "").trim().toLowerCase()
-              const serial = String(r[idxSerial] || "").trim().toLowerCase()
-              const idMay = String(r[idxIdMay] || "").trim().toLowerCase()
-              
-              const imeiLast5 = imei.length >= 5 ? imei.slice(-5) : ""
-              const serialLast5 = serial.length >= 5 ? serial.slice(-5) : ""
-
-              const isMatch = idsToDelete.some((pid: string) => 
-                (imei && pid === imei) || 
-                (serial && pid === serial) || 
-                (idMay && pid === idMay) ||
-                (imeiLast5 && pid === imeiLast5) ||
-                (serialLast5 && pid === serialLast5)
-              )
-              return !isMatch
-            })
-
-            if (newRows.length < originalLength) {
-              await syncToGoogleSheets(SHEETS.KHO_HANG, newRows)
-            }
+          if (idsToDelete.length === 0) return
+          const originalLength = rows.length
+          const matched: any[][] = []
+          const newRows = rows.filter((r) => {
+            const imei = String(r[idxIMEI] || "").trim().toLowerCase()
+            const serial = String(r[idxSerial] || "").trim().toLowerCase()
+            const idMay = String(r[idxIdMay] || "").trim().toLowerCase()
+            const imeiLast5 = imei.length >= 5 ? imei.slice(-5) : ""
+            const serialLast5 = serial.length >= 5 ? serial.slice(-5) : ""
+            const isMatch = idsToDelete.some((pid: string) =>
+              (imei && pid === imei) ||
+              (serial && pid === serial) ||
+              (idMay && pid === idMay) ||
+              (imeiLast5 && pid === imeiLast5) ||
+              (serialLast5 && pid === serialLast5)
+            )
+            if (isMatch) matched.push(r)
+            return !isMatch
+          })
+          if (newRows.length < originalLength) {
+            removedKhoRows = matched
+            await syncToGoogleSheets(SHEETS.KHO_HANG, newRows)
           }
-        }
-      } catch (e) {
-        console.warn("[Kho_Hang] Lỗi khi xoá sản phẩm nội bộ:", e)
-      }
-    }
+        },
+        undo: async () => {
+          if (removedKhoRows.length > 0) await appendMultipleToGoogleSheets(SHEETS.KHO_HANG, removedKhoRows)
+        },
+      })
 
-    if (errorFlag) {
-      return NextResponse.json({ error: "Lỗi ghi Google Sheets" }, { status: 500 })
-    }
-
-    // Giảm số lượng phụ kiện trong kho
-    if (normalizedAccessories.length > 0) {
-      const { header, rows } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
-      const idx = {
-        id: colIndex(header, "ID"),
-        soLuong: colIndex(header, "Số Lượng")
+      // B4: Trừ số lượng phụ kiện (chụp Số Lượng cũ để undo)
+      if (normalizedAccessories.length > 0) {
+        await journal.run({
+          name: "decrement-accessories",
+          do: async () => {
+            const { header, rows } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
+            const idx = { id: colIndex(header, "ID"), soLuong: colIndex(header, "Số Lượng") }
+            for (const pk of normalizedAccessories) {
+              const foundIdx = rows.findIndex((r) => r[idx.id] === pk.id)
+              if (foundIdx !== -1 && idx.soLuong !== -1) {
+                const current = Number(rows[foundIdx][idx.soLuong] || 0)
+                const sold = pk.so_luong !== undefined ? Number(pk.so_luong) : 1
+                const newQty = Math.max(current - sold, 0)
+                const rowNumber = foundIdx + 2 // Google Sheets row (1-based, header là dòng 1)
+                const range = `Phu_Kien!${toColumnLetter(idx.soLuong + 1)}${rowNumber}`
+                accessoryUndo.push({ range, oldQty: current })
+                await updateRangeValues(range, [[newQty]])
+              }
+            }
+          },
+          undo: async () => {
+            for (const u of accessoryUndo) await updateRangeValues(u.range, [[u.oldQty]])
+          },
+        })
       }
-      for (const pk of normalizedAccessories) {
-        const foundIdx = rows.findIndex((r) => r[idx.id] === pk.id)
-        if (foundIdx !== -1 && idx.soLuong !== -1) {
-          let current = Number(rows[foundIdx][idx.soLuong] || 0)
-          let sold = pk.so_luong !== undefined ? Number(pk.so_luong) : 1
-          let newQty = Math.max(current - sold, 0)
-          const rowNumber = foundIdx + 2 // Google Sheets row index (1-based, header is row 1)
-          await updateRangeValues(`Phu_Kien!${toColumnLetter(idx.soLuong + 1)}${rowNumber}`, [[newQty]])
-        }
-      }
+    } catch (commitErr: any) {
+      console.error("[COMMIT] Lỗi giữa chừng, đang rollback:", commitErr?.message || commitErr)
+      const report = await journal.rollback()
+      failIdempotent(clientRequestId)
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Lỗi tạo đơn, đã hoàn tác các bước đã ghi",
+          needsManualFix: report.some((r) => !r.ok),
+          rollback: report,
+          completed: journal.completedSteps(),
+        },
+        { status: 500 },
+      )
     }
+    // ✦ COMMIT POINT ✦ — đơn đã chốt. Từ đây trở đi là best-effort, KHÔNG rollback.
+    // (Các hàm ghi của lib/google-sheets đã tự invalidate cache sau khi ghi.)
 
     /* =================== Cập nhật Khach_Hang (Tổng mua & Lần mua cuối) =================== */
     try {
@@ -1069,7 +1120,7 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.warn("[NOTIFY] Không thể ghi thông báo đơn hàng mới:", e)
     }
-    return NextResponse.json({
+    const __responsePayload = {
       ok: true,
       created: true,
       id_don_hang: idDonHang,
@@ -1079,9 +1130,14 @@ export async function POST(request: NextRequest) {
       coreTotalServer,
       warrantyTotalServer: warrantyTotalFee,
       finalTotalServer
-    }, { status: 201 })
+    }
+    // Lưu kết quả để retry cùng clientRequestId được replay (idempotent), không tạo trùng.
+    completeIdempotent(clientRequestId, __responsePayload, __nowTx)
+    return NextResponse.json(__responsePayload, { status: 201 })
   } catch (error) {
     console.error("Ban_Hang POST error:", error)
+    // Giải phóng khóa để cho phép thử lại (đơn có thể đã/chưa commit — natural key sẽ chặn trùng nếu đã commit).
+    failIdempotent(clientRequestId)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

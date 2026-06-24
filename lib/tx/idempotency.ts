@@ -25,6 +25,15 @@ export type BeginResult =
   | { state: "in_flight" } // đang xử lý ở request khác => nên trả 409
   | { state: "done"; result: any } // đã xong => replay kết quả cũ
 
+/** Xem nhanh (KHÔNG khóa): chỉ trả result nếu đã 'done', dùng để replay sớm trước khi validate. */
+export function peekIdempotentDone(key: string, nowMs: number): { result: any } | null {
+  if (!key) return null
+  sweep(nowMs)
+  const existing = store.get(key)
+  if (existing && existing.status === "done") return { result: existing.result }
+  return null
+}
+
 /**
  * Đánh dấu bắt đầu xử lý một key. Trả về trạng thái để caller quyết định:
  *  - fresh: tiếp tục (đã được khóa in_flight)
