@@ -70,10 +70,33 @@ export function getLoaiMayBadgeClass(loai?: string) {
   return "bg-muted text-muted-foreground border-transparent"
 }
 
-// M\u00e0u ch\u1eef pin: >=90 xanh l\u00e1, 80-89 v\u00e0ng, <80 \u0111\u1ecf
+// Ph\u1ea7n "%" pin (s\u1ee9c kho\u1ebb): s\u1ed1 TR\u01af\u1edaC d\u1ea5u "/" n\u1ebfu c\u00f3 (vd "100/165" -> 100)
+export function parsePinHealth(pin?: string | number): number {
+  const first = String(pin ?? "").trim().split("/")[0]
+  const num = Number(first.replace(/[^\d.]/g, ""))
+  return Number.isFinite(num) ? num : 0
+}
+
+// Hi\u1ec3n th\u1ecb pin: "100/165" -> "100% (165L)" (L = l\u1ea7n s\u1ea1c); "93" -> "93%"; r\u1ed7ng -> "-"
+export function formatPinDisplay(pin?: string | number): string {
+  const s = String(pin ?? "").trim()
+  if (!s) return "-"
+  if (s.includes("/")) {
+    const [a, b] = s.split("/")
+    const health = (a || "").replace(/[^\d.]/g, "")
+    const cycles = (b || "").replace(/[^\d.]/g, "")
+    if (health && cycles) return `${health}% (${cycles}L)`
+    if (health) return `${health}%`
+    return s
+  }
+  const n = s.replace(/[^\d.]/g, "")
+  return n ? `${n}%` : s
+}
+
+// M\u00e0u ch\u1eef pin theo % (s\u1ee9c kho\u1ebb): >=90 xanh l\u00e1, 80-89 v\u00e0ng, <80 \u0111\u1ecf
 export function getPinColorClass(pin?: string | number) {
-  const num = Number(String(pin ?? "").replace(/[^\d.]/g, ""))
-  if (!Number.isFinite(num) || num <= 0) return "text-muted-foreground"
+  const num = parsePinHealth(pin)
+  if (num <= 0) return "text-muted-foreground"
   if (num >= 90) return "text-green-600 dark:text-green-400"
   if (num >= 80) return "text-amber-600 dark:text-amber-400"
   return "text-red-600 dark:text-red-400"

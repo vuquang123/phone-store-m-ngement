@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Edit2, Eye, Hammer, UserPlus } from "lucide-react"
-import { getTrangThaiColor, getTrangThaiKhoColor, getLoaiMayLabel, getLoaiMayBadgeClass, getPinColorClass, getAppleColorHex } from "@/lib/utils/inventory-helpers"
+import { getTrangThaiColor, getTrangThaiKhoColor, getLoaiMayLabel, getLoaiMayBadgeClass, getPinColorClass, getAppleColorHex, formatPinDisplay } from "@/lib/utils/inventory-helpers"
 
 interface Product {
   id: string
@@ -135,7 +135,7 @@ export function ProductTable({
                       </Badge>
                       {product.pin && (
                         <span className="text-[10px] text-muted-foreground">
-                          Pin: <span className={`font-semibold ${getPinColorClass(product.pin)}`}>{product.pin}%</span>
+                          Pin: <span className={`font-semibold ${getPinColorClass(product.pin)}`}>{formatPinDisplay(product.pin)}</span>
                         </span>
                       )}
                     </div>
@@ -168,7 +168,7 @@ export function ProductTable({
               </TableCell>
               <TableCell className="hidden lg:table-cell">
                 <span className={`text-sm font-semibold ${product.pin ? getPinColorClass(product.pin) : "text-muted-foreground"}`}>
-                  {product.pin ? `${product.pin}%` : "-"}
+                  {formatPinDisplay(product.pin)}
                 </span>
               </TableCell>
 
