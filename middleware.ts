@@ -49,13 +49,20 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
+  // HTTP header phải là ByteString (Latin1 0-255). Tên tiếng Việt có ký tự >255
+  // (vd "Nguyễn") sẽ làm headers.set() throw -> encode khi cần (ASCII giữ nguyên).
+  const headerSafe = (v: string) => {
+    for (let i = 0; i < v.length; i++) if (v.charCodeAt(i) > 255) return encodeURIComponent(v)
+    return v
+  }
+
   // Hợp lệ: ghi đè TẤT CẢ header danh tính bằng giá trị từ token đã verify
   // (kể cả khi client cố gửi header giả, giá trị thật vẫn thắng).
   const headers = new Headers(req.headers)
-  headers.set(HDR_EMAIL, user.email)
-  headers.set(HDR_ROLE, user.role || "")
-  headers.set(HDR_NAME, user.name || "")
-  headers.set(HDR_EMPLOYEE, user.employeeId || "")
+  headers.set(HDR_EMAIL, headerSafe(user.email))
+  headers.set(HDR_ROLE, headerSafe(user.role || ""))
+  headers.set(HDR_NAME, headerSafe(user.name || ""))
+  headers.set(HDR_EMPLOYEE, headerSafe(user.employeeId || ""))
 
   return NextResponse.next({ request: { headers } })
 }
