@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Edit2, Eye, Hammer, UserPlus } from "lucide-react"
-import { getTrangThaiColor, getTrangThaiKhoColor, getLoaiMayLabel } from "@/lib/utils/inventory-helpers"
+import { getTrangThaiColor, getTrangThaiKhoColor, getLoaiMayLabel, getLoaiMayBadgeClass, getPinColorClass, getAppleColorHex } from "@/lib/utils/inventory-helpers"
 
 interface Product {
   id: string
@@ -101,7 +101,13 @@ export function ProductTable({
                 <div className="flex flex-col">
                   <span className="font-medium text-foreground leading-tight">{product.ten_san_pham}</span>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-muted-foreground">{product.mau_sac}</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full ring-1 ring-black/10 dark:ring-white/20 shrink-0"
+                        style={{ backgroundColor: getAppleColorHex(product.mau_sac) }}
+                      />
+                      {product.mau_sac}
+                    </span>
                     <span className="text-xs text-muted-foreground">•</span>
                     <span className="text-xs text-muted-foreground">{product.dung_luong}</span>
                     {String(product.nguon || "").toLowerCase().includes("kho ngoài") ? (
@@ -124,11 +130,13 @@ export function ProductTable({
                       </span>
                     )}
                     <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px] h-4 py-0 px-1 leading-none font-normal">
+                      <Badge variant="outline" className={`${getLoaiMayBadgeClass(product.loai_may)} text-[10px] h-4 py-0 px-1 leading-none font-medium`}>
                         {getLoaiMayLabel(product.loai_may)}
                       </Badge>
                       {product.pin && (
-                        <span className="text-[10px] text-muted-foreground">Pin: {product.pin}%</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          Pin: <span className={`font-semibold ${getPinColorClass(product.pin)}`}>{product.pin}%</span>
+                        </span>
                       )}
                     </div>
                     {product.tinh_trang && (
@@ -154,12 +162,14 @@ export function ProductTable({
                 </div>
               </TableCell>
               <TableCell className="hidden sm:table-cell">
-                <Badge variant="secondary" className="bg-muted text-muted-foreground hover:bg-accent">
+                <Badge variant="outline" className={`${getLoaiMayBadgeClass(product.loai_may)} font-medium`}>
                   {getLoaiMayLabel(product.loai_may)}
                 </Badge>
               </TableCell>
               <TableCell className="hidden lg:table-cell">
-                <span className="text-sm font-medium text-foreground">{product.pin ? `${product.pin}%` : "-"}</span>
+                <span className={`text-sm font-semibold ${product.pin ? getPinColorClass(product.pin) : "text-muted-foreground"}`}>
+                  {product.pin ? `${product.pin}%` : "-"}
+                </span>
               </TableCell>
 
               <TableCell className="hidden md:table-cell">
