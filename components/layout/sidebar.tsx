@@ -180,8 +180,8 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-1 py-1.5">
-          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md border bg-background">
+        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background">
             <img
               src={logoUrl || "/apple-touch-icon.png"}
               alt="Logo"
