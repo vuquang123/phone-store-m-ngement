@@ -92,7 +92,7 @@ export function Header({ title, onMenuClick }: HeaderProps) {
   }, [])
 
   const handleLogout = async () => {
-    // Xóa thông tin đăng nhập cục bộ (tùy bạn muốn giữ store_settings hay không)
+    try { await fetch("/api/logout", { method: "POST" }) } catch {}
     localStorage.removeItem("auth_user")
     router.push("/auth/login")
   }

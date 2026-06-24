@@ -1,0 +1,11 @@
+import { NextResponse } from "next/server"
+import { clearSessionCookie } from "@/lib/auth"
+
+export const dynamic = "force-dynamic"
+
+// Xoá cookie phiên. Public (khai báo trong middleware) để gọi được kể cả khi token đã hết hạn.
+export async function POST() {
+  const res = NextResponse.json({ ok: true })
+  res.cookies.set(clearSessionCookie())
+  return res
+}

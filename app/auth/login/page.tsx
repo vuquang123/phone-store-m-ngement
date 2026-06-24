@@ -41,8 +41,10 @@ const handleLogin = async (e: React.FormEvent) => {
       localStorage.removeItem("employeeId")
     }
 
-    // Điều hướng: luôn vào kho hàng sau đăng nhập
-    router.push("/dashboard/kho-hang")
+    // Điều hướng: ưu tiên ?next= (chỉ chấp nhận đường dẫn nội bộ /dashboard), mặc định kho hàng
+    const nextParam = new URLSearchParams(window.location.search).get("next")
+    const dest = nextParam && nextParam.startsWith("/dashboard") ? nextParam : "/dashboard/kho-hang"
+    router.push(dest)
   } catch (error: unknown) {
     setError(error instanceof Error ? error.message : "Đã xảy ra lỗi")
   } finally {

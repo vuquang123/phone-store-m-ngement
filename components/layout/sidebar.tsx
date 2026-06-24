@@ -103,7 +103,7 @@ export function AppSidebar() {
 
   const [role, setRole] = useState<Role>("nhan_vien")
   const [userName, setUserName] = useState<string>("")
-  const [storeName, setStoreName] = useState("iPhone Lock Store")
+  const [storeName, setStoreName] = useState("DEV PỒ")
   const [logoUrl, setLogoUrl] = useState<string>("")
 
   // Đóng sidebar (mobile) khi điều hướng
@@ -171,7 +171,8 @@ export function AppSidebar() {
       .filter((s) => s.items.length > 0)
   }, [role])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await fetch("/api/logout", { method: "POST" }) } catch {}
     localStorage.removeItem("auth_user")
     localStorage.removeItem(ME_CACHE_KEY)
     router.push("/auth/login")
@@ -180,7 +181,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0">
+        <div className="flex items-center mt-1 gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background">
             <img
               src={logoUrl || "/apple-touch-icon.png"}

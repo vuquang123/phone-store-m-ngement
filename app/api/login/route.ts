@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs" // đảm bảo dùng Node (OpenSSL đầy đủ) cho googleapis
 import { readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
+import { signSession, sessionCookie } from "@/lib/auth"
 
 function toColumnLetter(colNum: number) {
   let letter = ""
@@ -114,7 +115,16 @@ export async function POST(request: NextRequest) {
       await updateRangeValues(range, [[nowVN]])
     }
 
-    return NextResponse.json({ success: true, user })
+    // Ký phiên + set cookie httpOnly (nguồn xác thực tin cậy cho middleware)
+    const token = await signSession({
+      email: String(user.email || ""),
+      role: String(user.role || ""),
+      name: String(user.name || ""),
+      employeeId: String(user.employeeId || ""),
+    })
+    const res = NextResponse.json({ success: true, user })
+    res.cookies.set(sessionCookie(token))
+    return res
   } catch (err: any) {
     console.error("[LOGIN] Unhandled error:", err)
     return NextResponse.json({ success: false, message: "Lỗi server", detail: err?.message }, { status: 500 })
