@@ -31,6 +31,8 @@ export function getTrangThaiColor(status: string) {
     case "Đang CNC": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400"
     case "Bảo hành": return "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
     case "Giao đối tác": return "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400"
+    case "Đã đặt cọc": return "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"
+    case "Đã bán": return "bg-muted text-muted-foreground"
     default: return "bg-muted text-muted-foreground"
   }
 }
@@ -65,7 +67,7 @@ export function getLoaiMayLabel(loai?: string) {
 // Badge lo\u1ea1i m\u00e1y: Qu\u1ed1c t\u1ebf -> xanh l\u00e1, Lock -> v\u00e0ng (amber)
 export function getLoaiMayBadgeClass(loai?: string) {
   const n = normLoai(loai)
-  if (n.includes("lock")) return "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400 border-transparent"
+  if (n.includes("lock")) return "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-white border-transparent"
   if (isQuocTe(loai)) return "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400 border-transparent"
   return "bg-muted text-muted-foreground border-transparent"
 }
@@ -78,7 +80,7 @@ export function parsePinHealth(pin?: string | number): number {
 }
 
 // Hi\u1ec3n th\u1ecb pin: "100/165" -> "100% (165L)" (L = l\u1ea7n s\u1ea1c); "93" -> "93%"; r\u1ed7ng -> "-"
-export function formatPinDisplay(pin?: string | number): string {
+export function formatPinDisplay(pin?: string | number): string { 
   const s = String(pin ?? "").trim()
   if (!s) return "-"
   if (s.includes("/")) {

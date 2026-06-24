@@ -1071,7 +1071,7 @@ export default function BanHangPage() {
     <ProtectedRoute>
       <div className="space-y-6 pb-28 md:pb-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="sticky top-0 z-10 bg-card shadow-sm">
+          <TabsList className="sticky top-0 z-30 bg-card shadow-sm">
             <TabsTrigger
               value="ban-hang"
               className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500"
@@ -1093,7 +1093,7 @@ export default function BanHangPage() {
 
           <TabsContent value="ban-hang">
             {isMobile && (
-              <div className="sticky top-0 z-10 bg-card/95 backdrop-blur border-b px-4 py-2 flex gap-2">
+              <div className="sticky top-0 z-30 bg-card border-b px-4 py-2 flex gap-2">
                 <Button size="sm" variant={mobileView==='san-pham'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('san-pham')}>Sản phẩm</Button>
                 <Button size="sm" variant={mobileView==='gio-hang'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('gio-hang')}>Giỏ hàng ({cart.length})</Button>
                 <Button size="sm" variant={mobileView==='thanh-toan'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('thanh-toan')}>Thanh toán</Button>
