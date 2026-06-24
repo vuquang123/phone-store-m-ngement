@@ -484,6 +484,64 @@ export async function POST(request: NextRequest) {
       return { ...may, trang_thai_may: trangThaiMay }
     })
 
+    // ===== PHA A — VALIDATE (chỉ ĐỌC, fail-an-toàn TRƯỚC mọi bước ghi) =====
+    // Chặn bán máy đã bán (natural idempotency: retry -> máy đã rời kho -> 409) và bán quá tồn phụ kiện.
+    const isPartnerMay = (may: any) =>
+      String(may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "")
+        .toLowerCase().includes("kho ngoài") ||
+      String(may.source || "").toLowerCase().includes("partner") ||
+      String(may.nguon || may.source || "").toLowerCase().includes("đối tác")
+    try {
+      const { header: kH, rows: kR } = await readFromGoogleSheets(SHEETS.KHO_HANG)
+      const kIdxId = colIndex(kH, "ID Máy")
+      const kIdxImei = colIndex(kH, "IMEI")
+      const kIdxSerial = colIndex(kH, "Serial")
+      const machinePresent = (pid: string) => kR.some((r) => {
+        const imei = String(r[kIdxImei] || "").trim().toLowerCase()
+        const serial = String(r[kIdxSerial] || "").trim().toLowerCase()
+        const idMay = String(r[kIdxId] || "").trim().toLowerCase()
+        const imeiLast5 = imei.length >= 5 ? imei.slice(-5) : ""
+        const serialLast5 = serial.length >= 5 ? serial.slice(-5) : ""
+        return (imei && pid === imei) || (serial && pid === serial) || (idMay && pid === idMay) ||
+               (imeiLast5 && pid === imeiLast5) || (serialLast5 && pid === serialLast5)
+      })
+      for (const may of mayList) {
+        if (isPartnerMay(may)) continue // máy đối tác không nằm trong Kho_Hang
+        const pid = String(may.imei || may.serial || may.id || may.id_may || "").trim().toLowerCase()
+        if (!pid) continue // dòng chỉ phụ kiện
+        if (!machinePresent(pid)) {
+          return NextResponse.json(
+            { ok: false, code: "MACHINE_NOT_AVAILABLE", error: `Máy không còn trong kho (có thể đã bán): ${may.imei || may.serial || may.id_may || pid}` },
+            { status: 409 },
+          )
+        }
+      }
+    } catch (e) {
+      console.warn("[VALIDATE] Đọc Kho_Hang để kiểm tra tồn máy thất bại (bỏ qua chặn cứng):", e)
+    }
+    if (normalizedAccessories.length > 0) {
+      try {
+        const { header: pH, rows: pR } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
+        const pIdxId = colIndex(pH, "ID")
+        const pIdxQty = colIndex(pH, "Số Lượng")
+        for (const pk of normalizedAccessories) {
+          const fi = pR.findIndex((r) => r[pIdxId] === pk.id)
+          if (fi !== -1 && pIdxQty !== -1) {
+            const cur = Number(pR[fi][pIdxQty] || 0)
+            const sold = pk.so_luong !== undefined ? Number(pk.so_luong) : 1
+            if (cur < sold) {
+              return NextResponse.json(
+                { ok: false, code: "ACCESSORY_INSUFFICIENT", error: `Phụ kiện không đủ số lượng: ${pk.ten_phu_kien || pk.id} (còn ${cur}, cần ${sold})` },
+                { status: 409 },
+              )
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[VALIDATE] Đọc Phu_Kien để kiểm tra tồn phụ kiện thất bại (bỏ qua chặn cứng):", e)
+      }
+    }
+
     let allResults = []
     let errorFlag = false
     let internalIdsToRemove: string[] = []
@@ -688,6 +746,12 @@ export async function POST(request: NextRequest) {
           console.warn("[Partner] Không thể xoá dòng đối tác sau khi bán:", e)
         }
       }
+    }
+
+    // FIX AN TOÀN (W3): nếu ghi đơn Ban_Hang lỗi thì DỪNG NGAY, KHÔNG xóa máy khỏi kho.
+    // (Trước đây return 500 nằm SAU bước xóa kho -> máy bị mất dù đơn không tạo được.)
+    if (errorFlag) {
+      return NextResponse.json({ error: "Lỗi ghi Google Sheets" }, { status: 500 })
     }
 
     // Xoá các sản phẩm nội bộ đã bán khỏi Kho_Hang
