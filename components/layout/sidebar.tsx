@@ -175,7 +175,7 @@ export function Sidebar({ className }: SidebarProps) {
   }
 
   return (
-    <div className={cn("pb-12 w-64 bg-gradient-to-b from-slate-50 to-slate-100 border-r border-slate-200", className)}>
+    <div className={cn("pb-12 w-64 bg-sidebar border-r border-sidebar-border", className)}>
       <div className="space-y-4 py-4">
         <div className="px-3 py-2">
           <div className="flex items-center gap-3 mb-8 p-3 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-xl shadow-lg">
@@ -202,7 +202,7 @@ export function Sidebar({ className }: SidebarProps) {
             >
               {navigation.map((section) => (
                 <div key={section.title}>
-                  <h3 className="mb-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <h3 className="mb-3 px-4 text-xs font-bold text-sidebar-foreground/60 uppercase tracking-wider">
                     {section.title}
                   </h3>
                   <div className="space-y-1">
@@ -214,7 +214,7 @@ export function Sidebar({ className }: SidebarProps) {
                           "w-full justify-start gap-3 h-11 text-sm font-medium transition-all duration-200",
                           pathname === item.href
                             ? "bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-md hover:shadow-lg transform scale-[1.02]"
-                            : "text-slate-700 hover:bg-slate-200/60 hover:text-slate-900 hover:translate-x-1",
+                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-1",
                         )}
                         asChild
                         onClick={() => {
@@ -233,11 +233,11 @@ export function Sidebar({ className }: SidebarProps) {
                 </div>
               ))}
 
-              <Separator className="my-4 bg-slate-300" />
+              <Separator className="my-4 bg-sidebar-border" />
 
               <Button
                 variant="ghost"
-                className="w-full justify-start gap-3 h-11 text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200 font-medium"
+                className="w-full justify-start gap-3 h-11 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all duration-200 font-medium"
                 onClick={handleLogout}
               >
                 <LogOut className="h-5 w-5" />

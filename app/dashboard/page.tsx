@@ -8,6 +8,7 @@ import { RecentActivities } from "@/components/dashboard/recent-activities"
 import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Loader2, Plus, Package, ShoppingCart, Users, AlertCircle, HelpCircle, RefreshCw } from "lucide-react"
 import Link from "next/link"
@@ -85,12 +86,11 @@ export default function DashboardPage() {
       <TooltipProvider>
         <div className="space-y-6 lg:space-y-8 p-4 lg:p-0">
           {error ? (
-            <Card className="border-amber-200 bg-amber-50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-amber-800 text-base">Không tải được dữ liệu</CardTitle>
-                <CardDescription className="text-amber-700">{error || "Vui lòng thử lại sau"}</CardDescription>
-              </CardHeader>
-            </Card>
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Không tải được dữ liệu</AlertTitle>
+              <AlertDescription>{error || "Vui lòng thử lại sau"}</AlertDescription>
+            </Alert>
           ) : null}
           {/* Bar chart lợi nhuận tháng */}
           <BarChartSection 
