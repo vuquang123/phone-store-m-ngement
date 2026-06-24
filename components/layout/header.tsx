@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
 import { ModeToggle } from "./mode-toggle"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 interface HeaderProps {
   title: string
@@ -98,16 +99,8 @@ export function Header({ title, onMenuClick }: HeaderProps) {
     <header className="border-b border-border bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 shadow-sm">
       <div className="flex h-14 sm:h-16 items-center justify-between px-3 sm:px-6">
         <div className="flex items-center gap-3">
-          {/* Mobile menu button */}
-          {onMenuClick && (
-            <button
-              aria-label="Mở menu"
-              className="mr-1 inline-flex sm:hidden items-center justify-center h-9 w-9 rounded-md border border-border hover:bg-accent active:scale-95 transition"
-              onClick={onMenuClick}
-            >
-              <Menu className="h-5 w-5 text-foreground" />
-            </button>
-          )}
+          {/* Toggle sidebar: thu gọn ở desktop, mở drawer ở mobile */}
+          <SidebarTrigger className="-ml-1 h-9 w-9 text-muted-foreground" />
           {logoUrl ? (
             <img
               src={logoUrl}

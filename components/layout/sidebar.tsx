@@ -4,10 +4,19 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
+import {
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarRail,
+  useSidebar,
+} from "@/components/ui/sidebar"
 import {
   LayoutDashboard,
   Package,
@@ -16,8 +25,6 @@ import {
   Settings,
   Bell,
   LogOut,
-  Smartphone,
-  PackageOpen,
   UserCheck,
   RotateCcw,
   BookOpen,
@@ -52,7 +59,7 @@ const getNavigation = () => [
     items: [
       { title: "Nhân viên", href: "/dashboard/nhan-vien", icon: UserCheck, roles: ["quan_ly"] as Role[] },
       { title: "Thông báo", href: "/dashboard/thong-bao", icon: Bell, roles: ["quan_ly", "nhan_vien"] as Role[] },
-  { title: "Cài đặt", href: "/dashboard/cai-dat", icon: Settings, roles: ["quan_ly"] as Role[] },
+      { title: "Cài đặt", href: "/dashboard/cai-dat", icon: Settings, roles: ["quan_ly"] as Role[] },
       { title: "Hướng dẫn", href: "/dashboard/huong-dan", icon: BookOpen, roles: ["quan_ly", "nhan_vien"] as Role[] },
     ],
   },
@@ -86,22 +93,23 @@ function writeMeCache(data: { role: Role; name?: string }) {
   }
 }
 
-interface SidebarProps {
-  className?: string
-}
-
-export function Sidebar({ className }: SidebarProps) {
+export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const { setOpenMobile } = useSidebar()
 
   const { me, isLoading, error } = useAuthMe()
   const { toast } = useToast()
 
   const [role, setRole] = useState<Role>("nhan_vien")
   const [userName, setUserName] = useState<string>("")
-  const [roleLoading, setRoleLoading] = useState(true)
   const [storeName, setStoreName] = useState("iPhone Lock Store")
   const [logoUrl, setLogoUrl] = useState<string>("")
+
+  // Đóng sidebar (mobile) khi điều hướng
+  useEffect(() => {
+    setOpenMobile(false)
+  }, [pathname, setOpenMobile])
 
   // đồng bộ thông tin tài khoản
   useEffect(() => {
@@ -111,13 +119,11 @@ export function Sidebar({ className }: SidebarProps) {
       router.replace("/auth/login")
       return
     }
-
     const nextRole = (me.role as Role) || readMeCache()?.role || "nhan_vien"
     const nextName = me.name?.trim() || readMeCache()?.name || ""
     setRole(nextRole)
     setUserName(nextName)
     writeMeCache({ role: nextRole, name: nextName })
-    setRoleLoading(false)
   }, [isLoading, me, error, toast, router])
 
   // load store settings & logo
@@ -142,16 +148,13 @@ export function Sidebar({ className }: SidebarProps) {
         setLogoUrl("")
       }
     }
-
     loadStore()
-
     const onStorage = (e: StorageEvent) => {
       if (e.key === "store_settings") loadStore()
     }
     const onCustom = () => loadStore()
     window.addEventListener("storage", onStorage)
     window.addEventListener("store_settings_changed", onCustom as EventListener)
-
     return () => {
       window.removeEventListener("storage", onStorage)
       window.removeEventListener("store_settings_changed", onCustom as EventListener)
@@ -175,78 +178,60 @@ export function Sidebar({ className }: SidebarProps) {
   }
 
   return (
-    <div className={cn("pb-12 w-64 bg-sidebar border-r border-sidebar-border", className)}>
-      <div className="space-y-4 py-4">
-        <div className="px-3 py-2">
-          <div className="flex items-center gap-3 mb-8 p-3 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-xl shadow-lg">
-            <div className="h-9 w-9 rounded-md overflow-hidden bg-white shadow-sm">
-              {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="h-full w-full object-cover" />
-              ) : (
-                <img src="/apple-touch-icon.png" alt="DEV PỒ Logo" className="h-full w-full object-cover" />
-              )}
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-white">{storeName}</h2>
-              <p className="text-xs text-white/80">
-                {role === "quan_ly" ? "Quản lý cửa hàng" : (userName || "Nhân viên")}
-              </p>
-              <p className="text-xs text-white/60">{roleLoading ? "Đang tải..." : `Role: ${role}`}</p>
-            </div>
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <div className="flex items-center gap-2 px-1 py-1.5">
+          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md border bg-background">
+            <img
+              src={logoUrl || "/apple-touch-icon.png"}
+              alt="Logo"
+              className="h-full w-full object-cover"
+            />
           </div>
-
-          <ScrollArea className="h-[calc(100dvh-180px)]">
-            <div
-              className="space-y-6 pb-28"
-              style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
-            >
-              {navigation.map((section) => (
-                <div key={section.title}>
-                  <h3 className="mb-3 px-4 text-xs font-bold text-sidebar-foreground/60 uppercase tracking-wider">
-                    {section.title}
-                  </h3>
-                  <div className="space-y-1">
-                    {section.items.map((item) => (
-                      <Button
-                        key={item.href}
-                        variant={pathname === item.href ? "secondary" : "ghost"}
-                        className={cn(
-                          "w-full justify-start gap-3 h-11 text-sm font-medium transition-all duration-200",
-                          pathname === item.href
-                            ? "bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-md hover:shadow-lg transform scale-[1.02]"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-1",
-                        )}
-                        asChild
-                        onClick={() => {
-                          if (pathname !== item.href) {
-                            router.push(item.href)
-                          }
-                        }}
-                      >
-                        <Link href={item.href}>
-                          <item.icon className="h-5 w-5" />
-                          {item.title}
-                        </Link>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              <Separator className="my-4 bg-sidebar-border" />
-
-              <Button
-                variant="ghost"
-                className="w-full justify-start gap-3 h-11 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all duration-200 font-medium"
-                onClick={handleLogout}
-              >
-                <LogOut className="h-5 w-5" />
-                Đăng xuất
-              </Button>
-            </div>
-          </ScrollArea>
+          <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+            <p className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{storeName}</p>
+            <p className="truncate text-xs text-sidebar-foreground/60">
+              {role === "quan_ly" ? "Quản lý cửa hàng" : userName || "Nhân viên"}
+            </p>
+          </div>
         </div>
-      </div>
-    </div>
+      </SidebarHeader>
+
+      <SidebarContent>
+        {navigation.map((section) => (
+          <SidebarGroup key={section.title}>
+            <SidebarGroupLabel>{section.title}</SidebarGroupLabel>
+            <SidebarMenu>
+              {section.items.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
+                    <Link href={item.href}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        ))}
+      </SidebarContent>
+
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={handleLogout}
+              tooltip="Đăng xuất"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive active:bg-destructive/10 active:text-destructive"
+            >
+              <LogOut />
+              <span>Đăng xuất</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
   )
 }
