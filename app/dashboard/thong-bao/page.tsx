@@ -7,6 +7,7 @@ import { Bell, Clock, AlertCircle, Info, ShoppingCart } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatDistanceToNow, parseISO } from "date-fns"
 import { vi } from "date-fns/locale"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface Notification {
   id: string
@@ -31,7 +32,7 @@ export default function ThongBaoPage() {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch("/api/thong-bao")
+      const response = await fetchWithTimeout("/api/thong-bao")
       if (response.ok) {
         const data = await response.json()
         setNotifications(data)

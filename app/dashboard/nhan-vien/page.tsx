@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Search, Plus, Edit, Trash2, UserCheck, UserX } from "lucide-react"
 import { EmployeeDialog } from "@/components/nhan-vien/employee-dialog"
 import { useToast } from "@/hooks/use-toast"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface Employee {
   id: string
@@ -77,9 +78,8 @@ export default function NhanVienPage() {
   /** Kiểm tra quyền từ API /api/auth/me (hoặc trả về từ sheets-auth) */
   const checkUserRole = async () => {
     try {
-      const res = await fetch("/api/auth/me", {
+      const res = await fetchWithTimeout("/api/auth/me", {
         headers: getAuthHeaders(),
-        cache: "no-store",
       })
       if (!res.ok) {
         router.push("/dashboard")
@@ -98,7 +98,7 @@ export default function NhanVienPage() {
 
   const fetchEmployees = async () => {
     try {
-      const response = await fetch("/api/nhan-vien", {
+      const response = await fetchWithTimeout("/api/nhan-vien", {
         headers: getAuthHeaders(),
       })
       if (response.ok) {

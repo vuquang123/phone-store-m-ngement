@@ -11,6 +11,7 @@ import { useState, useEffect } from "react"
 import { Eye } from "lucide-react"
 import CustomerPurchasesDialog from "@/components/khach-hang/CustomerPurchasesDialog"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface Customer {
   id: string
@@ -36,7 +37,7 @@ export default function KhachHangPage() {
   const fetchCustomers = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/khach-hang${search ? `?search=${encodeURIComponent(search)}` : ""}`);
+      const response = await fetchWithTimeout(`/api/khach-hang${search ? `?search=${encodeURIComponent(search)}` : ""}`);
       if (!response.ok) throw new Error("Failed to fetch customers");
       const data = await response.json();
       const mapped = Array.isArray(data)

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useToast } from "@/hooks/use-toast"
 import { formatDistanceToNow, parse } from "date-fns"
 import { vi } from "date-fns/locale"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface ReturnOrder {
   id: string
@@ -53,7 +54,7 @@ export default function HoanTraPage() {
   const fetchReturns = useCallback(async () => {
     setLoading(true)
     try {
-      const response = await fetch("/api/hoan-tra", { cache: "no-store" })
+      const response = await fetchWithTimeout("/api/hoan-tra")
       const result = await response.json()
       const data = Array.isArray(result.data) ? result.data : []
       const mapped: ReturnOrder[] = data.map((item: any, idx: number) => {

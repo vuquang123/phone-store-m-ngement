@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface DashboardStats {
   dailyLabels?: string[];
@@ -72,7 +73,7 @@ export function useDashboardStats(selectedMonth?: number, selectedYear?: number)
         setIsLoading(true)
 
         // Fetch stats
-        const statsResponse = await fetch("/api/dashboard/stats")
+        const statsResponse = await fetchWithTimeout("/api/dashboard/stats")
         if (!statsResponse.ok) throw new Error("Failed to fetch stats")
         const statsData = await statsResponse.json()
 
@@ -162,7 +163,7 @@ export function useDashboardStats(selectedMonth?: number, selectedYear?: number)
         })
 
         // Fetch activities
-        const activitiesResponse = await fetch("/api/dashboard/recent-activities")
+        const activitiesResponse = await fetchWithTimeout("/api/dashboard/recent-activities")
         if (!activitiesResponse.ok) throw new Error("Failed to fetch activities")
         const activitiesData = await activitiesResponse.json()
         setActivities(activitiesData.activities)

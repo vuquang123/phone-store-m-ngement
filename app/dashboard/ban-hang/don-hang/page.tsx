@@ -13,6 +13,7 @@ import Link from "next/link"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { OrderDetailDialog } from "@/components/ban-hang/order-detail-dialog"
 import OrderProductsCell from "@/app/dashboard/ban-hang/OrderProductsCell"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface Order {
   id: string
@@ -55,7 +56,7 @@ export default function DonHangPage() {
         trang_thai: "hoan_thanh",
       })
 
-      const response = await fetch(`/api/ban-hang?${params}`)
+      const response = await fetchWithTimeout(`/api/ban-hang?${params}`)
       if (!response.ok) throw new Error("Failed to fetch orders")
 
       const data = await response.json()
