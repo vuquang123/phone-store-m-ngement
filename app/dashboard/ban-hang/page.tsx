@@ -25,6 +25,9 @@ import { computeDynamicDiscount } from "@/lib/ban-hang/discount"
 import { isWarrantyEligible, computeCartSubtotal, computeWarrantyTotal } from "@/lib/ban-hang/totals"
 import { useCart } from "@/hooks/ban-hang/use-cart"
 import { useDiscount } from "@/hooks/ban-hang/use-discount"
+import { CustomerCard } from "@/components/ban-hang/customer-card"
+import { MobileCheckoutBar } from "@/components/ban-hang/mobile-checkout-bar"
+import { PaymentColumn } from "@/components/ban-hang/payment-column"
 import { CartItemList } from "@/components/ban-hang/cart-item-list"
 import { SearchArea } from "@/components/ban-hang/search-area"
 
@@ -1164,241 +1167,45 @@ export default function BanHangPage() {
               {(!isMobile || mobileView === 'thanh-toan') && (
                 <div className="space-y-6 lg:max-w-[520px]">
                   {/* Khách hàng */}
-                  <Card>
-                    <CardHeader><CardTitle>Khách hàng</CardTitle></CardHeader>
-                    <CardContent className="space-y-4">
-                      {customerResults.length > 0 && (
-                        <div className="border rounded bg-white max-h-56 overflow-y-auto">
-                          {customerResults.map((kh: Customer & { isDeposit?: boolean }) => (
-                            <div
-                              key={kh.id}
-                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 ${kh.isDeposit ? "text-orange-600 font-semibold" : ""}`}
-                              onClick={() => { setSelectedCustomer(kh); setCustomerSearch(""); setCustomerResults([]); }}
-                            >
-                              <span>{kh.ho_ten} ({kh.so_dien_thoai})</span>
-                              {kh.isDeposit && <span title="Khách đang đặt cọc" className="ml-1">🔒</span>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {selectedCustomer ? (
-                        <div className="p-3 border rounded-lg bg-white flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{selectedCustomer.ho_ten}</p>
-                            <p className="text-sm text-muted-foreground">{selectedCustomer.so_dien_thoai}</p>
-                          </div>
-                          <Button variant="ghost" size="sm" onClick={() => setSelectedCustomer(null)}>Xóa</Button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <Button variant="outline" className="flex-1 bg-white" onClick={() => setIsCustomerSelectOpen(true)}>
-                            <User className="mr-2 h-4 w-4" /> Chọn khách hàng
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                  <CustomerCard
+                    customerResults={customerResults}
+                    selectedCustomer={selectedCustomer}
+                    setSelectedCustomer={setSelectedCustomer}
+                    setCustomerSearch={setCustomerSearch}
+                    setCustomerResults={setCustomerResults}
+                    setIsCustomerSelectOpen={setIsCustomerSelectOpen}
+                  />
 
                   {/* Thanh toán */}
-                  <Card>
-                    <CardHeader><CardTitle>Thanh toán</CardTitle></CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Phương thức thanh toán</label>
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                              <label className="flex items-center gap-2 cursor-pointer w-28">
-                                <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={cashEnabled} onChange={(e) => { setCashEnabled(e.target.checked); if (!e.target.checked) setCashAmount(0); }} />
-                                <span className="text-sm">Tiền mặt</span>
-                              </label>
-                              {cashEnabled && <Input className="flex-1" placeholder="₫0" value={cashAmount ? cashAmount.toLocaleString('vi-VN') : ''} onChange={(e) => setCashAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />}
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <label className="flex items-center gap-2 cursor-pointer w-28">
-                                <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={transferEnabled} onChange={(e) => { setTransferEnabled(e.target.checked); if (!e.target.checked) setTransferAmount(0); }} />
-                                <span className="text-sm">Chuyển khoản</span>
-                              </label>
-                              {transferEnabled && <Input className="flex-1" placeholder="₫0" value={transferAmount ? transferAmount.toLocaleString('vi-VN') : ''} onChange={(e) => setTransferAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />}
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <label className="flex items-center gap-2 cursor-pointer w-28">
-                                <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={cardEnabled} onChange={(e) => { setCardEnabled(e.target.checked); if (!e.target.checked) setCardAmount(0); }} />
-                                <span className="text-sm">Thẻ</span>
-                              </label>
-                              {cardEnabled && <Input className="flex-1" placeholder="₫0" value={cardAmount ? cardAmount.toLocaleString('vi-VN') : ''} onChange={(e) => setCardAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />}
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-3">
-                                <label className="flex items-center gap-2 cursor-pointer w-28">
-                                  <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={installmentEnabled} onChange={(e) => { setInstallmentEnabled(e.target.checked); if (!e.target.checked) { setInstallmentDown(0); setInstallmentLoan(0); setInstallmentType(''); } }} />
-                                  <span className="text-sm">Trả góp</span>
-                                </label>
-                                {installmentEnabled && (
-                                  <Select value={installmentType} onValueChange={(val: any) => setInstallmentType(val)}>
-                                    <SelectTrigger className="flex-1"><SelectValue placeholder="Chọn đối tác..." /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="Góp iCloud">Góp iCloud</SelectItem>
-                                      <SelectItem value="Thẻ tín dụng">Thẻ tín dụng</SelectItem>
-                                      <SelectItem value="Mira">Mira</SelectItem>
-                                      <SelectItem value="HDSaison">HDSaison</SelectItem>
-                                      <SelectItem value="HomeCredit">HomeCredit</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              </div>
-                              {installmentEnabled && (
-                                <div className="flex items-center gap-3 pl-7">
-                                  <div className="flex-1 space-y-1">
-                                    <label className="text-xs text-muted-foreground">Trả trước (Khách đưa)</label>
-                                    <Input placeholder="₫0" value={installmentDown ? installmentDown.toLocaleString('vi-VN') : ''} onChange={(e) => setInstallmentDown(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />
-                                  </div>
-                                  <div className="flex-1 space-y-1">
-                                    <label className="text-xs text-muted-foreground">Góp (Khoản vay)</label>
-                                    <Input placeholder="₫0" value={installmentLoan ? installmentLoan.toLocaleString('vi-VN') : ''} onChange={(e) => setInstallmentLoan(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <p className="text-xs text-muted-foreground pt-1">
-                            Tổng đã nhập: ₫{sumPayments.toLocaleString('vi-VN')} • Cần thu: ₫{expectedCollect.toLocaleString('vi-VN')}
-                          </p>
-                        </div>
-                        
-                        <Separator />
-
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium">Giảm giá</label>
-                            <div className="flex items-center gap-1">
-                              {['50k', '100k', '200k', '5%', '10%'].map(pres => (
-                                <button key={pres} type="button" onClick={() => handleDiscountPreset(pres)} className="px-2 py-1 text-[11px] border rounded hover:bg-slate-100">{pres}</button>
-                              ))}
-                              <button type="button" onClick={() => handleDiscountPreset('Reset')} className="px-2 py-1 text-[11px] border rounded hover:bg-slate-100">Reset</button>
-                            </div>
-                          </div>
-                          <Input
-                            placeholder="Ví dụ: 100k hoặc 10%"
-                            value={giamGiaInput}
-                            onChange={(e) => { setGiamGiaInput(e.target.value); if(!e.target.value.trim()){ setGiamGia(0); setDiscountParseMsg(''); } }}
-                          />
-                          {(computedDiscountMsg || discountParseMsg) && <p className="text-xs text-blue-600 font-medium">{computedDiscountMsg || discountParseMsg}</p>}
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Ghi chú</label>
-                          <Input
-                            placeholder="Ghi chú đơn hàng..."
-                            value={ghiChu}
-                            onChange={(e) => setGhiChu(e.target.value)}
-                          />
-                        </div>
-
-                        <Separator />
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Tiền hàng:</span>
-                            <span>₫{tongTien.toLocaleString()}</span>
-                          </div>
-                          {warrantyTotal > 0 && (
-                            <div className="flex justify-between text-sm text-blue-700">
-                              <span>Bảo hành:</span>
-                              <span>+₫{warrantyTotal.toLocaleString()}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between text-sm">
-                            <span>Giảm giá:</span>
-                            <span>-₫{giamGiaToUse.toLocaleString()}</span>
-                          </div>
-                          {currentDepositOrderId && depositAmountAlreadyPaid > 0 && (
-                            <div className="flex justify-between text-sm text-emerald-600 font-medium">
-                              <span>Sẵn có (Tiền cọc):</span>
-                              <span>-₫{depositAmountAlreadyPaid.toLocaleString()}</span>
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-between font-bold text-lg mt-2">
-                            <span>Thanh toán:</span>
-                            <span>₫{finalThanhToan.toLocaleString()}</span>
-                          </div>
-                        </div>
-
-                        <Separator />
-                        
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-3">
-                            <Select value={loaiDon} onValueChange={setLoaiDon}>
-                              <SelectTrigger className="flex-1"><SelectValue placeholder="Loại đơn" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Đơn onl">Đơn onl</SelectItem>
-                                <SelectItem value="Đơn off">Đơn off</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            
-                            {loaiDon === 'Đơn onl' && (
-                              <Select value={hinhThucVanChuyen} onValueChange={setHinhThucVanChuyen}>
-                                <SelectTrigger className="flex-1"><SelectValue placeholder="Hình thức vận chuyển" /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="GHTK">GHTK</SelectItem>
-                                  <SelectItem value="Book Grab">Book Grab</SelectItem>
-                                  <SelectItem value="Gửi Xe">Gửi Xe</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </div>
-
-                          {loaiDon === 'Đơn onl' && (
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium">Địa chỉ nhận</label>
-                              <Input placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố" value={diaChiNhan} onChange={(e) => setDiaChiNhan(e.target.value)} />
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Loại thanh toán</label>
-                          <Select value={loaiThanhToan} onValueChange={setLoaiThanhToan}>
-                            <SelectTrigger><SelectValue placeholder="Chọn loại thanh toán..." /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Thanh toán đủ">Thanh toán đủ</SelectItem>
-                              <SelectItem value="Đặt cọc">Đặt cọc</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          {loaiThanhToan === 'Đặt cọc' && (
-                            <div className="pt-2 space-y-3 p-3 border rounded bg-orange-50/50">
-                              <div className="space-y-1">
-                                <label className="text-xs font-semibold text-orange-800">Khách đặt cọc trước (₫)</label>
-                                <Input type="number" placeholder="Ví dụ: 500000" value={soTienCoc || ''} onChange={(e) => setSoTienCoc(Number(e.target.value))} className="border-orange-200" />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-xs font-semibold text-orange-800">Hẹn ngày trả đủ</label>
-                                <Input type="date" value={ngayHenTraDu} onChange={(e) => setNgayHenTraDu(e.target.value)} className="border-orange-200" />
-                              </div>
-                              <div className="pt-1 text-sm font-medium text-orange-800 flex justify-between">
-                                <span>Còn lại phải thu:</span>
-                                <span>₫{Math.max(0, finalThanhToan - (soTienCoc||0)).toLocaleString()}</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {loaiThanhToan !== 'Đặt cọc' && (
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Đính kèm ảnh (hóa đơn / biên nhận)</label>
-                            <ImagePicker onSelectBlobs={setReceiptBlobs} />
-                            {receiptBlobs && receiptBlobs.length > 0 && <p className="text-xs text-muted-foreground mt-1">Gửi {receiptBlobs.length} ảnh kèm thông báo</p>}
-                          </div>
-                        )}
-
-                        <Button className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg mt-4" disabled={isLoading || cart.length === 0} onClick={handleCheckout}>
-                          {isLoading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang xử lý</> : "Thanh toán"}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <PaymentColumn
+                    cashEnabled={cashEnabled} setCashEnabled={setCashEnabled}
+                    cashAmount={cashAmount} setCashAmount={setCashAmount}
+                    transferEnabled={transferEnabled} setTransferEnabled={setTransferEnabled}
+                    transferAmount={transferAmount} setTransferAmount={setTransferAmount}
+                    cardEnabled={cardEnabled} setCardEnabled={setCardEnabled}
+                    cardAmount={cardAmount} setCardAmount={setCardAmount}
+                    installmentEnabled={installmentEnabled} setInstallmentEnabled={setInstallmentEnabled}
+                    installmentType={installmentType} setInstallmentType={setInstallmentType}
+                    installmentDown={installmentDown} setInstallmentDown={setInstallmentDown}
+                    installmentLoan={installmentLoan} setInstallmentLoan={setInstallmentLoan}
+                    sumPayments={sumPayments} expectedCollect={expectedCollect}
+                    handleDiscountPreset={handleDiscountPreset}
+                    giamGiaInput={giamGiaInput} setGiamGiaInput={setGiamGiaInput}
+                    setGiamGia={setGiamGia} setDiscountParseMsg={setDiscountParseMsg}
+                    computedDiscountMsg={computedDiscountMsg} discountParseMsg={discountParseMsg}
+                    ghiChu={ghiChu} setGhiChu={setGhiChu}
+                    tongTien={tongTien} warrantyTotal={warrantyTotal} giamGiaToUse={giamGiaToUse}
+                    currentDepositOrderId={currentDepositOrderId} depositAmountAlreadyPaid={depositAmountAlreadyPaid}
+                    finalThanhToan={finalThanhToan}
+                    loaiDon={loaiDon} setLoaiDon={setLoaiDon}
+                    hinhThucVanChuyen={hinhThucVanChuyen} setHinhThucVanChuyen={setHinhThucVanChuyen}
+                    diaChiNhan={diaChiNhan} setDiaChiNhan={setDiaChiNhan}
+                    loaiThanhToan={loaiThanhToan} setLoaiThanhToan={setLoaiThanhToan}
+                    soTienCoc={soTienCoc} setSoTienCoc={setSoTienCoc}
+                    ngayHenTraDu={ngayHenTraDu} setNgayHenTraDu={setNgayHenTraDu}
+                    receiptBlobs={receiptBlobs} setReceiptBlobs={setReceiptBlobs}
+                    isLoading={isLoading} cartCount={cart.length} handleCheckout={handleCheckout}
+                  />
                 </div>
               )}
             </div>
@@ -1584,41 +1391,14 @@ export default function BanHangPage() {
       />
       {/* Bỏ PartnerSelectDialog: đã gộp vào search */}
       {/* Sticky mobile checkout bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 px-3 py-[10px]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)' }}>
-        <div className="max-w-screen-md mx-auto flex items-center justify-between gap-3">
-          <div className="text-sm">
-            <div className="text-slate-500">Thanh toán</div>
-            <div className="text-xl font-bold">₫{finalThanhToan.toLocaleString()}</div>
-          </div>
-          {mobileView === 'san-pham' && (
-            <Button
-              className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-              onClick={() => setMobileView('gio-hang')}
-              disabled={cart.length === 0}
-            >
-              {`Giỏ hàng (${cart.length})`}
-            </Button>
-          )}
-          {mobileView === 'gio-hang' && (
-            <Button
-              className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-              onClick={() => setMobileView('thanh-toan')}
-              disabled={cart.length === 0}
-            >
-              Thanh toán
-            </Button>
-          )}
-          {mobileView === 'thanh-toan' && (
-            <Button
-              className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-              onClick={handleCheckout}
-              disabled={isLoading || cart.length === 0}
-            >
-              {isLoading ? "Đang xử lý..." : "Thanh toán"}
-            </Button>
-          )}
-        </div>
-      </div>
+      <MobileCheckoutBar
+        finalThanhToan={finalThanhToan}
+        mobileView={mobileView}
+        setMobileView={setMobileView}
+        cartCount={cart.length}
+        handleCheckout={handleCheckout}
+        isLoading={isLoading}
+      />
     </ProtectedRoute>
   )
 }
