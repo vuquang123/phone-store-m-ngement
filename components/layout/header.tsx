@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/user-avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,17 +104,6 @@ export function Header({ title, onMenuClick }: HeaderProps) {
     day: "numeric",
   }).format(new Date())
 
-  const initials =
-    (me?.name &&
-      me.name
-        .split(" ")
-        .filter(Boolean)
-        .map((s) => s[0])
-        .join("")
-        .toUpperCase()) ||
-    me?.email?.[0]?.toUpperCase() ||
-    "U"
-
   return (
     <header className="border-b border-border bg-sidebar/80 backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/60 shadow-sm">
       <div className="flex h-14 sm:h-16 items-center justify-between px-3 sm:px-6">
@@ -154,12 +143,11 @@ export function Header({ title, onMenuClick }: HeaderProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-9 w-9 sm:h-10 sm:w-10 rounded-full hover:bg-accent" disabled={isLoading}>
-                <Avatar className="h-8 w-8 sm:h-9 sm:w-9 ring-2 ring-emerald-500/20">
-                  <AvatarImage src="/placeholder.svg" alt="Avatar" />
-                  <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-blue-500 text-white font-semibold">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar
+                  name={me?.name}
+                  email={me?.email}
+                  className="h-8 w-8 sm:h-9 sm:w-9 ring-2 ring-emerald-500/20"
+                />
               </Button>
             </DropdownMenuTrigger>
 

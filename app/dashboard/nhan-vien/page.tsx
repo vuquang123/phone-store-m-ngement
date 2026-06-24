@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/user-avatar"
 import { Search, Plus, Edit, Trash2, UserCheck, UserX } from "lucide-react"
 import { EmployeeDialog } from "@/components/nhan-vien/employee-dialog"
 import { useToast } from "@/hooks/use-toast"
@@ -251,16 +251,7 @@ export default function NhanVienPage() {
                 className="relative p-4 border rounded-lg hover:bg-muted/50 flex flex-col gap-3 sm:flex-row sm:items-center"
               >
                 <div className="flex items-start gap-3 pr-16 sm:pr-0 w-full">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback>
-                      {(employee.ho_ten || "NV")
-                        .split(" ")
-                        .filter(Boolean)
-                        .map((n) => n[0])
-                        .join("")
-                        .toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar name={employee.ho_ten} email={employee.email} className="h-10 w-10" />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                       <h3 className="font-medium truncate max-w-[200px] sm:max-w-none">{employee.ho_ten}</h3>
