@@ -72,8 +72,12 @@ export function useDashboardStats(selectedMonth?: number, selectedYear?: number)
       try {
         setIsLoading(true)
 
-        // Fetch stats
-        const statsResponse = await fetchWithTimeout("/api/dashboard/stats")
+        // Tham số kỳ gửi lên API (mặc định hiện tại). month=0 nghĩa là xem cả năm.
+        const qYear = typeof selectedYear === "number" ? selectedYear : new Date().getFullYear()
+        const qMonth = typeof selectedMonth === "number" ? selectedMonth : new Date().getMonth() + 1
+
+        // Fetch stats — gửi year/month để API trả đúng kỳ được chọn
+        const statsResponse = await fetchWithTimeout(`/api/dashboard/stats?year=${qYear}&month=${qMonth}`)
         if (!statsResponse.ok) throw new Error("Failed to fetch stats")
         const statsData = await statsResponse.json()
 
@@ -95,57 +99,24 @@ export function useDashboardStats(selectedMonth?: number, selectedYear?: number)
           ordersOnlByMonth = statsData.monthlyStats.map((d: any) => d.ordersOnl ?? 0)
           ordersOffByMonth = statsData.monthlyStats.map((d: any) => d.ordersOff ?? 0)
         }
-        // Nếu FE chọn tháng, tạo mảng ngày đủ số ngày trong tháng, ngày không có thì mặc định 0
+        // Biểu đồ tháng: tạo đủ số ngày, khớp bản ghi theo (ngày, tháng, năm) đã PARSE
+        // (không so khớp chuỗi cứng -> tránh lệch định dạng zero-pad/có giờ làm ra 0)
         if (Array.isArray(statsData.dailyStats)) {
-          // Lấy selectedMonth, selectedYear từ tham số truyền vào, nếu không có thì lấy tháng/năm hiện tại
-          let year = typeof selectedYear === "number" ? selectedYear : new Date().getFullYear();
-          let month = typeof selectedMonth === "number" ? selectedMonth : new Date().getMonth() + 1;
-          const daysInMonth = new Date(year, month, 0).getDate();
-          const dailyLabels: string[] = Array.from({ length: daysInMonth }, (_, i) => `${i + 1}/${month}/${year}`);
-          const dailyRevenue: number[] = dailyLabels.map(label => {
-            const found = statsData.dailyStats.find((d: any) => {
-              const m = d.date.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-              return m && Number(m[2]) === month && Number(m[3]) === year && d.date === label;
+          const daysInMonth = new Date(qYear, qMonth, 0).getDate();
+          const dailyLabels: string[] = Array.from({ length: daysInMonth }, (_, i) => `${i + 1}/${qMonth}/${qYear}`);
+          const findByDay = (day: number) =>
+            statsData.dailyStats.find((d: any) => {
+              const m = String(d.date).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+              return m && Number(m[1]) === day && Number(m[2]) === qMonth && Number(m[3]) === qYear;
             });
-            return found ? found.revenue : 0;
-          });
-          const dailyProfit: number[] = dailyLabels.map(label => {
-            const found = statsData.dailyStats.find((d: any) => {
-              const m = d.date.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-              return m && Number(m[2]) === month && Number(m[3]) === year && d.date === label;
-            });
-            return found ? found.profit : 0;
-          });
-          const dailyOrders: number[] = dailyLabels.map(label => {
-            const found = statsData.dailyStats.find((d: any) => {
-              const m = d.date.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-              return m && Number(m[2]) === month && Number(m[3]) === year && d.date === label;
-            });
-            return found ? found.orders : 0;
-          });
+          const perDay = Array.from({ length: daysInMonth }, (_, i) => findByDay(i + 1));
           statsData.dailyLabels = dailyLabels;
-          statsData.dailyRevenue = dailyRevenue;
-          statsData.dailyProfit = dailyProfit;
-          statsData.dailyOrders = dailyOrders;
-          // Thêm đơn online/offline nếu có
-          statsData.dailyOrdersOnl = dailyLabels.map(label => {
-            const found = statsData.dailyStats.find((d: any) => {
-              const m = d.date.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-              return m && Number(m[2]) === month && Number(m[3]) === year && d.date === label;
-            });
-            return found ? found.ordersOnl ?? 0 : 0;
-          });
-          statsData.dailyOrdersOff = dailyLabels.map(label => {
-            const found = statsData.dailyStats.find((d: any) => {
-              const m = d.date.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-              return m && Number(m[2]) === month && Number(m[3]) === year && d.date === label;
-            });
-            return found ? found.ordersOff ?? 0 : 0;
-          });
-          statsData.dailyCustomers = dailyLabels.map(label => {
-            const found = statsData.dailyStats.find((d: any) => d.date === label);
-            return found ? found.newCustomers ?? 0 : 0;
-          });
+          statsData.dailyRevenue = perDay.map((d: any) => (d ? d.revenue : 0));
+          statsData.dailyProfit = perDay.map((d: any) => (d ? d.profit : 0));
+          statsData.dailyOrders = perDay.map((d: any) => (d ? d.orders : 0));
+          statsData.dailyOrdersOnl = perDay.map((d: any) => (d ? d.ordersOnl ?? 0 : 0));
+          statsData.dailyOrdersOff = perDay.map((d: any) => (d ? d.ordersOff ?? 0 : 0));
+          statsData.dailyCustomers = perDay.map((d: any) => (d ? d.newCustomers ?? 0 : 0));
         }
         setStats({
           ...statsData,

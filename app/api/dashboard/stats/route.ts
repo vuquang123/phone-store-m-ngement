@@ -79,11 +79,14 @@ function toNumber(x: any): number {
 
 /* ================= Route ================= */
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     // Đọc sheet Thong_Ke
     const { header, rows } = await readFromGoogleSheets("Thong_Ke")
     const now = new Date()
+    // Tham số kỳ: year (mặc định năm hiện tại), month (0 = xem cả năm)
+    const reqYear = Number(req.nextUrl.searchParams.get("year")) || now.getFullYear()
+    const reqMonth = Number(req.nextUrl.searchParams.get("month")) || (now.getMonth() + 1)
     const todayStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`
     const monthStr = `${now.getMonth() + 1}/${now.getFullYear()}`
 
@@ -152,8 +155,8 @@ export async function GET(_req: NextRequest) {
       newCustomers: Number(row[idxKhachHangMoi] || 0), // <-- Tự động bổ sung trường khách hàng mới
     }))
 
-    // Tạo mảng thống kê theo tháng cho năm hiện tại
-    const year = now.getFullYear()
+    // Tạo mảng thống kê theo tháng cho NĂM ĐƯỢC CHỌN
+    const year = reqYear
     const months = Array.from({ length: 12 }, (_, i) => i + 1)
     let totalCustomersYear = 0
     let totalOrdersOnlYear = 0
@@ -182,9 +185,10 @@ export async function GET(_req: NextRequest) {
       }
     })
 
-    // Dòng thống kê tháng hiện tại
-    let monthlyRow = rowsThang.find(r => r[idxThang] && String(r[idxThang]).trim() === `${now.getMonth() + 1}/${year}`)
-    if (!monthlyRow) monthlyRow = rowsThang[0] || []
+    // Dòng thống kê THÁNG ĐƯỢC CHỌN (month=0 -> dùng tháng hiện tại)
+    const monthForRow = reqMonth > 0 ? reqMonth : now.getMonth() + 1
+    let monthlyRow = rowsThang.find(r => r[idxThang] && String(r[idxThang]).trim() === `${monthForRow}/${year}`)
+    if (!monthlyRow) monthlyRow = []
 
     // Trả về đúng shape cho dashboard
     const result = {
