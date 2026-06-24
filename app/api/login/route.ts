@@ -1,9 +1,20 @@
+// ---------------------------------------------------------------------------
+// Đăng nhập an toàn:
+//  1) Đọc sheet USERS, tìm theo email (giữ logic chuẩn hoá cột như cũ).
+//  2) So khớp mật khẩu qua bcrypt; tài khoản cũ (plaintext) vẫn vào được và
+//     được TỰ HASH lại ngay (lazy migration).
+//  3) Ký JWT, đặt vào cookie httpOnly => phiên đăng nhập thật, không còn dựa
+//     vào header x-user-email giả mạo được.
+// ---------------------------------------------------------------------------
+
 import { NextRequest, NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
-export const runtime = "nodejs" // đảm bảo dùng Node (OpenSSL đầy đủ) cho googleapis
+export const runtime = "nodejs" // googleapis + bcrypt cần Node (OpenSSL đầy đủ)
+
 import { readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
-import { signSession, SESSION_COOKIE, TOKEN_TTL_SECONDS } from "@/lib/auth"
+import { SESSION_COOKIE, TOKEN_TTL_SECONDS, signSession, type SessionUser } from "@/lib/auth"
+import { verifyPassword, hashPassword } from "@/lib/password"
 
 function toColumnLetter(colNum: number) {
   let letter = ""
@@ -37,98 +48,103 @@ export async function POST(request: NextRequest) {
         SHEET_ID: !!process.env.GOOGLE_SHEETS_SPREADSHEET_ID || !!process.env.GOOGLE_SHEETS_ID,
       }
       console.error("[LOGIN] Env presence:", envStatus)
-      return NextResponse.json({ success: false, message: "Không kết nối được Google Sheets (USERS)", detail: err?.message, env: envStatus }, { status: 500 })
+      return NextResponse.json(
+        { success: false, message: "Không kết nối được Google Sheets (USERS)", detail: err?.message, env: envStatus },
+        { status: 500 },
+      )
     }
 
-    const norm = (s: string) => (s || "")
-      .normalize("NFD")
-      .replace(/\p{Diacritic}/gu, "")
-      .trim()
-      .toLowerCase()
+    const norm = (s: string) =>
+      (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase()
 
-    const HNorm = header.map(h => norm(h))
+    const HNorm = header.map((h) => norm(h))
     const find = (candidates: string[]) => {
       for (const c of candidates) {
         const n = norm(c)
-        const i = HNorm.findIndex(h => h === n)
+        const i = HNorm.findIndex((h) => h === n)
         if (i !== -1) return i
       }
       return -1
     }
 
     const emailIdx = find(["Email", "E-mail", "email"])
-    const passwordIdx = find(["Mật Khẩu", "Mat Khau", "Password", "Pass", "pwd"]) 
+    const passwordIdx = find(["Mật Khẩu", "Mat Khau", "Password", "Pass", "pwd"])
     const nameIdx = find(["Tên", "Ten", "Name"])
-    const roleIdx = find(["Vai Trò", "Vai Tro", "Role", "Quyen"]) 
-    const statusIdx = find(["Trạng Thái", "Trang Thai", "Status"]) 
-    const lastLoginIdx = find(["Lần Đăng Nhập Cuối", "Lan Dang Nhap Cuoi", "Last Login"]) 
+    const roleIdx = find(["Vai Trò", "Vai Tro", "Role", "Quyen"])
+    const statusIdx = find(["Trạng Thái", "Trang Thai", "Status"])
+    const lastLoginIdx = find(["Lần Đăng Nhập Cuối", "Lan Dang Nhap Cuoi", "Last Login"])
+    const employeeIdx = find(["ID Nhân Viên", "ID Nhan Vien", "Employee Id"])
 
     if ([emailIdx, passwordIdx].includes(-1)) {
-      return NextResponse.json({ success: false, message: "Thiếu cột Email hoặc Mật Khẩu trong sheet USERS" }, { status: 500 })
+      return NextResponse.json(
+        { success: false, message: "Thiếu cột Email hoặc Mật Khẩu trong sheet USERS" },
+        { status: 500 },
+      )
     }
 
+    // Tìm theo email trước (không tiết lộ email tồn tại hay không qua thông báo).
     const userRow = rows.find(
-      (row) =>
-        (row[emailIdx] || "").trim().toLowerCase() === String(email).trim().toLowerCase() &&
-        (row[passwordIdx] || "") === password
+      (row) => (row[emailIdx] || "").trim().toLowerCase() === String(email).trim().toLowerCase(),
     )
-    if (!userRow) {
-      return NextResponse.json({ success: false, message: "Sai email hoặc mật khẩu" }, { status: 401 })
-    }
+    const INVALID = NextResponse.json({ success: false, message: "Sai email hoặc mật khẩu" }, { status: 401 })
+    if (!userRow) return INVALID
 
-    // Hàm tìm cột theo tên chuẩn hóa
-    function colIndex(header: string[], ...names: string[]) {
-      const h = header.map((x) => x.trim())
-      for (const n of names) {
-        const i = h.findIndex((x) => x === n)
-        if (i !== -1) return i
-      }
-      // fallback nhẹ bằng normalize (phòng sai khác dấu)
-      const norm = (s: string) => (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/\s+/g, "_").toLowerCase()
-      const hh = header.map((x) => norm(x))
-      for (const n of names) {
-        const i = hh.findIndex((x) => x === norm(n))
-        if (i !== -1) return i
-      }
-      return -1
-    }
-    const idxIdNhanVien = colIndex(header, "ID Nhân Viên")
-    const user = {
-  email: userRow[emailIdx] ?? "",
-  name: userRow[nameIdx] ?? "",
-  role: userRow[roleIdx] ?? "",
-  status: userRow[statusIdx] ?? "",
-  employeeId: idxIdNhanVien !== -1 ? userRow[idxIdNhanVien] : "",
-    }
+    const stored = String(userRow[passwordIdx] ?? "")
+    const { ok, needsUpgrade } = await verifyPassword(String(password), stored)
+    if (!ok) return INVALID
 
-    if (statusIdx !== -1 && user.status && user.status !== "hoat_dong") {
+    const status = statusIdx !== -1 ? String(userRow[statusIdx] ?? "") : ""
+    if (statusIdx !== -1 && status && status !== "hoat_dong") {
       return NextResponse.json({ success: false, message: "Tài khoản bị khóa" }, { status: 403 })
     }
 
-    // Cập nhật "Lần Đăng Nhập Cuối" nếu cột tồn tại
-    if (lastLoginIdx !== -1) {
-      const rowNumber = rows.indexOf(userRow) + 2
-      const colLetter = toColumnLetter(lastLoginIdx + 1)
-      const range = `${SHEET_NAME}!${colLetter}${rowNumber}`
+    const rowNumber = rows.indexOf(userRow) + 2 // rows[] bắt đầu từ dòng 2 của sheet
 
-      const nowVN = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
-      await updateRangeValues(range, [[nowVN]])
+    // Lazy migration: mật khẩu đang plaintext -> hash lại ngay (best-effort, không chặn login).
+    if (needsUpgrade) {
+      try {
+        const newHash = await hashPassword(String(password))
+        const colLetter = toColumnLetter(passwordIdx + 1)
+        await updateRangeValues(`${SHEET_NAME}!${colLetter}${rowNumber}`, [[newHash]])
+      } catch (e: any) {
+        console.warn("[LOGIN] Không nâng cấp được hash mật khẩu:", e?.message)
+      }
     }
 
-    // Ký phiên + set cookie httpOnly (nguồn xác thực tin cậy cho middleware)
-    const token = await signSession({
-      email: String(user.email || ""),
-      role: String(user.role || ""),
-      name: String(user.name || ""),
-      employeeId: String(user.employeeId || ""),
-    })
+    // Cập nhật "Lần Đăng Nhập Cuối" nếu có cột.
+    if (lastLoginIdx !== -1) {
+      try {
+        const colLetter = toColumnLetter(lastLoginIdx + 1)
+        const nowVN = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+        await updateRangeValues(`${SHEET_NAME}!${colLetter}${rowNumber}`, [[nowVN]])
+      } catch {
+        /* không chặn login nếu ghi log thất bại */
+      }
+    }
+
+    const user: SessionUser = {
+      email: String(userRow[emailIdx] ?? ""),
+      name: nameIdx !== -1 ? String(userRow[nameIdx] ?? "") : "",
+      role: roleIdx !== -1 ? String(userRow[roleIdx] ?? "").trim().toLowerCase() : "",
+      employeeId: employeeIdx !== -1 ? String(userRow[employeeIdx] ?? "") : "",
+    }
+
+    let token: string
+    try {
+      token = await signSession(user)
+    } catch (e: any) {
+      console.error("[LOGIN] Ký phiên thất bại:", e?.message)
+      return NextResponse.json(
+        { success: false, message: "Lỗi cấu hình máy chủ: thiếu AUTH_SECRET" },
+        { status: 500 },
+      )
+    }
+
     const res = NextResponse.json({ success: true, user })
-    res.cookies.set({
-      name: SESSION_COOKIE,
-      value: token,
+    res.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
-      sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       path: "/",
       maxAge: TOKEN_TTL_SECONDS,
     })

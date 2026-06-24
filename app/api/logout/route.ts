@@ -1,19 +1,20 @@
+// ---------------------------------------------------------------------------
+// Đăng xuất: xoá cookie phiên httpOnly. Public (không cần đăng nhập sẵn).
+// ---------------------------------------------------------------------------
+
 import { NextResponse } from "next/server"
 import { SESSION_COOKIE } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
 
-// Xoá cookie phiên. Public (khai báo trong middleware) để gọi được kể cả khi token đã hết hạn.
 export async function POST() {
-  const res = NextResponse.json({ ok: true })
-  res.cookies.set({
-    name: SESSION_COOKIE,
-    value: "",
+  const res = NextResponse.json({ success: true })
+  res.cookies.set(SESSION_COOKIE, "", {
     httpOnly: true,
-    sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
     path: "/",
-    maxAge: 0,
+    maxAge: 0, // hết hạn ngay
   })
   return res
 }
