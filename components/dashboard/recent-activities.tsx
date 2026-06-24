@@ -64,40 +64,40 @@ export function RecentActivities({ activities, isLoading = false, onRefresh }: R
           {/* Nhập kho */}
           <div className="flex flex-col h-full">
             <div className="flex items-center gap-2 mb-2">
-              <span className="bg-indigo-100 text-indigo-700 rounded-full p-2"><Package className="h-4 w-4" /></span>
+              <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 rounded-full p-2"><Package className="h-4 w-4" /></span>
               <span className="font-semibold text-lg">Nhập kho</span>
             </div>
             <div className="space-y-3">
               {activities.filter(a => a.type === "nhap-kho").slice(0, 5).map((activity, idx) => (
-                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg hover:bg-indigo-50 transition-colors">
-                  <span className="bg-indigo-100 text-indigo-700 rounded-full p-2"><Package className="h-4 w-4" /></span>
+                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors">
+                  <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 rounded-full p-2"><Package className="h-4 w-4" /></span>
                   <div>
                     <span className="font-semibold">{activity.title}</span>
-                    <span className="block text-[#888] text-sm">{activity.description}</span>
+                    <span className="block text-muted-foreground text-sm">{activity.description}</span>
                   </div>
                 </div>
               ))}
             </div>
-            <Button className="mt-3 px-4 py-1 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-sm hover:bg-indigo-100">Xem tất cả</Button>
+            <Button className="mt-3 px-4 py-1 rounded-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-500/15 dark:text-indigo-400 dark:hover:bg-indigo-500/25 font-semibold text-sm">Xem tất cả</Button>
           </div>
           {/* Xuất hàng */}
           <div className="flex flex-col h-full">
             <div className="flex items-center gap-2 mb-2">
-              <span className="bg-green-100 text-green-700 rounded-full p-2"><ShoppingCart className="h-4 w-4" /></span>
+              <span className="bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400 rounded-full p-2"><ShoppingCart className="h-4 w-4" /></span>
               <span className="font-semibold text-lg">Xuất hàng</span>
             </div>
             <div className="space-y-3">
               {activities.filter(a => a.type === "xuat-hang").slice(0, 5).map((activity, idx) => (
-                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg hover:bg-green-50 transition-colors">
-                  <span className="bg-green-100 text-green-700 rounded-full p-2"><ShoppingCart className="h-4 w-4" /></span>
+                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors">
+                  <span className="bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400 rounded-full p-2"><ShoppingCart className="h-4 w-4" /></span>
                   <div>
                     <span className="font-semibold">{activity.customer} | {activity.product} | {activity.total}</span>
-                    <span className="block text-[#888] text-sm">{activity.description}</span>
+                    <span className="block text-muted-foreground text-sm">{activity.description}</span>
                   </div>
                 </div>
               ))}
             </div>
-            <Button className="mt-3 px-4 py-1 rounded-full bg-green-50 text-green-700 font-semibold text-sm hover:bg-green-100">Xem tất cả</Button>
+            <Button className="mt-3 px-4 py-1 rounded-full bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-500/15 dark:text-green-400 dark:hover:bg-green-500/25 font-semibold text-sm">Xem tất cả</Button>
           </div>
         </div>
       </CardContent>

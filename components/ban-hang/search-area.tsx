@@ -268,7 +268,7 @@ export function SearchArea({
                           <TableRow
                             key={`${product.id || product.imei || product.serial || product.ten_san_pham}`}
                             data-index={idx}
-                            className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-blue-50/50 active:bg-blue-50'} ${idx === selectedIndex ? 'bg-blue-50' : ''} ${justAddedKey === (product.id || product.imei || product.serial) ? 'animate-pulse bg-green-50' : ''} odd:bg-muted/30`}
+                            className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-accent'} ${idx === selectedIndex ? 'bg-blue-50 dark:bg-blue-500/15' : ''} ${justAddedKey === (product.id || product.imei || product.serial) ? 'animate-pulse bg-green-50 dark:bg-green-500/15' : ''} odd:bg-muted/30`}
                             onClick={() => { if (!isDisabled) { addToCart(product); setJustAddedKey(product.id || product.imei || product.serial || null); setTimeout(() => setJustAddedKey(null), 500) } }}
                           >
                             <TableCell className="px-3 py-2">
@@ -301,7 +301,7 @@ export function SearchArea({
                                    <Badge variant="outline">{product.loai_may || '-'}</Badge>
                                    <Badge variant="outline">{hasPin ? formattedPin : '-'}</Badge>
                                    {product.do_sim && (
-                                     <Badge variant="outline" className="border-orange-200 text-orange-700 bg-orange-50 truncate max-w-[80px]" title={product.do_sim}>
+                                     <Badge variant="outline" className="border-orange-200 text-orange-700 bg-orange-50 dark:bg-orange-500/15 dark:text-orange-400 dark:border-transparent truncate max-w-[80px]" title={product.do_sim}>
                                        {product.do_sim}
                                      </Badge>
                                    )}
@@ -313,9 +313,9 @@ export function SearchArea({
                             </TableCell>
                             <TableCell className="px-3 py-2">
                               <Badge className={
-                                product.trang_thai === 'Đã đặt cọc' ? 'bg-orange-100 text-orange-800' :
-                                product.trang_thai === 'Đang CNC' ? 'bg-orange-100 text-orange-800' :
-                                product.trang_thai === 'Đã bán' ? 'bg-gray-200 text-muted-foreground' : 'bg-green-100 text-green-800'
+                                product.trang_thai === 'Đã đặt cọc' ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-400' :
+                                product.trang_thai === 'Đang CNC' ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-400' :
+                                product.trang_thai === 'Đã bán' ? 'bg-muted text-muted-foreground' : 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-400'
                               }>
                                 {product.trang_thai || 'Còn hàng'}
                               </Badge>

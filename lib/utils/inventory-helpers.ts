@@ -27,18 +27,18 @@ export function classifyCondition(p: any) {
 
 export function getTrangThaiColor(status: string) {
   switch (status) {
-    case "Còn hàng": return "bg-green-100 text-green-700"
-    case "Đang CNC": return "bg-yellow-100 text-yellow-700"
-    case "Bảo hành": return "bg-red-100 text-red-700"
-    case "Giao đối tác": return "bg-purple-100 text-purple-700"
-    default: return "bg-gray-100 text-gray-700"
+    case "Còn hàng": return "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+    case "Đang CNC": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400"
+    case "Bảo hành": return "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+    case "Giao đối tác": return "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400"
+    default: return "bg-muted text-muted-foreground"
   }
 }
 
 export function getTrangThaiKhoColor(status?: string) {
   const val = (status || "").toLowerCase()
-  if (val.includes("không sẵn")) return "bg-amber-100 text-amber-700"
-  return "bg-emerald-100 text-emerald-700"
+  if (val.includes("không sẵn")) return "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+  return "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
 }
 
 function normLoai(loai?: string) {

@@ -398,8 +398,8 @@ const BarChartComponent = ({
                 accentClass="bg-blue-500"
               >
                 <div className="mt-1 flex items-center gap-2 text-xs font-semibold">
-                  <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-orange-700">Off: {summary.totalOrdersOff}</span>
-                  <span className="rounded-md bg-green-50 px-1.5 py-0.5 text-green-700">Onl: {summary.totalOrdersOnl}</span>
+                  <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400">Off: {summary.totalOrdersOff}</span>
+                  <span className="rounded-md bg-green-50 px-1.5 py-0.5 text-green-700 dark:bg-green-500/15 dark:text-green-400">Onl: {summary.totalOrdersOnl}</span>
                 </div>
               </StatCard>
               <StatCard
