@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs" // đảm bảo dùng Node (OpenSSL đầy đủ) cho googleapis
 import { readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
-import { signSession, sessionCookie } from "@/lib/auth"
+import { signSession, SESSION_COOKIE, TOKEN_TTL_SECONDS } from "@/lib/auth"
 
 function toColumnLetter(colNum: number) {
   let letter = ""
@@ -123,7 +123,15 @@ export async function POST(request: NextRequest) {
       employeeId: String(user.employeeId || ""),
     })
     const res = NextResponse.json({ success: true, user })
-    res.cookies.set(sessionCookie(token))
+    res.cookies.set({
+      name: SESSION_COOKIE,
+      value: token,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: TOKEN_TTL_SECONDS,
+    })
     return res
   } catch (err: any) {
     console.error("[LOGIN] Unhandled error:", err)

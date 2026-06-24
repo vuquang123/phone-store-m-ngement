@@ -1,88 +1,90 @@
-// Phiên đăng nhập tập trung: JWT ký HS256 (jose) lưu trong cookie httpOnly.
-// Dùng chung cho middleware (verify ở Edge) + /api/login (ký) + /api/logout (xoá).
+// ---------------------------------------------------------------------------
+// Lớp phiên đăng nhập (session) — KHÔNG import bcrypt để an toàn cho Edge runtime
+// (middleware chạy ở Edge và chỉ cần verify JWT, không cần đụng tới bcrypt/Sheets).
+//
+// THIẾT KẾ:
+// - Phiên = JWT ký HS256, đặt trong cookie httpOnly => JavaScript phía client
+//   KHÔNG đọc/sửa được, và không thể giả mạo như header x-user-email trước đây.
+// - Stateless: không cần lưu session vào Google Sheets.
+// - middleware.ts verify cookie ở MỌI request rồi "tiêm" danh tính đã xác thực
+//   vào header (x-user-email/x-user-role/...) để các route đọc an toàn.
+// ---------------------------------------------------------------------------
+
 import { SignJWT, jwtVerify } from "jose"
 
-export const SESSION_COOKIE = "session"
+export const SESSION_COOKIE = "ps_session"
 
-// Tên header danh tính được middleware TIÊM vào request (ghi đè giá trị client gửi).
-// HDR_EMAIL trùng "x-user-email" để các route cũ đang đọc header này nhận giá trị tin cậy.
+// Tên header chứa danh tính ĐÃ XÁC THỰC (do middleware tiêm vào).
 export const HDR_EMAIL = "x-user-email"
 export const HDR_ROLE = "x-user-role"
 export const HDR_NAME = "x-user-name"
-export const HDR_EMPLOYEE = "x-employee-id"
+export const HDR_EMPLOYEE = "x-user-employee-id"
 
-export interface SessionUser {
+// Thời hạn phiên. Hạ xuống "1d" / "12h" nếu muốn việc khoá tài khoản có hiệu
+// lực nhanh hơn (xem ghi chú "Cửa sổ khoá tài khoản" trong hướng dẫn).
+export const TOKEN_TTL = "7d"
+export const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7
+
+export type SessionUser = {
   email: string
-  role?: string
+  role: string
   name?: string
   employeeId?: string
 }
 
-const ALG = "HS256"
-const MAX_AGE_SEC = 60 * 60 * 24 * 7 // 7 ngày
-
 function getSecret(): Uint8Array {
-  const s = process.env.SESSION_SECRET
-  if (!s) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("Thiếu SESSION_SECRET — không thể ký/verify phiên đăng nhập.")
-    }
-    // Fallback CHỈ cho dev local (đặt SESSION_SECRET trong .env.local để an toàn).
-    return new TextEncoder().encode("dev-insecure-session-secret-change-me-32++")
+  const s = process.env.AUTH_SECRET || process.env.JWT_SECRET
+  if (!s || s.length < 16) {
+    throw new Error(
+      "AUTH_SECRET chưa cấu hình (tối thiểu 16 ký tự). Thêm vào .env.local rồi khởi động lại server.",
+    )
   }
   return new TextEncoder().encode(s)
 }
 
 export async function signSession(user: SessionUser): Promise<string> {
-  return await new SignJWT({
-    email: user.email,
-    role: user.role ?? "",
+  return new SignJWT({
+    role: user.role,
     name: user.name ?? "",
     employeeId: user.employeeId ?? "",
   })
-    .setProtectedHeader({ alg: ALG })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(user.email)
     .setIssuedAt()
-    .setExpirationTime(`${MAX_AGE_SEC}s`)
+    .setExpirationTime(TOKEN_TTL)
     .sign(getSecret())
 }
 
 export async function verifySession(token: string): Promise<SessionUser | null> {
   try {
-    const { payload } = await jwtVerify(token, getSecret(), { algorithms: [ALG] })
-    const email = typeof payload.email === "string" ? payload.email : ""
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] })
+    const email = String(payload.sub || "")
     if (!email) return null
     return {
       email,
-      role: typeof payload.role === "string" ? payload.role : "",
-      name: typeof payload.name === "string" ? payload.name : "",
-      employeeId: typeof payload.employeeId === "string" ? payload.employeeId : "",
+      role: String((payload as any).role || ""),
+      name: String((payload as any).name || ""),
+      employeeId: String((payload as any).employeeId || ""),
     }
   } catch {
     return null
   }
 }
 
-// Tham số cookie cho NextResponse.cookies.set(...)
-export function sessionCookie(token: string) {
+/**
+ * Đọc danh tính đã được middleware xác thực + tiêm vào header. Dùng trong API
+ * route handler khi cần biết "ai đang thao tác" (vd ghi log, gán người bán).
+ *
+ * Lưu ý: an toàn vì các header này LUÔN bị middleware ghi đè bằng giá trị lấy
+ * từ JWT đã verify — client không thể tự gửi header giả để qua mặt.
+ */
+export function getServerUser(req: { headers: Headers }): SessionUser | null {
+  const email = req.headers.get(HDR_EMAIL)
+  if (!email) return null
   return {
-    name: SESSION_COOKIE,
-    value: token,
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: MAX_AGE_SEC,
-  }
-}
-
-export function clearSessionCookie() {
-  return {
-    name: SESSION_COOKIE,
-    value: "",
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
+    email,
+    role: req.headers.get(HDR_ROLE) || "",
+    name: req.headers.get(HDR_NAME) || undefined,
+    employeeId: req.headers.get(HDR_EMPLOYEE) || undefined,
   }
 }
