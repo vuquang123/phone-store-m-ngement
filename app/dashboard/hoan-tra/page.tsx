@@ -246,7 +246,7 @@ export default function HoanTraPage() {
                 {/* Body: thông tin chính */}
                 <div className="mt-2 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
                   <div className="space-y-1 text-sm">
-                    <div className="text-slate-700">
+                    <div className="text-foreground">
                       <span className="font-medium">{r.khach_hang}</span>
                       {r.so_dien_thoai && <span className="text-muted-foreground"> • {r.so_dien_thoai}</span>}
                     </div>
@@ -262,7 +262,7 @@ export default function HoanTraPage() {
                   </div>
                   <div className="flex items-start sm:items-end justify-between sm:flex-col sm:justify-end sm:text-right gap-3">
                     <div className="text-xs text-muted-foreground">{relativeFromNowSafe(r.ngay_yeu_cau)}</div>
-                    {r.ly_do && <div className="text-xs text-slate-600">{r.ly_do}</div>}
+                    {r.ly_do && <div className="text-xs text-muted-foreground">{r.ly_do}</div>}
                     <Button
                       variant="outline"
                       size="sm"
@@ -278,7 +278,7 @@ export default function HoanTraPage() {
           </div>
 
           {filteredReturns.length === 0 && (
-            <div className="text-center py-16 bg-white rounded-lg">
+            <div className="text-center py-16 bg-card rounded-lg">
               <h3 className="text-lg font-medium mb-2">Chưa có yêu cầu hoàn trả nào</h3>
               <p className="text-sm text-muted-foreground">Khi có yêu cầu hoàn trả, nội dung sẽ hiển thị tại đây.</p>
             </div>
@@ -302,22 +302,22 @@ export default function HoanTraPage() {
             )}
           </DialogHeader>
           <div className="space-y-2 text-sm">
-            <div><span className="text-slate-500">Khách hàng:</span> <span className="font-medium">{selected?.khach_hang || '-'}</span></div>
-            {selected?.so_dien_thoai && <div><span className="text-slate-500">SĐT:</span> {selected.so_dien_thoai}</div>}
-            {selected?.san_pham && <div><span className="text-slate-500">Sản phẩm:</span> {selected.san_pham}</div>}
+            <div><span className="text-muted-foreground">Khách hàng:</span> <span className="font-medium">{selected?.khach_hang || '-'}</span></div>
+            {selected?.so_dien_thoai && <div><span className="text-muted-foreground">SĐT:</span> {selected.so_dien_thoai}</div>}
+            {selected?.san_pham && <div><span className="text-muted-foreground">Sản phẩm:</span> {selected.san_pham}</div>}
             {(selected?.imei || selected?.serial) && (
               <div>
-                <span className="text-slate-500">IMEI/Serial:</span> {selected.imei || selected.serial}
+                <span className="text-muted-foreground">IMEI/Serial:</span> {selected.imei || selected.serial}
               </div>
             )}
             {typeof selected?.so_tien_hoan === 'number' && selected?.so_tien_hoan! > 0 && (
               <div className="text-red-600 font-semibold">Số tiền hoàn: {new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND'}).format(selected!.so_tien_hoan!)}</div>
             )}
-            {selected?.ly_do && <div><span className="text-slate-500">Lý do:</span> {selected.ly_do}</div>}
-            {selected?.trang_thai && <div><span className="text-slate-500">Trạng thái:</span> {selected.trang_thai}</div>}
-            {selected?.nguoi_xu_ly && <div><span className="text-slate-500">Người xử lý:</span> {selected.nguoi_xu_ly}</div>}
-            {selected?.ngay_xu_ly && <div><span className="text-slate-500">Ngày xử lý:</span> {selected.ngay_xu_ly}</div>}
-            {selected?.ghi_chu && <div className="whitespace-pre-wrap"><span className="text-slate-500">Ghi chú:</span> {selected.ghi_chu}</div>}
+            {selected?.ly_do && <div><span className="text-muted-foreground">Lý do:</span> {selected.ly_do}</div>}
+            {selected?.trang_thai && <div><span className="text-muted-foreground">Trạng thái:</span> {selected.trang_thai}</div>}
+            {selected?.nguoi_xu_ly && <div><span className="text-muted-foreground">Người xử lý:</span> {selected.nguoi_xu_ly}</div>}
+            {selected?.ngay_xu_ly && <div><span className="text-muted-foreground">Ngày xử lý:</span> {selected.ngay_xu_ly}</div>}
+            {selected?.ghi_chu && <div className="whitespace-pre-wrap"><span className="text-muted-foreground">Ghi chú:</span> {selected.ghi_chu}</div>}
           </div>
           <div className="mt-4 flex items-center justify-end gap-2">
             {isManager && (selected?.trang_thai || '').toLowerCase().includes('xử lý') && (

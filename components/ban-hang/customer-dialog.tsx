@@ -94,7 +94,7 @@ export function CustomerDialog({ isOpen, onClose, onSuccess, initial }: Customer
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-  <DialogContent className="sm:max-w-[500px] bg-white">
+  <DialogContent className="sm:max-w-[500px] bg-card">
         <DialogHeader>
           <DialogTitle>Thêm khách hàng mới</DialogTitle>
           <DialogDescription>Nhập thông tin khách hàng mới</DialogDescription>

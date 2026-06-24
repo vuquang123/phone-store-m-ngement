@@ -110,7 +110,7 @@ export function SearchArea({
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <div className="flex items-center gap-1">
-            <span className="text-xs text-slate-500 mr-1">Nguồn:</span>
+            <span className="text-xs text-muted-foreground mr-1">Nguồn:</span>
             <Button size="sm" variant={filterSource === 'all' ? 'default' : 'outline'}
               className={filterSource === 'all' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
               onClick={() => setFilterSource('all')}>Tất cả</Button>
@@ -122,7 +122,7 @@ export function SearchArea({
               onClick={() => setFilterSource('partner')}>Kho ngoài</Button>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-xs text-slate-500 mr-1">Loại:</span>
+            <span className="text-xs text-muted-foreground mr-1">Loại:</span>
             <Button size="sm" variant={filterType === 'all' ? 'default' : 'outline'}
               className={filterType === 'all' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
               onClick={() => setFilterType('all')}>Tất cả</Button>
@@ -158,7 +158,7 @@ export function SearchArea({
                       aria-disabled={isDisabled}
                       onClick={() => { if (!isDisabled) { addToCart(product); try { (navigator as any).vibrate && navigator.vibrate(10) } catch { } } }}
                       onKeyDown={(e) => { if (!isDisabled && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); addToCart(product) } }}
-                      className={`group relative border rounded-xl p-3 pb-10 bg-white shadow-sm hover:shadow-md transition select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-blue-50 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-blue-300 active:border-blue-400'}`}
+                      className={`group relative border rounded-xl p-3 pb-10 bg-card shadow-sm hover:shadow-md transition select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-blue-50 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-blue-300 active:border-blue-400'}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -188,17 +188,17 @@ export function SearchArea({
                       <div className="mt-2 text-sm text-muted-foreground">
                         {!isAccessoryItem ? (
                           <>
-                            {product.loai_may && <div>Loại: <span className="text-slate-800">{product.loai_may}</span></div>}
-                            {hasPin && <div>Pin: <span className="text-slate-800">{formattedPin}</span></div>}
-                            {tinhTrang && <div>Tình trạng: <span className="text-slate-800">{tinhTrang}</span></div>}
+                            {product.loai_may && <div>Loại: <span className="text-foreground">{product.loai_may}</span></div>}
+                            {hasPin && <div>Pin: <span className="text-foreground">{formattedPin}</span></div>}
+                            {tinhTrang && <div>Tình trạng: <span className="text-foreground">{tinhTrang}</span></div>}
                             {(product.imei || product.serial) && (
-                              <div>{product.imei ? 'IMEI' : 'Serial'}: <span className="font-mono text-slate-800">{product.imei || product.serial}</span></div>
+                              <div>{product.imei ? 'IMEI' : 'Serial'}: <span className="font-mono text-foreground">{product.imei || product.serial}</span></div>
                             )}
                           </>
                         ) : (
                           <>
-                            {product.loai_phu_kien && <div>Loại: <span className="text-slate-800">{product.loai_phu_kien}</span></div>}
-                            <div>Tồn: <span className="text-slate-800">{product.so_luong_ton ?? product.so_luong ?? 0}</span></div>
+                            {product.loai_phu_kien && <div>Loại: <span className="text-foreground">{product.loai_phu_kien}</span></div>}
+                            <div>Tồn: <span className="text-foreground">{product.so_luong_ton ?? product.so_luong ?? 0}</span></div>
                           </>
                         )}
                       </div>
@@ -208,7 +208,7 @@ export function SearchArea({
                            ₫{(product.gia_ban - (product.giam_gia || 0)).toLocaleString()}
                         </span>
                         {(product.giam_gia || 0) > 0 && (
-                          <span className="text-[10px] text-slate-400 line-through">
+                          <span className="text-[10px] text-muted-foreground line-through">
                             ₫{product.gia_ban.toLocaleString()}
                           </span>
                         )}
@@ -226,7 +226,7 @@ export function SearchArea({
               >
                 <Table>
                   <TableHeader>
-                    <TableRow className="sticky top-0 z-10 bg-white">
+                    <TableRow className="sticky top-0 z-10 bg-card">
                       <TableHead className="w-[30%] cursor-pointer" onClick={() => toggleSort('san_pham')}>
                         <div className="flex items-center gap-2">
                           Sản phẩm
@@ -253,7 +253,7 @@ export function SearchArea({
                     {isSearching && sortedSearchResults.length === 0 ? (
                       Array.from({ length: 8 }).map((_, i) => (
                         <TableRow key={`skeleton-${i}`}>
-                           <TableCell colSpan={6}><div className="h-8 w-full bg-slate-100 animate-pulse rounded"/></TableCell>
+                           <TableCell colSpan={6}><div className="h-8 w-full bg-muted animate-pulse rounded"/></TableCell>
                         </TableRow>
                       ))
                     ) : (
@@ -268,7 +268,7 @@ export function SearchArea({
                           <TableRow
                             key={`${product.id || product.imei || product.serial || product.ten_san_pham}`}
                             data-index={idx}
-                            className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-blue-50/50 active:bg-blue-50'} ${idx === selectedIndex ? 'bg-blue-50' : ''} ${justAddedKey === (product.id || product.imei || product.serial) ? 'animate-pulse bg-green-50' : ''} odd:bg-slate-50/30`}
+                            className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-blue-50/50 active:bg-blue-50'} ${idx === selectedIndex ? 'bg-blue-50' : ''} ${justAddedKey === (product.id || product.imei || product.serial) ? 'animate-pulse bg-green-50' : ''} odd:bg-muted/30`}
                             onClick={() => { if (!isDisabled) { addToCart(product); setJustAddedKey(product.id || product.imei || product.serial || null); setTimeout(() => setJustAddedKey(null), 500) } }}
                           >
                             <TableCell className="px-3 py-2">
@@ -315,7 +315,7 @@ export function SearchArea({
                               <Badge className={
                                 product.trang_thai === 'Đã đặt cọc' ? 'bg-orange-100 text-orange-800' :
                                 product.trang_thai === 'Đang CNC' ? 'bg-orange-100 text-orange-800' :
-                                product.trang_thai === 'Đã bán' ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-800'
+                                product.trang_thai === 'Đã bán' ? 'bg-gray-200 text-muted-foreground' : 'bg-green-100 text-green-800'
                               }>
                                 {product.trang_thai || 'Còn hàng'}
                               </Badge>
@@ -326,7 +326,7 @@ export function SearchArea({
                                   ₫{(product.gia_ban - (product.giam_gia || 0)).toLocaleString()}
                                 </span>
                                 {(product.giam_gia || 0) > 0 && (
-                                  <span className="text-[10px] text-slate-400 line-through">
+                                  <span className="text-[10px] text-muted-foreground line-through">
                                     ₫{product.gia_ban.toLocaleString()}
                                   </span>
                                 )}

@@ -27,7 +27,7 @@ export function CustomerCard({
       <CardHeader><CardTitle>Khách hàng</CardTitle></CardHeader>
       <CardContent className="space-y-4">
         {customerResults.length > 0 && (
-          <div className="border rounded bg-white max-h-56 overflow-y-auto">
+          <div className="border rounded bg-card max-h-56 overflow-y-auto">
             {customerResults.map((kh: Customer & { isDeposit?: boolean }) => (
               <div
                 key={kh.id}
@@ -41,7 +41,7 @@ export function CustomerCard({
           </div>
         )}
         {selectedCustomer ? (
-          <div className="p-3 border rounded-lg bg-white flex items-center justify-between">
+          <div className="p-3 border rounded-lg bg-card flex items-center justify-between">
             <div>
               <p className="font-medium">{selectedCustomer.ho_ten}</p>
               <p className="text-sm text-muted-foreground">{selectedCustomer.so_dien_thoai}</p>
@@ -50,7 +50,7 @@ export function CustomerCard({
           </div>
         ) : (
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1 bg-white" onClick={() => setIsCustomerSelectOpen(true)}>
+            <Button variant="outline" className="flex-1 bg-card" onClick={() => setIsCustomerSelectOpen(true)}>
               <User className="mr-2 h-4 w-4" /> Chọn khách hàng
             </Button>
           </div>

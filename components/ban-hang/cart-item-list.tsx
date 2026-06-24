@@ -50,7 +50,7 @@ export function CartItemList({
           <div className="flex-1 flex flex-wrap items-center gap-3">
             <span className="text-xs font-medium text-blue-900">Áp gói bảo hành nhanh:</span>
             <select
-              className="text-xs border rounded-lg px-2 py-1.5 bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="text-xs border rounded-lg px-2 py-1.5 bg-card shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
               defaultValue=""
               onChange={e => {
                 const code = e.target.value || null
@@ -89,8 +89,8 @@ export function CartItemList({
       {devices.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
-            <Smartphone className="h-4 w-4 text-slate-500" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Danh sách máy ({devices.length})</h3>
+            <Smartphone className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Danh sách máy ({devices.length})</h3>
           </div>
           <div className="space-y-3">
             {devices.map(item => (
@@ -118,8 +118,8 @@ export function CartItemList({
       {accessories.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
-            <Package className="h-4 w-4 text-slate-500" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Phụ kiện ({accessories.length})</h3>
+            <Package className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Phụ kiện ({accessories.length})</h3>
           </div>
           <div className="space-y-3">
             {accessories.map(item => (

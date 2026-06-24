@@ -61,7 +61,7 @@ const handleLogin = async (e: React.FormEvent) => {
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8 animate-fade-in">
           <div className="flex justify-center mb-6">
-            <div className="h-16 w-16 rounded-2xl overflow-hidden shadow-lg transform hover:scale-105 transition-transform duration-200 bg-white">
+            <div className="h-16 w-16 rounded-2xl overflow-hidden shadow-lg transform hover:scale-105 transition-transform duration-200 bg-card">
               <img
                 src="/apple-touch-icon.png"
                 alt="DEV PỒ Logo"
@@ -72,18 +72,18 @@ const handleLogin = async (e: React.FormEvent) => {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent mb-2">
             DEV PỒ 
           </h1>
-          <p className="text-gray-600 text-lg">Hệ thống quản lý cửa hàng chuyên nghiệp</p>
+          <p className="text-muted-foreground text-lg">Hệ thống quản lý cửa hàng chuyên nghiệp</p>
         </div>
 
-        <Card className="backdrop-blur-sm bg-white/80 border-0 shadow-2xl animate-slide-up">
+        <Card className="backdrop-blur-sm bg-card/80 border-0 shadow-2xl animate-slide-up">
           <CardHeader className="text-center pb-4">
-            <CardTitle className="text-2xl font-semibold text-gray-800">Đăng nhập hệ thống</CardTitle>
-            <CardDescription className="text-gray-600">Nhập thông tin để truy cập vào hệ thống quản lý</CardDescription>
+            <CardTitle className="text-2xl font-semibold text-foreground">Đăng nhập hệ thống</CardTitle>
+            <CardDescription className="text-muted-foreground">Nhập thông tin để truy cập vào hệ thống quản lý</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="email" className="text-sm font-medium text-foreground">
                   Địa chỉ Email
                 </Label>
                 <Input
@@ -93,11 +93,11 @@ const handleLogin = async (e: React.FormEvent) => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 border-gray-200 focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
+                  className="h-12 border-border focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="password" className="text-sm font-medium text-foreground">
                   Mật khẩu
                 </Label>
                 <Input
@@ -107,7 +107,7 @@ const handleLogin = async (e: React.FormEvent) => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 border-gray-200 focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
+                  className="h-12 border-border focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
                 />
               </div>
               {error && (

@@ -529,7 +529,7 @@ export default function KhoHangPage() {
                     <SelectTrigger className="h-8 w-[130px] text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border-emerald-200">
                       <SelectValue placeholder="Chuyển kho" />
                     </SelectTrigger>
-                    <SelectContent className="bg-white">
+                    <SelectContent className="bg-card">
                       <SelectItem value="Kho trong">Kho trong</SelectItem>
                       <SelectItem value="Kho ngoài">Kho ngoài</SelectItem>
                     </SelectContent>
@@ -569,7 +569,7 @@ export default function KhoHangPage() {
                 />
 
                 {filteredProducts.length > pageSize && (
-                  <div className="flex items-center justify-center p-4 bg-slate-50/50 gap-2">
+                  <div className="flex items-center justify-center p-4 bg-muted/50 gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -598,7 +598,7 @@ export default function KhoHangPage() {
           <div className="space-y-8">
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-2">
-                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
                   Đang CNC
                   <Badge variant="secondary" className="ml-2 bg-blue-50 text-blue-600 border-blue-100">{processingCNC.length}</Badge>
@@ -606,7 +606,7 @@ export default function KhoHangPage() {
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <Input
                     placeholder="Tìm máy đang CNC..."
-                    className="h-9 bg-white w-full sm:w-[240px]"
+                    className="h-9 bg-card w-full sm:w-[240px]"
                     value={cncProcessingSearch}
                     onChange={(e) => { setCncProcessingSearch(e.target.value); setCncProcessingPage(1); }}
                   />
@@ -662,7 +662,7 @@ export default function KhoHangPage() {
                   />
                   {processingCNC.length > pageSize && (
                     <div className="flex items-center justify-between mt-2 px-2">
-                      <div className="text-[12px] text-slate-500">
+                      <div className="text-[12px] text-muted-foreground">
                         Trang {cncProcessingPage} / {Math.ceil(processingCNC.length / pageSize)}
                       </div>
                       <div className="flex gap-2">
@@ -693,7 +693,7 @@ export default function KhoHangPage() {
 
             <div className="space-y-4 opacity-90 grayscale-[0.3]">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-2">
-                <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2">
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                   Đã hoàn thành CNC
                   <Badge variant="secondary" className="ml-2 bg-emerald-50 text-emerald-600 border-emerald-100">{completedCNC.length}</Badge>
@@ -701,7 +701,7 @@ export default function KhoHangPage() {
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <Input
                     placeholder="Tìm máy đã hoàn thành..."
-                    className="h-9 bg-white w-full sm:w-[240px]"
+                    className="h-9 bg-card w-full sm:w-[240px]"
                     value={cncCompletedSearch}
                     onChange={(e) => { setCncCompletedSearch(e.target.value); setCncCompletedPage(1); }}
                   />
@@ -719,7 +719,7 @@ export default function KhoHangPage() {
                   />
                   {completedCNC.length > pageSize && (
                     <div className="flex items-center justify-between mt-2 px-2">
-                      <div className="text-[12px] text-slate-500">
+                      <div className="text-[12px] text-muted-foreground">
                         Trang {cncCompletedPage} / {Math.ceil(completedCNC.length / pageSize)}
                       </div>
                       <div className="flex gap-2">
@@ -753,7 +753,7 @@ export default function KhoHangPage() {
         {activeTab === "giao-doi-tac" && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-2">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
                 Đang giao đối tác
                 <Badge variant="secondary" className="ml-2 bg-purple-50 text-purple-600 border-purple-100">{partnerProducts.length}</Badge>
@@ -761,7 +761,7 @@ export default function KhoHangPage() {
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <Input
                   placeholder="Tìm máy đang giao..."
-                  className="h-9 bg-white w-full sm:w-[240px]"
+                  className="h-9 bg-card w-full sm:w-[240px]"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -845,13 +845,13 @@ export default function KhoHangPage() {
         {activeTab === "phu-kien" && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <h3 className="text-lg font-semibold text-slate-800">Danh sách phụ kiện</h3>
+              <h3 className="text-lg font-semibold text-foreground">Danh sách phụ kiện</h3>
               <div className="flex items-center gap-2">
                 <Select value={accessoryStatusFilter} onValueChange={(v) => { setAccessoryStatusFilter(v); setAccessoryPage(1); }}>
-                  <SelectTrigger className="w-[180px] h-9 bg-white">
+                  <SelectTrigger className="w-[180px] h-9 bg-card">
                     <SelectValue placeholder="Trạng thái tồn" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white">
+                  <SelectContent className="bg-card">
                     <SelectItem value="all">Trạng thái: Tất cả</SelectItem>
                     <SelectItem value="in_stock">Còn hàng (&gt; 5)</SelectItem>
                     <SelectItem value="low_stock">Sắp hết hàng (1 - 5)</SelectItem>
@@ -871,7 +871,7 @@ export default function KhoHangPage() {
 
                 {filteredAccessories.length > pageSize && (
                   <div className="flex items-center justify-between mt-4 pb-4">
-                    <div className="text-sm text-slate-500">
+                    <div className="text-sm text-muted-foreground">
                       Hiển thị {Math.min(filteredAccessories.length, (accessoryPage - 1) * pageSize + 1)} - {Math.min(filteredAccessories.length, accessoryPage * pageSize)} trong tổng số {filteredAccessories.length} phụ kiện
                     </div>
                     <div className="flex gap-2">

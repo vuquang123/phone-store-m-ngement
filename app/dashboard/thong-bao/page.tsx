@@ -82,7 +82,7 @@ export default function ThongBaoPage() {
       case "canh_bao":
         return <AlertCircle className="h-5 w-5 text-red-500" />
       default:
-        return <Bell className="h-5 w-5 text-gray-500" />
+        return <Bell className="h-5 w-5 text-muted-foreground" />
     }
   }
 

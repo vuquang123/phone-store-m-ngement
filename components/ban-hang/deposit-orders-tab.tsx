@@ -62,13 +62,13 @@ export function DepositOrdersTab({
               const k = o["Tên Khách Hàng"] || o["ten_khach_hang"] || "";
               return String(m).toLowerCase().includes(depositSearch.toLowerCase()) || String(k).toLowerCase().includes(depositSearch.toLowerCase());
            });
-           if (depositLoading) return <div className="p-8 text-center text-slate-500">Đang tải...</div>;
-           if (filtered.length === 0) return <div className="p-8 text-center text-slate-500">Không tìm thấy đơn nào.</div>;
+           if (depositLoading) return <div className="p-8 text-center text-muted-foreground">Đang tải...</div>;
+           if (filtered.length === 0) return <div className="p-8 text-center text-muted-foreground">Không tìm thấy đơn nào.</div>;
            return (
              <div className="overflow-x-auto">
                <Table>
                  <TableHeader>
-                   <TableRow className="bg-slate-50">
+                   <TableRow className="bg-muted">
                      <TableHead>
                        <div className="flex items-center gap-2">
                          Mã Đơn Hàng
@@ -129,7 +129,7 @@ export function DepositOrdersTab({
                          <TableCell className="min-w-[200px]">{sanPham}</TableCell>
                          <TableCell className="whitespace-nowrap">{imei}</TableCell>
                          <TableCell>
-                            <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs whitespace-nowrap">{trangThaiMay}</span>
+                            <span className="bg-muted text-foreground px-2 py-1 rounded text-xs whitespace-nowrap">{trangThaiMay}</span>
                          </TableCell>
                          <TableCell className="text-blue-600 font-semibold whitespace-nowrap align-middle">
                             <span>₫{tongDaCoc.toLocaleString('vi-VN')}</span>

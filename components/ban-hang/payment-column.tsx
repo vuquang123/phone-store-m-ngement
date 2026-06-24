@@ -147,9 +147,9 @@ export function PaymentColumn(props: PaymentColumnProps) {
               <label className="text-sm font-medium">Giảm giá</label>
               <div className="flex items-center gap-1">
                 {['50k', '100k', '200k', '5%', '10%'].map(pres => (
-                  <button key={pres} type="button" onClick={() => handleDiscountPreset(pres)} className="px-2 py-1 text-[11px] border rounded hover:bg-slate-100">{pres}</button>
+                  <button key={pres} type="button" onClick={() => handleDiscountPreset(pres)} className="px-2 py-1 text-[11px] border rounded hover:bg-accent">{pres}</button>
                 ))}
-                <button type="button" onClick={() => handleDiscountPreset('Reset')} className="px-2 py-1 text-[11px] border rounded hover:bg-slate-100">Reset</button>
+                <button type="button" onClick={() => handleDiscountPreset('Reset')} className="px-2 py-1 text-[11px] border rounded hover:bg-accent">Reset</button>
               </div>
             </div>
             <Input

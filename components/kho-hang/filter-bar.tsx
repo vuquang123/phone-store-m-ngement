@@ -30,15 +30,15 @@ export function FilterBar({ productNames, colors, capacities, maxPrice }: Filter
   } = useInventoryStore()
 
   return (
-    <div className="space-y-4 bg-slate-50/50 p-4 rounded-xl border border-slate-200/60 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+    <div className="space-y-4 bg-muted/50 p-4 rounded-xl border border-border/60 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
       <div className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Tìm theo tên, IMEI, serial, ghi chú..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 bg-white border-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500"
+            className="pl-9 bg-card border-border focus:ring-emerald-500/20 focus:border-emerald-500"
           />
         </div>
         <Button 
@@ -53,8 +53,8 @@ export function FilterBar({ productNames, colors, capacities, maxPrice }: Filter
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
         <Select value={productNameFilter} onValueChange={setProductNameFilter}>
-          <SelectTrigger className="h-10 bg-white text-xs"><SelectValue placeholder="Sản phẩm" /></SelectTrigger>
-          <SelectContent className="bg-white">
+          <SelectTrigger className="h-10 bg-card text-xs"><SelectValue placeholder="Sản phẩm" /></SelectTrigger>
+          <SelectContent className="bg-card">
             <SelectItem value="all">Sản phẩm: Tất cả</SelectItem>
             {productNames.map((name: string) => (
               <SelectItem key={name} value={name}>{name}</SelectItem>
@@ -63,8 +63,8 @@ export function FilterBar({ productNames, colors, capacities, maxPrice }: Filter
         </Select>
 
         <Select value={sourceFilter} onValueChange={setSourceFilter as any}>
-          <SelectTrigger className="h-10 bg-white text-xs"><SelectValue placeholder="Nguồn" /></SelectTrigger>
-          <SelectContent className="bg-white">
+          <SelectTrigger className="h-10 bg-card text-xs"><SelectValue placeholder="Nguồn" /></SelectTrigger>
+          <SelectContent className="bg-card">
             <SelectItem value="all">Nguồn: Tất cả</SelectItem>
             <SelectItem value="kho">Kho trong</SelectItem>
             <SelectItem value="doi_tac">Kho ngoài</SelectItem>
@@ -72,8 +72,8 @@ export function FilterBar({ productNames, colors, capacities, maxPrice }: Filter
         </Select>
 
         <Select value={trangThai} onValueChange={setTrangThai}>
-          <SelectTrigger className="h-10 bg-white text-xs"><SelectValue placeholder="Loại máy" /></SelectTrigger>
-          <SelectContent className="bg-white">
+          <SelectTrigger className="h-10 bg-card text-xs"><SelectValue placeholder="Loại máy" /></SelectTrigger>
+          <SelectContent className="bg-card">
             <SelectItem value="all">Loại: Tất cả</SelectItem>
             <SelectItem value="Lock">Lock</SelectItem>
             <SelectItem value="Qte">Quốc tế</SelectItem>
@@ -81,8 +81,8 @@ export function FilterBar({ productNames, colors, capacities, maxPrice }: Filter
         </Select>
 
         <Select value={colorFilter} onValueChange={setColorFilter}>
-          <SelectTrigger className="h-10 bg-white text-xs"><SelectValue placeholder="Màu" /></SelectTrigger>
-          <SelectContent className="bg-white">
+          <SelectTrigger className="h-10 bg-card text-xs"><SelectValue placeholder="Màu" /></SelectTrigger>
+          <SelectContent className="bg-card">
             <SelectItem value="all">Màu: Tất cả</SelectItem>
             {colors.map((color: string) => (
               <SelectItem key={color} value={color}>{color}</SelectItem>
@@ -91,8 +91,8 @@ export function FilterBar({ productNames, colors, capacities, maxPrice }: Filter
         </Select>
 
         <Select value={capacityFilter} onValueChange={setCapacityFilter}>
-          <SelectTrigger className="h-10 bg-white text-xs"><SelectValue placeholder="Dung lượng" /></SelectTrigger>
-          <SelectContent className="bg-white">
+          <SelectTrigger className="h-10 bg-card text-xs"><SelectValue placeholder="Dung lượng" /></SelectTrigger>
+          <SelectContent className="bg-card">
             <SelectItem value="all">Dung lượng: Tất cả</SelectItem>
             {capacities.map((cap: string) => (
               <SelectItem key={cap} value={cap}>{cap}</SelectItem>
@@ -101,10 +101,10 @@ export function FilterBar({ productNames, colors, capacities, maxPrice }: Filter
         </Select>
 
         <Select value={pinFilter} onValueChange={setPinFilter as any}>
-          <SelectTrigger className="h-10 bg-white text-xs">
+          <SelectTrigger className="h-10 bg-card text-xs">
             <SelectValue placeholder="Pin" />
           </SelectTrigger>
-          <SelectContent className="bg-white">
+          <SelectContent className="bg-card">
             <SelectItem value="all">Pin: Tất cả</SelectItem>
             <SelectItem value="100">Pin 100%</SelectItem>
             <SelectItem value="9x">Pin 9x (90-99)</SelectItem>
@@ -116,7 +116,7 @@ export function FilterBar({ productNames, colors, capacities, maxPrice }: Filter
       </div>
 
       <div className="pt-2 px-1">
-        <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
+        <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
           <span className="font-medium">Khoảng giá</span>
           <span>{priceRange[0].toLocaleString()} - {priceRange[1].toLocaleString()} VNĐ</span>
         </div>

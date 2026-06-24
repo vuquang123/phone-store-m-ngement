@@ -75,25 +75,25 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white max-w-md">
+      <DialogContent className="bg-card max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-blue-700">Gửi sản phẩm đi CNC</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label className="text-slate-500 text-xs">Sản phẩm đã chọn ({selectedProducts.length})</Label>
-            <ScrollArea className="h-[180px] w-full rounded-md border border-slate-100 bg-slate-50/50 p-2">
+            <Label className="text-muted-foreground text-xs">Sản phẩm đã chọn ({selectedProducts.length})</Label>
+            <ScrollArea className="h-[180px] w-full rounded-md border border-slate-100 bg-muted/50 p-2">
               <div className="space-y-2">
                 {selectedProducts.map((p, i) => (
-                  <div key={p.id || i} className="bg-white p-2 rounded border border-slate-100 shadow-sm text-xs">
+                  <div key={p.id || i} className="bg-card p-2 rounded border border-slate-100 shadow-sm text-xs">
                     <div className="flex justify-between items-start mb-1">
-                      <span className="font-semibold text-slate-800">{p.ten_san_pham}</span>
-                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-slate-200 text-slate-500 font-normal">
+                      <span className="font-semibold text-foreground">{p.ten_san_pham}</span>
+                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-border text-muted-foreground font-normal">
                         {p.tinh_trang || "N/A"}
                       </Badge>
                     </div>
-                    <div className="flex gap-2 text-slate-500">
+                    <div className="flex gap-2 text-muted-foreground">
                       <span>{p.mau_sac}</span>
                       <span>•</span>
                       <span>{p.dung_luong}</span>
@@ -110,10 +110,10 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
           <div className="space-y-2">
             <Label>Kiểu Dạng Sim</Label>
             <Select value={doSim} onValueChange={setDoSim}>
-              <SelectTrigger className="bg-white">
+              <SelectTrigger className="bg-card">
                 <SelectValue placeholder="Chọn kiểu dạng sim..." />
               </SelectTrigger>
-              <SelectContent className="bg-white">
+              <SelectContent className="bg-card">
                 <SelectItem value="Không rõ">Để trống</SelectItem>
                 <SelectItem value="Nguyên bản">Nguyên bản</SelectItem>
                 <SelectItem value="Sim ghép">Sim ghép</SelectItem>
@@ -130,10 +130,10 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
             {!isAddingNewAddress ? (
               <div className="flex gap-2">
                 <Select value={cncAddress} onValueChange={setCncAddress}>
-                  <SelectTrigger className="bg-white">
+                  <SelectTrigger className="bg-card">
                     <SelectValue placeholder="Chọn địa chỉ..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-white">
+                  <SelectContent className="bg-card">
                     {addresses.map(addr => (
                       <SelectItem key={addr.value} value={addr.value}>{addr.label}</SelectItem>
                     ))}

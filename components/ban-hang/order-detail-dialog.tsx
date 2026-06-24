@@ -247,7 +247,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
       case "huy":
         return "bg-red-100 text-red-800"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-muted text-foreground"
     }
   }
 
@@ -257,7 +257,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
     if (s.includes('chuyển khoản') || s.includes('chuyen khoan')) return 'bg-purple-100 text-purple-800'
     if (s.includes('thẻ') || s.includes('the')) return 'bg-orange-100 text-orange-800'
     if (s.includes('trả góp') || s.includes('tra gop') || s.includes('góp')) return 'bg-amber-100 text-amber-800'
-    return 'bg-gray-100 text-gray-800'
+    return 'bg-muted text-foreground'
   }
 
   // Tách các dòng thanh toán có số tiền từ chuỗi tổng hợp.
@@ -311,7 +311,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto bg-white">
+      <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto bg-card">
         <DialogHeader>
           <DialogTitle>Chi tiết đơn hàng</DialogTitle>
           <DialogDescription>Thông tin chi tiết về đơn hàng và sản phẩm</DialogDescription>
@@ -356,7 +356,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               <div>
                 <h3 className="text-lg font-semibold mb-2">Thông tin khách hàng</h3>
                 {order.khach_hang ? (
-                  <div className="p-3 border rounded-lg bg-white">
+                  <div className="p-3 border rounded-lg bg-card">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium">{order.khach_hang.ho_ten}</div>
@@ -364,10 +364,10 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                       </div>
                       <div className="flex gap-2">
                         {order.khach_hang.so_dien_thoai && (
-                          <a className="text-xs px-2 py-1 border rounded hover:bg-slate-50" href={`tel:${order.khach_hang.so_dien_thoai}`}>Gọi</a>
+                          <a className="text-xs px-2 py-1 border rounded hover:bg-accent" href={`tel:${order.khach_hang.so_dien_thoai}`}>Gọi</a>
                         )}
                         {order.khach_hang.so_dien_thoai && (
-                          <a className="text-xs px-2 py-1 border rounded hover:bg-slate-50" href={`sms:${order.khach_hang.so_dien_thoai}`}>SMS</a>
+                          <a className="text-xs px-2 py-1 border rounded hover:bg-accent" href={`sms:${order.khach_hang.so_dien_thoai}`}>SMS</a>
                         )}
                       </div>
                     </div>
@@ -413,7 +413,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                           ? 'bg-amber-100 text-amber-700'
                           : 'bg-emerald-100 text-emerald-700'
                       return (
-                        <div key={w.ma_hd + w.imei} className="rounded-xl border p-3 bg-white">
+                        <div key={w.ma_hd + w.imei} className="rounded-xl border p-3 bg-card">
                           <div className="flex items-center justify-between">
                             <div className="font-mono text-xs">{w.ma_hd}</div>
                             <span className={`px-2 py-0.5 rounded text-xs font-medium inline-block ${badgeClass}`}>
@@ -505,7 +505,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                   {(order.chi_tiet ?? []).map((item) => (
                     <Fragment key={item.id}>
                       {item.san_pham && (
-                        <div className="rounded-xl border p-3 bg-white">
+                        <div className="rounded-xl border p-3 bg-card">
                           <div className="font-medium">
                             {item.san_pham.ten_san_pham} {item.san_pham.loai_may}
                           </div>
@@ -579,7 +579,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                 }
                 const parts = Array.from(map.values())
                 return (
-                  <div className="mt-3 rounded-md border p-3 bg-slate-50">
+                  <div className="mt-3 rounded-md border p-3 bg-muted">
                     <div className="text-sm font-medium mb-1">Phụ kiện</div>
                     <ul className="list-disc pl-5 text-sm space-y-0.5">
                       {parts.map((it, i)=>(
@@ -621,7 +621,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                     const arr = parsePaymentBreakdown(order.phuong_thuc_thanh_toan || '')
                     if (!arr.length) return null
                     return (
-                      <div className="mt-1 text-sm text-slate-700 space-y-1">
+                      <div className="mt-1 text-sm text-foreground space-y-1">
                         {arr.map((p, i) => (
                           <div key={`pay-${i}`} className="flex items-center justify-between">
                             <span className="text-muted-foreground">{p.label}:</span>
@@ -751,7 +751,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               </div>
               {/* Sticky action bar for mobile */}
               {isMobile && (
-                <div className="md:hidden sticky bottom-0 left-0 right-0 bg-white border-t mt-2 py-3 flex justify-end">
+                <div className="md:hidden sticky bottom-0 left-0 right-0 bg-card border-t mt-2 py-3 flex justify-end">
                   <Button
                     disabled={returnLoading || !returnImei}
                     onClick={async () => {

@@ -22,10 +22,10 @@ export function MobileCheckoutBar({
   isLoading,
 }: MobileCheckoutBarProps) {
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 px-3 py-[10px]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)' }}>
+    <div className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 px-3 py-[10px]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)' }}>
       <div className="max-w-screen-md mx-auto flex items-center justify-between gap-3">
         <div className="text-sm">
-          <div className="text-slate-500">Thanh toán</div>
+          <div className="text-muted-foreground">Thanh toán</div>
           <div className="text-xl font-bold">₫{finalThanhToan.toLocaleString()}</div>
         </div>
         {mobileView === 'san-pham' && (

@@ -106,7 +106,7 @@ export default function DonHangPage() {
       case "huy":
         return "bg-red-100 text-red-800"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-muted text-foreground"
     }
   }
 
@@ -116,7 +116,7 @@ export default function DonHangPage() {
     if (s === 'chuyển khoản' || s === 'chuyen khoan') return 'bg-purple-100 text-purple-800'
     if (s === 'thẻ' || s === 'the') return 'bg-orange-100 text-orange-800'
     if (s === 'trả góp' || s === 'tra gop') return 'bg-amber-100 text-amber-800'
-    return 'bg-gray-100 text-gray-800'
+    return 'bg-muted text-foreground'
   }
 
   return (
@@ -166,7 +166,7 @@ export default function DonHangPage() {
             <div className="md:hidden space-y-3 mb-4">
               {/* Trạng thái */}
               <div>
-                <div className="text-xs text-slate-500 mb-1">Trạng thái</div>
+                <div className="text-xs text-muted-foreground mb-1">Trạng thái</div>
                 <div className="flex gap-2 overflow-x-auto">
                   {[
                     { key: "all", label: "Tất cả" },
@@ -176,7 +176,7 @@ export default function DonHangPage() {
                     <button
                       key={opt.key}
                       onClick={() => setTrangThai(opt.key)}
-                      className={`px-3 py-1 rounded-full text-sm border ${trangThai === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200"}`}
+                      className={`px-3 py-1 rounded-full text-sm border ${trangThai === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-card text-foreground border-border"}`}
                     >
                       {opt.label}
                     </button>
@@ -186,7 +186,7 @@ export default function DonHangPage() {
 
               {/* Loại đơn */}
               <div>
-                <div className="text-xs text-slate-500 mb-1">Loại đơn</div>
+                <div className="text-xs text-muted-foreground mb-1">Loại đơn</div>
                 <div className="flex gap-2 overflow-x-auto">
                   {[
                     { key: "all", label: "Tất cả" },
@@ -196,7 +196,7 @@ export default function DonHangPage() {
                     <button
                       key={opt.key}
                       onClick={() => setLoaiDonFilter(opt.key as any)}
-                      className={`px-3 py-1 rounded-full text-sm border ${loaiDonFilter === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200"}`}
+                      className={`px-3 py-1 rounded-full text-sm border ${loaiDonFilter === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-card text-foreground border-border"}`}
                     >
                       {opt.label}
                     </button>
@@ -206,7 +206,7 @@ export default function DonHangPage() {
 
               {/* Thời gian */}
               <div>
-                <div className="text-xs text-slate-500 mb-1">Thời gian</div>
+                <div className="text-xs text-muted-foreground mb-1">Thời gian</div>
                 <div className="flex gap-2 overflow-x-auto">
                   {[
                     { key: "all", label: "Tất cả" },
@@ -216,7 +216,7 @@ export default function DonHangPage() {
                     <button
                       key={opt.key}
                       onClick={() => setTimeFilter(opt.key as any)}
-                      className={`px-3 py-1 rounded-full text-sm border ${timeFilter === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200"}`}
+                      className={`px-3 py-1 rounded-full text-sm border ${timeFilter === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-card text-foreground border-border"}`}
                     >
                       {opt.label}
                     </button>
@@ -266,11 +266,11 @@ export default function DonHangPage() {
                       return true
                     })
                     .map(order => (
-                      <div key={order.ma_don_hang || order.id} className="rounded-xl border p-4 bg-white shadow-sm">
+                      <div key={order.ma_don_hang || order.id} className="rounded-xl border p-4 bg-card shadow-sm">
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <div className="text-sm text-slate-500">Mã đơn</div>
-                            <div className="font-semibold text-slate-900">{order.ma_don_hang || order.id}</div>
+                            <div className="text-sm text-muted-foreground">Mã đơn</div>
+                            <div className="font-semibold text-foreground">{order.ma_don_hang || order.id}</div>
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge className={getTrangThaiColor(order.trang_thai)}>
@@ -286,7 +286,7 @@ export default function DonHangPage() {
                             ))}
                           </div>
                         </div>
-                        <div className="mt-2 text-sm text-slate-700">
+                        <div className="mt-2 text-sm text-foreground">
                           {order.khach_hang ? (
                             <div>
                               <div className="font-medium">{order.khach_hang.ho_ten}</div>
@@ -297,9 +297,9 @@ export default function DonHangPage() {
                           )}
                         </div>
                         <div className="mt-2 flex items-center justify-between">
-                          <div className="text-slate-600 text-sm">{new Date(order.ngay_ban).toLocaleDateString("vi-VN")}</div>
+                          <div className="text-muted-foreground text-sm">{new Date(order.ngay_ban).toLocaleDateString("vi-VN")}</div>
                           <div className="text-right">
-                            <div className="font-semibold text-slate-900">₫{Number(order.thanh_toan || 0).toLocaleString()}</div>
+                            <div className="font-semibold text-foreground">₫{Number(order.thanh_toan || 0).toLocaleString()}</div>
                             {order.loai_don && (
                               <div className="text-xs text-muted-foreground">{order.loai_don}</div>
                             )}

@@ -111,19 +111,19 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white rounded-xl shadow-xl p-6 min-w-[350px] max-w-[600px] border border-slate-200">
+      <DialogContent className="bg-card rounded-xl shadow-xl p-6 min-w-[350px] max-w-[600px] border border-border">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-blue-700 mb-2">Thêm máy bảo hành ngoài kho</DialogTitle>
-          <p className="text-slate-500 text-sm mb-4">Nhập thông tin máy bảo hành ngoài kho để quản lý và theo dõi trạng thái.</p>
+          <p className="text-muted-foreground text-sm mb-4">Nhập thông tin máy bảo hành ngoài kho để quản lý và theo dõi trạng thái.</p>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Tên Sản Phẩm</Label>
+            <Label className="font-medium text-foreground">Tên Sản Phẩm</Label>
             <Select value={tenSanPham} onValueChange={v => setTenSanPham(v)}>
-              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-slate-800 font-medium">
+              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
                 <SelectValue placeholder="Chọn sản phẩm" />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-slate-200 shadow-lg text-slate-800">
+              <SelectContent className="bg-card border border-border shadow-lg text-foreground">
                 {productNames.map(name => (
                   <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
@@ -131,35 +131,35 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">IMEI</Label>
+            <Label className="font-medium text-foreground">IMEI</Label>
             <Input value={imei} onChange={e => setImei(e.target.value)} required placeholder="Nhập IMEI" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Màu Sắc</Label>
+            <Label className="font-medium text-foreground">Màu Sắc</Label>
             <Input value={mauSac} onChange={e => setMauSac(e.target.value)} placeholder="Nhập màu sắc" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Loại máy</Label>
+            <Label className="font-medium text-foreground">Loại máy</Label>
             <Select value={loaiMay} onValueChange={v => setLoaiMay(v)}>
-              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-slate-800 font-medium">
+              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
                 <SelectValue placeholder="Chọn loại máy" />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-slate-200 shadow-lg text-slate-800">
+              <SelectContent className="bg-card border border-border shadow-lg text-foreground">
                 <SelectItem value="Lock">Lock</SelectItem>
                 <SelectItem value="Qte">Qte</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Tình trạng</Label>
+            <Label className="font-medium text-foreground">Tình trạng</Label>
             <Input value={tinhTrang} onChange={e => setTinhTrang(e.target.value)} placeholder="Nhập tình trạng máy" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Lỗi sản phẩm</Label>
+            <Label className="font-medium text-foreground">Lỗi sản phẩm</Label>
             <Input value={loi} onChange={e => setLoi(e.target.value)} placeholder="Nhập lỗi sản phẩm" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Địa chỉ bảo hành</Label>
+            <Label className="font-medium text-foreground">Địa chỉ bảo hành</Label>
             <Select value={diaChiBaoHanh} onValueChange={val => {
               if (val === "__add__") {
                 setIsAddingBaoHanhAddress(true)
@@ -167,10 +167,10 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
                 setDiaChiBaoHanh(val)
               }
             }}>
-              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-slate-800 font-medium">
+              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
                 <SelectValue placeholder="Chọn địa chỉ bảo hành" />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-slate-200 shadow-lg text-slate-800">
+              <SelectContent className="bg-card border border-border shadow-lg text-foreground">
                 {typeof window !== 'undefined' && window.baoHanhAddresses && window.baoHanhAddresses.map((a: any) => (
                   <SelectItem key={a.value} value={a.value}>{a.label || a.value}</SelectItem>
                 ))}
@@ -209,11 +209,11 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
           <div className="flex flex-col gap-2 md:col-span-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
-                <Label className="font-medium text-slate-700">Tên khách hàng</Label>
+                <Label className="font-medium text-foreground">Tên khách hàng</Label>
                 <Input value={tenKhachHang} onChange={e => setTenKhachHang(e.target.value)} placeholder="Nhập tên khách hàng" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
               </div>
               <div className="flex flex-col gap-2">
-                <Label className="font-medium text-slate-700">Số điện thoại khách hàng</Label>
+                <Label className="font-medium text-foreground">Số điện thoại khách hàng</Label>
                 <Input value={soDienThoai} onChange={e => setSoDienThoai(e.target.value)} placeholder="Nhập số điện thoại" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
               </div>
             </div>

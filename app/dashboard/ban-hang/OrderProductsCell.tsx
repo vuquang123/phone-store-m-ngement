@@ -40,7 +40,7 @@ export default function OrderProductsCell({ orderId }: Props) {
               [{p.san_pham.imei || p.san_pham.serial}]
             </span>
           )}
-          {p.san_pham?.mau_sac && <span className="ml-2 text-slate-500">({p.san_pham.mau_sac})</span>}
+          {p.san_pham?.mau_sac && <span className="ml-2 text-muted-foreground">({p.san_pham.mau_sac})</span>}
         </div>
       ))}
       {showCompact && products.length > visibleCount && (

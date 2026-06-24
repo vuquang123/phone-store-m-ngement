@@ -124,7 +124,7 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onClose}>
-  <DialogContent className="sm:max-w-[600px] bg-white">
+  <DialogContent className="sm:max-w-[600px] bg-card">
         <DialogHeader>
           <DialogTitle>Chọn khách hàng</DialogTitle>
           <DialogDescription>Nhập tên hoặc số điện thoại để tìm khách; nếu không có sẽ hiện nút tạo mới.</DialogDescription>
@@ -197,7 +197,7 @@ export function CustomerSelectDialog({ isOpen, onClose, onSelect }: CustomerSele
               return (
               <div
                 key={itemKey}
-                className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${selectedCustomerId === customer.id ? 'bg-white border-primary' : 'hover:bg-muted/50 border-muted'} ${highlightIndex===idx ? 'ring-2 ring-primary' : ''}`}
+                className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${selectedCustomerId === customer.id ? 'bg-card border-primary' : 'hover:bg-muted/50 border-muted'} ${highlightIndex===idx ? 'ring-2 ring-primary' : ''}`}
                 onClick={() => handleSelect(customer)}
               >
                 <div>

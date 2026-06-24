@@ -56,9 +56,9 @@ export function ProductTable({
   totalCount
 }: ProductTableProps) {
   return (
-    <div className="rounded-md border border-slate-200 overflow-hidden bg-white shadow-sm">
+    <div className="rounded-md border border-border overflow-hidden bg-card shadow-sm">
       <Table>
-        <TableHeader className="bg-slate-50/80">
+        <TableHeader className="bg-muted/80">
           <TableRow>
             {isEditMode && (
               <TableHead className="w-12 text-center">
@@ -68,7 +68,7 @@ export function ProductTable({
                 />
               </TableHead>
             )}
-            <TableHead className="font-semibold text-slate-700">
+            <TableHead className="font-semibold text-foreground">
               <div className="flex items-center gap-2">
                 Sản phẩm
                 <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-100 py-0 leading-none h-5">
@@ -76,19 +76,19 @@ export function ProductTable({
                 </Badge>
               </div>
             </TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden md:table-cell">IMEI/Serial</TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden sm:table-cell">Loại</TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden lg:table-cell">Pin</TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden md:table-cell">Tình trạng</TableHead>
-            <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
+            <TableHead className="font-semibold text-foreground hidden md:table-cell">IMEI/Serial</TableHead>
+            <TableHead className="font-semibold text-foreground hidden sm:table-cell">Loại</TableHead>
+            <TableHead className="font-semibold text-foreground hidden lg:table-cell">Pin</TableHead>
+            <TableHead className="font-semibold text-foreground hidden md:table-cell">Tình trạng</TableHead>
+            <TableHead className="font-semibold text-foreground">Trạng thái</TableHead>
 
-            <TableHead className="font-semibold text-slate-700 text-right">Giá bán</TableHead>
+            <TableHead className="font-semibold text-foreground text-right">Giá bán</TableHead>
             {!isEditMode && <TableHead className="w-20"></TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.map((product) => (
-            <TableRow key={product.id} className="hover:bg-slate-50/50 transition-colors group">
+            <TableRow key={product.id} className="hover:bg-accent/50 transition-colors group">
               {isEditMode && (
                 <TableCell className="text-center">
                   <Checkbox 
@@ -99,11 +99,11 @@ export function ProductTable({
               )}
               <TableCell className="py-3">
                 <div className="flex flex-col">
-                  <span className="font-medium text-slate-900 leading-tight">{product.ten_san_pham}</span>
+                  <span className="font-medium text-foreground leading-tight">{product.ten_san_pham}</span>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-slate-500">{product.mau_sac}</span>
-                    <span className="text-xs text-slate-400">•</span>
-                    <span className="text-xs text-slate-500">{product.dung_luong}</span>
+                    <span className="text-xs text-muted-foreground">{product.mau_sac}</span>
+                    <span className="text-xs text-muted-foreground">•</span>
+                    <span className="text-xs text-muted-foreground">{product.dung_luong}</span>
                     {String(product.nguon || "").toLowerCase().includes("kho ngoài") ? (
                       <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 text-[10px] h-4 px-1 py-0 leading-none">Kho ngoài</Badge>
                     ) : (
@@ -119,20 +119,20 @@ export function ProductTable({
                   {/* Additional info for Mobile */}
                   <div className="flex flex-col gap-1 mt-2 md:hidden">
                     {(product.imei || product.serial) && (
-                      <span className="text-[10px] font-mono text-slate-500 bg-slate-50 self-start px-1 rounded">
+                      <span className="text-[10px] font-mono text-muted-foreground bg-muted self-start px-1 rounded">
                         {product.imei || product.serial}
                       </span>
                     )}
                     <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] h-4 py-0 px-1 leading-none font-normal">
+                      <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px] h-4 py-0 px-1 leading-none font-normal">
                         {getLoaiMayLabel(product.loai_may)}
                       </Badge>
                       {product.pin && (
-                        <span className="text-[10px] text-slate-500">Pin: {product.pin}%</span>
+                        <span className="text-[10px] text-muted-foreground">Pin: {product.pin}%</span>
                       )}
                     </div>
                     {product.tinh_trang && (
-                      <p className="text-[11px] text-slate-600 italic bg-orange-50/50 p-1 rounded border border-orange-100/50">
+                      <p className="text-[11px] text-muted-foreground italic bg-orange-50/50 p-1 rounded border border-orange-100/50">
                         {product.tinh_trang}
                       </p>
                     )}
@@ -140,30 +140,30 @@ export function ProductTable({
                 </div>
               </TableCell>
               <TableCell className="hidden md:table-cell">
-                <div className="flex flex-col text-xs font-mono text-slate-600">
+                <div className="flex flex-col text-xs font-mono text-muted-foreground">
                   {product.imei ? (
                     <span>{product.imei}</span>
                   ) : product.serial ? null : (
                     <span>-</span>
                   )}
                   {product.serial && (
-                    <span className={product.imei ? "text-slate-400" : "text-slate-600"}>
+                    <span className={product.imei ? "text-muted-foreground" : "text-muted-foreground"}>
                       {product.serial}
                     </span>
                   )}
                 </div>
               </TableCell>
               <TableCell className="hidden sm:table-cell">
-                <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-100">
+                <Badge variant="secondary" className="bg-muted text-muted-foreground hover:bg-accent">
                   {getLoaiMayLabel(product.loai_may)}
                 </Badge>
               </TableCell>
               <TableCell className="hidden lg:table-cell">
-                <span className="text-sm font-medium text-slate-700">{product.pin ? `${product.pin}%` : "-"}</span>
+                <span className="text-sm font-medium text-foreground">{product.pin ? `${product.pin}%` : "-"}</span>
               </TableCell>
 
               <TableCell className="hidden md:table-cell">
-                <span className="text-sm text-slate-600">{product.tinh_trang || "-"}</span>
+                <span className="text-sm text-muted-foreground">{product.tinh_trang || "-"}</span>
               </TableCell>
               <TableCell>
                 <Badge className={`${getTrangThaiColor(product.trang_thai)} border-none text-[11px]`}>
@@ -177,7 +177,7 @@ export function ProductTable({
                     {(product.gia_ban - (product.giam_gia || 0)).toLocaleString()}
                   </span>
                   {(product.giam_gia || 0) > 0 && (
-                    <span className="text-[10px] text-slate-400 line-through">
+                    <span className="text-[10px] text-muted-foreground line-through">
                       {product.gia_ban.toLocaleString()}
                     </span>
                   )}
@@ -195,7 +195,7 @@ export function ProductTable({
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-8 w-8 text-slate-400 hover:text-orange-500"
+                      className="h-8 w-8 text-muted-foreground hover:text-orange-500"
                       title="Gửi CNC"
                       onClick={() => onSendCNC?.(product)}
                     >
@@ -204,7 +204,7 @@ export function ProductTable({
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-8 w-8 text-slate-400 hover:text-purple-600"
+                      className="h-8 w-8 text-muted-foreground hover:text-purple-600"
                       title="Giao đối tác"
                       onClick={() => onSendPartner?.(product)}
                     >
@@ -214,7 +214,7 @@ export function ProductTable({
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-8 w-8 text-slate-400 hover:text-blue-600"
+                        className="h-8 w-8 text-muted-foreground hover:text-blue-600"
                         onClick={() => onViewCustomer(product)}
                       >
                         <Eye className="h-4 w-4" />
@@ -227,7 +227,7 @@ export function ProductTable({
           ))}
           {products.length === 0 && (
             <TableRow>
-              <TableCell colSpan={isEditMode ? 9 : 8} className="h-32 text-center text-slate-500">
+              <TableCell colSpan={isEditMode ? 9 : 8} className="h-32 text-center text-muted-foreground">
 
                 Không tìm thấy sản phẩm nào phù hợp.
               </TableCell>

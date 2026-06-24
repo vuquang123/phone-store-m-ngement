@@ -103,13 +103,13 @@ export default function CustomerPurchasesDialog({ isOpen, onClose, phone }: Prop
                   <div className="flex items-start justify-between">
                     <div className="font-medium">{it.ten_san_pham || 'Thiết bị'}</div>
                     {typeof it.gia_ban === 'number' && it.gia_ban > 0 && (
-                      <div className="text-sm font-medium text-slate-800 ml-4">₫{Number(it.gia_ban).toLocaleString('vi-VN')}</div>
+                      <div className="text-sm font-medium text-foreground ml-4">₫{Number(it.gia_ban).toLocaleString('vi-VN')}</div>
                     )}
                   </div>
                   <div className="mt-1">
                     {it.imei && <div className="text-xs font-mono text-muted-foreground">IMEI: {it.imei}</div>}
                     {it.serial && <div className="text-xs font-mono text-muted-foreground">Serial: {it.serial}</div>}
-                    {it.ngay_xuat && <div className="text-xs text-slate-500 mt-1">{it.ngay_xuat}</div>}
+                    {it.ngay_xuat && <div className="text-xs text-muted-foreground mt-1">{it.ngay_xuat}</div>}
                   </div>
                 </div>
               ))}
