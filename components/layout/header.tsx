@@ -96,7 +96,7 @@ export function Header({ title, onMenuClick }: HeaderProps) {
     "U"
 
   return (
-    <header className="border-b border-border bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 shadow-sm">
+    <header className="border-b border-border bg-sidebar/80 backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/60 shadow-sm">
       <div className="flex h-14 sm:h-16 items-center justify-between px-3 sm:px-6">
         <div className="flex items-center gap-3">
           {/* Toggle sidebar: thu gọn ở desktop, mở drawer ở mobile */}

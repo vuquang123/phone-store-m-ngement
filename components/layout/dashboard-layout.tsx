@@ -15,7 +15,7 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
   return (
     <SidebarProvider className="h-dvh">
       <AppSidebar />
-      <SidebarInset className="flex h-dvh min-h-0 flex-col overflow-hidden">
+      <SidebarInset className="flex h-dvh min-h-0 flex-col overflow-hidden bg-sidebar">
         <Header title={title} />
         <main className="flex-1 overflow-y-auto no-scrollbar overscroll-none p-3 sm:p-6">{children}</main>
       </SidebarInset>
