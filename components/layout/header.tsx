@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter, usePathname } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -25,11 +25,31 @@ interface HeaderProps {
   onMenuClick?: () => void
 }
 
+// Tiêu đề hiển thị theo route (khớp tên mục sidebar) — khớp prefix cụ thể nhất trước
+const PAGE_TITLES: [string, string][] = [
+  ["/dashboard/ban-hang/don-hang", "Đơn hàng"],
+  ["/dashboard/kho-hang", "Kho hàng"],
+  ["/dashboard/ban-hang", "Bán hàng"],
+  ["/dashboard/khach-hang", "Khách hàng"],
+  ["/dashboard/hoan-tra", "Hoàn trả"],
+  ["/dashboard/nhan-vien", "Nhân viên"],
+  ["/dashboard/thong-bao", "Thông báo"],
+  ["/dashboard/cai-dat", "Cài đặt"],
+  ["/dashboard/huong-dan", "Hướng dẫn"],
+  ["/dashboard", "Dashboard"],
+]
+
 export function Header({ title, onMenuClick }: HeaderProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { me, isLoading, error } = useAuthMe()
   const [logoUrl, setLogoUrl] = useState<string>("")
   const { toast } = useToast()
+
+  const pageTitle = useMemo(() => {
+    const found = PAGE_TITLES.find(([p]) => pathname === p || pathname.startsWith(p + "/"))
+    return found ? found[1] : title || "Dashboard"
+  }, [pathname, title])
 
   useEffect(() => {
     if (!isLoading && (!me || error)) {
@@ -109,8 +129,8 @@ export function Header({ title, onMenuClick }: HeaderProps) {
             />
           ) : null}
           <div>
-            <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
-              {title}
+            <h1 className="text-lg sm:text-xl font-bold text-foreground">
+              {pageTitle}
             </h1>
             <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">{todayStr}</p>
           </div>
