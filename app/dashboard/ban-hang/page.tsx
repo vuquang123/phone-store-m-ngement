@@ -737,7 +737,11 @@ export default function BanHangPage() {
           }
           setCart([])
           setGiamGia(0)
+          setGiamGiaInput("")
           setGhiChu("")
+          setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false)
+          setCashAmount(0); setTransferAmount(0); setCardAmount(0)
+          setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0)
           setCurrentDepositOrderId(dc.id_don_hang || dc.id || null)
           try { localStorage.removeItem('cart_draft_v1'); localStorage.removeItem('cart_warranty_sel_v1') } catch{}
           toast({ title: 'Đặt cọc thành công', description: `Mã: ${dc.id_don_hang || dc.id || ''}` })
@@ -965,8 +969,10 @@ export default function BanHangPage() {
           setGiamGia(0);
           setGhiChu("");
           setDiaChiNhan("");
+          setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false);
           setCashAmount(0); setTransferAmount(0); setCardAmount(0);
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0);
+          setGiamGiaInput("");
           try {
             if (currentDepositOrderId) {
               await fetch('/api/dat-coc', {

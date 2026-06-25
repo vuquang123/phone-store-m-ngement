@@ -33,6 +33,7 @@ const PAGE_TITLES: [string, string][] = [
   ["/dashboard/ban-hang", "Bán hàng"],
   ["/dashboard/khach-hang", "Khách hàng"],
   ["/dashboard/hoan-tra", "Hoàn trả"],
+  ["/dashboard/tien-mat", "Quỹ tiền mặt"],
   ["/dashboard/nhan-vien", "Nhân viên"],
   ["/dashboard/thong-bao", "Thông báo"],
   ["/dashboard/cai-dat", "Cài đặt"],

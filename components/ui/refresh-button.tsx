@@ -16,7 +16,6 @@ interface RefreshButtonProps {
 export function RefreshButton({ onRefresh, loading, className, label }: RefreshButtonProps) {
   return (
     <Button
-      type="button"
       variant="outline"
       size={label ? "sm" : "icon"}
       onClick={() => onRefresh()}

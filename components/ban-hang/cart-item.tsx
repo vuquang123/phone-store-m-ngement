@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { CheckCircle, Plus, Minus, Trash2, Pencil, Check, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { getLoaiMayLabel } from "@/lib/utils/inventory-helpers"
 
 interface CartItemRowProps {
   item: CartItem
@@ -47,6 +48,13 @@ export function CartItemRow({
     <div className="grid grid-cols-1 sm:grid-cols-[1.4fr_1fr_0.9fr_0.9fr_auto] gap-2 items-start sm:items-center border rounded-lg p-3 sm:p-2.5 bg-card shadow-sm">
       <div className="min-w-0">
         <p className="font-medium truncate" title={item.ten_san_pham}>{item.ten_san_pham}</p>
+        {item.type === 'product' && (item.dung_luong || item.mau_sac || item.loai_may) && (
+          <p className="text-[11px] text-muted-foreground">
+            {[item.dung_luong, item.mau_sac, item.loai_may ? getLoaiMayLabel(item.loai_may) : '']
+              .filter(Boolean)
+              .join(' • ')}
+          </p>
+        )}
         {(item.imei || item.serial) && (
           <p className="text-[11px] text-muted-foreground font-mono">{item.imei ? 'IMEI' : 'Serial'}: {item.imei || item.serial}</p>
         )}

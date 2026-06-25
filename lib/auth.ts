@@ -78,13 +78,24 @@ export async function verifySession(token: string): Promise<SessionUser | null> 
  * Lưu ý: an toàn vì các header này LUÔN bị middleware ghi đè bằng giá trị lấy
  * từ JWT đã verify — client không thể tự gửi header giả để qua mặt.
  */
+// Middleware encode header có ký tự >255 (tên tiếng Việt) bằng encodeURIComponent.
+// Giải mã lại khi đọc để có giá trị gốc ("D%C5%A9ng" -> "Dũng").
+function headerDecode(v: string | null): string | undefined {
+  if (v == null) return undefined
+  try {
+    return /%[0-9A-Fa-f]{2}/.test(v) ? decodeURIComponent(v) : v
+  } catch {
+    return v
+  }
+}
+
 export function getServerUser(req: { headers: Headers }): SessionUser | null {
-  const email = req.headers.get(HDR_EMAIL)
+  const email = headerDecode(req.headers.get(HDR_EMAIL))
   if (!email) return null
   return {
     email,
-    role: req.headers.get(HDR_ROLE) || "",
-    name: req.headers.get(HDR_NAME) || undefined,
-    employeeId: req.headers.get(HDR_EMPLOYEE) || undefined,
+    role: headerDecode(req.headers.get(HDR_ROLE)) || "",
+    name: headerDecode(req.headers.get(HDR_NAME)) || undefined,
+    employeeId: headerDecode(req.headers.get(HDR_EMPLOYEE)) || undefined,
   }
 }

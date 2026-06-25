@@ -503,7 +503,7 @@ export default function KhoHangPage() {
                 >
                   <ListChecks className="w-4 h-4" />
                 </Button>
-                <RefreshButton onRefresh={handleRefresh} loading={refreshing} />
+                <RefreshButton onRefresh={handleRefresh} loading={refreshing} className="h-10 w-10" />
               </div>
               {isEditMode && selectedIds.length > 0 && (
                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">

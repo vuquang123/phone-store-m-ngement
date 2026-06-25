@@ -27,7 +27,7 @@ interface Order {
   trang_thai: string
   ngay_ban: string
   khach_hang?: { ho_ten: string; so_dien_thoai: string }
-  nhan_vien?: { id: string }
+  nhan_vien?: { id?: string; name?: string; role?: string }
   loai_don?: string
   hinh_thuc_van_chuyen?: string
   imeis?: string[]
@@ -421,7 +421,20 @@ export default function DonHangPage() {
                             <TableCell>
                               <OrderProductsCell orderId={order.ma_don_hang || order.id} />
                             </TableCell>
-                            <TableCell>{order.nhan_vien?.id || "N/A"}</TableCell>
+                            <TableCell>
+                              {order.nhan_vien?.name || order.nhan_vien?.id ? (
+                                <div>
+                                  <div className="font-medium">{order.nhan_vien?.name || order.nhan_vien?.id}</div>
+                                  {order.nhan_vien?.role && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {order.nhan_vien.role === "quan_ly" ? "Quản lý" : "Nhân viên"}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                "N/A"
+                              )}
+                            </TableCell>
                             {/* <TableCell>₫{Number(order.tong_tien || 0).toLocaleString()}</TableCell> */}
                             <TableCell>
                               <div>

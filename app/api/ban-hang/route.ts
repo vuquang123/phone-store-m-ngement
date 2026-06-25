@@ -8,6 +8,8 @@ import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
 import { Journal } from "@/lib/tx/journal"
 import { peekIdempotentDone, beginIdempotent, completeIdempotent, failIdempotent } from "@/lib/tx/idempotency"
+import { recordCashTransaction } from "@/lib/cash"
+import { getServerUser } from "@/lib/auth"
 
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
@@ -242,7 +244,43 @@ export async function GET(request: NextRequest) {
     const idx = idxBanHang(header)
     const idxLoaiDon = header.indexOf("Loại Đơn")
     const idxTrangThai = colIndex(header, "Trạng Thái", "trang_thai")
-    
+
+    // Tra USERS để hiển thị ĐÚNG tên + vai trò người bán (cột "Người Bán" có thể là
+    // ID/email/tên — đôi khi bị URL-encode "D%C5%A9ng"). Resolve về { id, name, role }.
+    const normName = (s: any) =>
+      String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").trim().toLowerCase()
+    const usersById = new Map<string, any>()
+    const usersByEmail = new Map<string, any>()
+    const usersByName = new Map<string, any>()
+    try {
+      const { header: UH, rows: UR } = await readFromGoogleSheets("USERS", undefined, { force })
+      const uId = colIndex(UH, "ID Nhân Viên")
+      const uEmail = colIndex(UH, "Email")
+      const uName = colIndex(UH, "Tên", "Ten", "Name")
+      const uRole = colIndex(UH, "Vai Trò", "Vai Tro", "Role")
+      for (const r of UR) {
+        const rec = {
+          id: uId !== -1 ? String(r[uId] || "") : "",
+          name: uName !== -1 ? String(r[uName] || "") : "",
+          role: uRole !== -1 ? String(r[uRole] || "").trim().toLowerCase() : "",
+          email: uEmail !== -1 ? String(r[uEmail] || "") : "",
+        }
+        if (rec.id) usersById.set(rec.id, rec)
+        if (rec.email) usersByEmail.set(rec.email.toLowerCase(), rec)
+        if (rec.name) usersByName.set(normName(rec.name), rec)
+      }
+    } catch (e) {
+      console.warn("[BAN-HANG GET] đọc USERS để resolve người bán lỗi (bỏ qua):", e)
+    }
+    const resolveSeller = (raw: any) => {
+      let v = String(raw || "")
+      if (!v) return undefined
+      try { if (/%[0-9A-Fa-f]{2}/.test(v)) v = decodeURIComponent(v) } catch {}
+      const u = usersById.get(v) || usersByEmail.get(v.toLowerCase()) || usersByName.get(normName(v))
+      if (u) return { id: u.id || v, name: u.name || v, role: u.role || "" }
+      return { id: v, name: v, role: "" }
+    }
+
     // Group rows by order ID
     const groupedOrdersMap = new Map<string, any[]>()
     
@@ -274,7 +312,7 @@ export async function GET(request: NextRequest) {
         hinh_thuc_thanh_toan: row[idx.hinhThucTT],
         gia_nhap: row[idx.giaNhap],
         lai: row[idx.lai],
-        nhan_vien: row[idx.nguoiBan] ? { id: row[idx.nguoiBan] } : undefined,
+        nhan_vien: resolveSeller(row[idx.nguoiBan]),
         loai_don: idxLoaiDon !== -1 ? row[idxLoaiDon] : "",
         trang_thai: idxTrangThai !== -1 ? row[idxTrangThai] : "hoan_thanh",
       })
@@ -999,6 +1037,32 @@ export async function POST(request: NextRequest) {
   }
     } catch (err) {
       console.error("Lỗi gửi thông báo Telegram:", err)
+    }
+
+    // ===== Cộng TIỀN MẶT vào QUỸ khi đơn có thanh toán tiền mặt (best-effort) =====
+    // VD: khách trả 10tr (5tr CK + 5tr tiền mặt) -> +5tr vào quỹ. Nguồn: khách offline/online.
+    try {
+      const payments = Array.isArray(body.payments) ? body.payments : []
+      const cashAmount = payments.reduce((s: number, p: any) => {
+        const m = String(p?.method || p?.label || "").toLowerCase()
+        const isCash = m.includes("tiền mặt") || m.includes("tien mat") || m.includes("cash")
+        return isCash ? s + (Number(p?.amount) || 0) : s
+      }, 0)
+      if (cashAmount > 0) {
+        const seller = getServerUser(request)
+        const rawLoaiDon = String(body.loai_don || body["Loại Đơn"] || "")
+        const isOnline = /onl|online/i.test(rawLoaiDon)
+        await recordCashTransaction({
+          loai: "thu",
+          so_tien: cashAmount,
+          nguon: isOnline ? "khach_online" : "khach_offline",
+          ma_tham_chieu: idDonHang,
+          ly_do: "Khách thanh toán",
+          nhan_vien: seller?.name || seller?.email || body.employeeName || body.employeeId || "",
+        })
+      }
+    } catch (err) {
+      console.warn("[CASH] Cộng quỹ tiền mặt từ đơn bán lỗi (bỏ qua):", err)
     }
 
     /* =================== WARRANTY (Optional) =================== */

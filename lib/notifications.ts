@@ -1,6 +1,6 @@
 import { readFromGoogleSheets, appendToGoogleSheets, syncToGoogleSheets, updateRangeValues } from "./google-sheets"
 
-export type NotificationType = "ban_hang" | "kho_hang" | "he_thong" | "canh_bao" | "hoan_tra"
+export type NotificationType = "ban_hang" | "kho_hang" | "he_thong" | "canh_bao" | "hoan_tra" | "tien_mat"
 export type NotificationStatus = "chua_doc" | "da_doc"
 
 export interface NotificationItem {

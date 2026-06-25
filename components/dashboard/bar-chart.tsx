@@ -1,6 +1,7 @@
 "use client"
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Line, Chart as MixedChart } from "react-chartjs-2"
 // Auto-register all controllers/scales/elements once (prevents 'category' or 'bar' not registered' in prod)
 import "chart.js/auto"
@@ -30,9 +31,9 @@ interface BarChartProps {
 }
 
 // Style dùng chung cho các select để hàng filter cân đối
-const SELECT_CLS =
-  "h-9 min-w-[112px] rounded-full border bg-background px-2 text-sm font-semibold text-foreground shadow-sm " +
-  "focus:outline-none focus:ring-2 focus:ring-ring"
+// Style cho SelectTrigger (shadcn) — pill bo tròn, w-auto (ghi đè w-full mặc định)
+// để các select nằm gọn trên CÙNG 1 hàng ngang.
+const SELECT_TRIGGER_CLS = "h-9 w-auto shrink-0 rounded-full font-semibold shadow-sm"
 
 // Thẻ thống kê đồng nhất (label + value, accent màu) — đảm bảo 4 thẻ cân xứng
 const StatCard = ({
@@ -286,66 +287,66 @@ const BarChartComponent = ({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <CardTitle className="text-2xl">Biểu đồ thống kê</CardTitle>
 
-          {/* Hàng filter: năm / tháng / khoảng ngày — wrap đều, cùng style */}
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              className={SELECT_CLS}
-              value={selectedYear}
-              onChange={(e) => onYearChange?.(Number(e.target.value))}
-              aria-label="Chọn năm"
-            >
-              {Array.from({ length: 7 }, (_, i) => 2020 + i).map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
+          {/* Hàng filter: năm / tháng / khoảng ngày — gọn trên 1 hàng ngang */}
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <Select value={String(selectedYear)} onValueChange={(v) => onYearChange?.(Number(v))}>
+              <SelectTrigger className={SELECT_TRIGGER_CLS} aria-label="Chọn năm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 7 }, (_, i) => 2020 + i).map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-            <select
-              className={SELECT_CLS}
-              value={selectedMonth}
-              onChange={(e) => onMonthChange?.(Number(e.target.value))}
-              aria-label="Chọn tháng"
-            >
-              <option value={0}>Cả năm</option>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m}>
-                  Tháng {m}
-                </option>
-              ))}
-            </select>
+            <Select value={String(selectedMonth)} onValueChange={(v) => onMonthChange?.(Number(v))}>
+              <SelectTrigger className={SELECT_TRIGGER_CLS} aria-label="Chọn tháng">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Cả năm</SelectItem>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                  <SelectItem key={m} value={String(m)}>
+                    Tháng {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             {/* Bộ lọc theo ngày: chỉ hiện khi xem theo tháng */}
             {isMonthView && (
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-muted-foreground">Ngày</span>
-                <select
-                  className={SELECT_CLS + " min-w-[84px]"}
-                  value={dayFrom}
-                  onChange={(e) => handleFromChange(Number(e.target.value))}
-                  aria-label="Từ ngày"
-                >
-                  {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-muted-foreground">–</span>
-                <select
-                  className={SELECT_CLS + " min-w-[84px]"}
-                  value={effectiveTo}
-                  onChange={(e) => setDayTo(Number(e.target.value))}
-                  aria-label="Đến ngày"
-                >
-                  {Array.from({ length: daysInMonth }, (_, i) => i + 1)
-                    .filter((d) => d >= dayFrom)
-                    .map((d) => (
-                      <option key={d} value={d}>
+                <Select value={String(dayFrom)} onValueChange={(v) => handleFromChange(Number(v))}>
+                  <SelectTrigger className={SELECT_TRIGGER_CLS + " min-w-[84px]"} aria-label="Từ ngày">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
+                      <SelectItem key={d} value={String(d)}>
                         {d}
-                      </option>
+                      </SelectItem>
                     ))}
-                </select>
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground">–</span>
+                <Select value={String(effectiveTo)} onValueChange={(v) => setDayTo(Number(v))}>
+                  <SelectTrigger className={SELECT_TRIGGER_CLS + " min-w-[84px]"} aria-label="Đến ngày">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: daysInMonth }, (_, i) => i + 1)
+                      .filter((d) => d >= dayFrom)
+                      .map((d) => (
+                        <SelectItem key={d} value={String(d)}>
+                          {d}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
                 {isDayFiltered && (
                   <button
                     type="button"

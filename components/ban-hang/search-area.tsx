@@ -243,6 +243,7 @@ export function SearchArea({
                         IMEI/Seri {sortKey === 'imei_loai' && <span>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
                       </TableHead>
                       <TableHead>Loại</TableHead>
+                      <TableHead>Dạng Sim</TableHead>
                       <TableHead>Pin</TableHead>
                       <TableHead>Tình trạng</TableHead>
                       <TableHead className="cursor-pointer" onClick={() => toggleSort('trang_thai')}>
@@ -257,7 +258,7 @@ export function SearchArea({
                     {isSearching && sortedSearchResults.length === 0 ? (
                       Array.from({ length: 8 }).map((_, i) => (
                         <TableRow key={`skeleton-${i}`}>
-                          <TableCell colSpan={9}><div className="h-8 w-full bg-muted animate-pulse rounded" /></TableCell>
+                          <TableCell colSpan={10}><div className="h-8 w-full bg-muted animate-pulse rounded" /></TableCell>
                         </TableRow>
                       ))
                     ) : (
@@ -325,6 +326,14 @@ export function SearchArea({
                                   {getLoaiMayLabel(product.loai_may)}
                                 </Badge>
                               )}
+                            </TableCell>
+                            {/* Dạng Sim */}
+                            <TableCell className="px-3 py-2 whitespace-nowrap align-top">
+                              {!isAccessory && product.do_sim ? (
+                                <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/15 dark:text-orange-400 dark:border-transparent text-[10px] h-5 px-1.5 py-0 leading-none">
+                                  {product.do_sim}
+                                </Badge>
+                              ) : <span className="text-muted-foreground">-</span>}
                             </TableCell>
                             {/* Pin */}
                             <TableCell className="px-3 py-2 whitespace-nowrap align-top">
