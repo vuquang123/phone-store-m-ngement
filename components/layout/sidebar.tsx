@@ -30,6 +30,7 @@ import {
   BookOpen,
   Receipt,
   Wallet,
+  Truck,
 } from "lucide-react"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
@@ -55,6 +56,7 @@ const getNavigation = () => [
       { title: "Khách hàng", href: "/dashboard/khach-hang", icon: Users, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Hoàn trả", href: "/dashboard/hoan-tra", icon: RotateCcw, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Quỹ tiền mặt", href: "/dashboard/tien-mat", icon: Wallet, roles: ["quan_ly", "nhan_vien"] as Role[] },
+      { title: "Đơn online", href: "/dashboard/don-online", icon: Truck, roles: ["quan_ly", "nhan_vien"] as Role[] },
     ],
   },
   {

@@ -4,7 +4,7 @@ import { ProtectedRoute } from "@/components/auth/protected-route"
 import { useState } from "react"
 import { BarChart } from "@/components/dashboard/bar-chart"
 import { StatsCards } from "@/components/dashboard/stats-cards"
-import { RecentActivities } from "@/components/dashboard/recent-activities"
+import { RecentSummaries } from "@/components/dashboard/recent-summaries"
 import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,7 +36,6 @@ export default function DashboardPage() {
   // Dữ liệu tổng cho các phần khác
   const {
     stats: rawStats,
-    activities = [],
     isLoading = false,
     error = "",
   } = useDashboardStats() || {}
@@ -112,48 +111,11 @@ export default function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <Button asChild className="h-20 lg:h-24 flex-col gap-1 text-center">
-                    <Link href="/dashboard/kho-hang">
-                      <Package className="h-6 lg:h-8 w-6 lg:w-8" />
-                      <span className="font-semibold text-sm lg:text-base">Thêm sản phẩm</span>
-                      <span className="text-xs opacity-80">Bổ sung hàng vào kho</span>
-                    </Link>
-                  </Button>
-
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="h-20 lg:h-24 flex-col gap-1 bg-transparent text-center"
-                  >
-                    <Link href="/dashboard/khach-hang">
-                      <Users className="h-6 lg:h-8 w-6 lg:w-8" />
-                      <span className="font-semibold text-sm lg:text-base">Thêm khách hàng</span>
-                      <span className="text-xs opacity-80">Tạo hồ sơ để theo dõi</span>
-                    </Link>
-                  </Button>
-
-                  <Button
-                    asChild
-                    variant="secondary"
-                    className="h-20 lg:h-24 flex-col gap-1 text-center sm:col-span-2 lg:col-span-1"
-                  >
-                    <Link href="/dashboard/ban-hang">
-                      <ShoppingCart className="h-6 lg:h-8 w-6 lg:w-8" />
-                      <span className="font-semibold text-sm lg:text-base">Tạo đơn hàng</span>
-                      <span className="text-xs opacity-80">Bắt đầu phiên bán</span>
-                    </Link>
-                  </Button>
-                </div>
+                
               </CardContent>
             </Card>
           ) : (
-            <>
-
-              <div className="grid gap-6 lg:grid-cols-1">
-                <RecentActivities activities={activities ?? []} />
-              </div>
-            </>
+            <RecentSummaries />
           )}
         </div>
       </TooltipProvider>

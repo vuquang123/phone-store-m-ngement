@@ -1,5 +1,13 @@
+// Ưu tiên IPv4 khi phân giải DNS để tránh fetch ETIMEDOUT tới api.telegram.org
+// trên server có IPv6 cấu hình lỗi (Node mặc định thử IPv6 trước -> treo ~25s).
+// File này chỉ chạy phía server nên dùng node:dns an toàn.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("node:dns").setDefaultResultOrder("ipv4first")
+} catch {}
+
 type OrderType = "online" | "offline" | "return" | "deposit" | string
-interface TelegramOptions { message_thread_id?: number }
+interface TelegramOptions { message_thread_id?: number; chat_id?: number }
 
 type StockEvent =
   | { type: "import"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
@@ -117,7 +125,7 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
   try {
     const botToken = getBotToken()
     // choose chat id from mapping, fallback to default
-    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
+    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
     // choose topic/thread id based on orderType defaults, can be overridden by options.message_thread_id
     let messageThreadId = 9 // default thread for offline
     if (orderType === "online") messageThreadId = 7
@@ -175,7 +183,7 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
 export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = getBotToken()
-    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
+    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
     // choose thread id defaults
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7
@@ -237,7 +245,7 @@ export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'i
 export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = getBotToken()
-    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
+    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
@@ -284,7 +292,7 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
 export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: string[], captions?: string[], orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = getBotToken()
-    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
+    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334

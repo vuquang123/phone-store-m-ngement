@@ -26,11 +26,12 @@ export function InventoryStats({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <Card className="p-4 bg-card border-border shadow-sm">
-        <div className="flex items-start gap-3">
-          <div className="bg-muted p-2 rounded-lg">📲</div>
-          <div className="flex-1">
-            <div className="text-sm font-bold text-foreground mb-2">Sản phẩm hệ thống</div>
-            <div className="grid grid-cols-4 gap-2">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="bg-muted p-2 rounded-lg leading-none">📲</div>
+            <div className="text-sm font-bold text-foreground">Sản phẩm hệ thống</div>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
               <button
                 onClick={() => setActiveTab("san-pham")}
                 className="flex flex-col items-center p-2 bg-muted/50 rounded-lg border border-border hover:bg-muted transition-colors"
@@ -61,15 +62,15 @@ export function InventoryStats({
               </button>
             </div>
           </div>
-        </div>
       </Card>
 
       <Card className="p-4 bg-card border-border shadow-sm">
-        <div className="flex items-start gap-3">
-          <div className="bg-muted p-2 rounded-lg">📦</div>
-          <div className="flex-1">
-            <div className="text-sm font-bold text-foreground mb-2">Trạng thái phụ kiện</div>
-            <div className="grid grid-cols-2 gap-2">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="bg-muted p-2 rounded-lg leading-none">📦</div>
+            <div className="text-sm font-bold text-foreground">Trạng thái phụ kiện</div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setActiveTab("phu-kien")}
                 className="flex flex-col items-center p-2 bg-muted/50 rounded-lg border border-border hover:bg-muted transition-colors"
@@ -86,7 +87,6 @@ export function InventoryStats({
               </button>
             </div>
           </div>
-        </div>
       </Card>
     </div>
   )

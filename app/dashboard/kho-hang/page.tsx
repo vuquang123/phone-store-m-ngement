@@ -507,13 +507,13 @@ export default function KhoHangPage() {
               </div>
               {isEditMode && selectedIds.length > 0 && (
                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">
-                  <Badge variant="secondary" className="px-3 py-1 bg-blue-50 text-blue-700 border-blue-100">
+                  <Badge variant="secondary" className="h-9 rounded-md px-3">
                     Đã chọn {selectedIds.length}
                   </Badge>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="text-orange-600 bg-orange-50 hover:bg-orange-100 border-orange-200"
+                    className="h-9 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-700 dark:border-amber-500/40 dark:text-amber-400 dark:hover:bg-amber-500/10 dark:hover:text-amber-300"
                     onClick={() => setIsSendCNCDialogOpen(true)}
                   >
                     Gửi CNC
@@ -521,22 +521,22 @@ export default function KhoHangPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="text-purple-600 bg-purple-50 hover:bg-purple-100 border-purple-200"
+                    className="h-9 border-purple-300 text-purple-700 hover:bg-purple-50 hover:text-purple-700 dark:border-purple-500/40 dark:text-purple-400 dark:hover:bg-purple-500/10 dark:hover:text-purple-300"
                     onClick={() => setIsSendPartnerDialogOpen(true)}
                   >
                     Giao đối tác
                   </Button>
                   <Select onValueChange={(val) => {
-                    bulkUpdateNguon({ 
-                      productIds: selectedIds, 
-                      nguon: val, 
-                      employeeId: me?.employeeId || "NV-UNKNOWN" 
+                    bulkUpdateNguon({
+                      productIds: selectedIds,
+                      nguon: val,
+                      employeeId: me?.employeeId || "NV-UNKNOWN"
                     }).then(() => {
                       setSelectedIds([]);
                       setIsEditMode(false);
                     });
                   }}>
-                    <SelectTrigger className="h-8 w-[130px] text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border-emerald-200">
+                    <SelectTrigger className="h-9 w-[130px] border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/40 dark:text-emerald-400 dark:hover:bg-emerald-500/10">
                       <SelectValue placeholder="Chuyển kho" />
                     </SelectTrigger>
                     <SelectContent className="bg-card">

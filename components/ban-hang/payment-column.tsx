@@ -42,6 +42,7 @@ interface PaymentColumnProps {
   // Order type
   loaiDon: string; setLoaiDon: (v: string) => void
   hinhThucVanChuyen: string; setHinhThucVanChuyen: (v: string) => void
+  maGhtk: string; setMaGhtk: (v: string) => void
   diaChiNhan: string; setDiaChiNhan: (v: string) => void
   // Payment type
   loaiThanhToan: string; setLoaiThanhToan: (v: string) => void
@@ -67,7 +68,7 @@ export function PaymentColumn(props: PaymentColumnProps) {
     computedDiscountMsg, discountParseMsg,
     ghiChu, setGhiChu,
     tongTien, warrantyTotal, giamGiaToUse, currentDepositOrderId, depositAmountAlreadyPaid, finalThanhToan,
-    loaiDon, setLoaiDon, hinhThucVanChuyen, setHinhThucVanChuyen, diaChiNhan, setDiaChiNhan,
+    loaiDon, setLoaiDon, hinhThucVanChuyen, setHinhThucVanChuyen, maGhtk, setMaGhtk, diaChiNhan, setDiaChiNhan,
     loaiThanhToan, setLoaiThanhToan, soTienCoc, setSoTienCoc, ngayHenTraDu, setNgayHenTraDu,
     receiptBlobs, setReceiptBlobs,
     isLoading, cartCount, handleCheckout,
@@ -227,6 +228,13 @@ export function PaymentColumn(props: PaymentColumnProps) {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Địa chỉ nhận</label>
                 <Input placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố" value={diaChiNhan} onChange={(e) => setDiaChiNhan(e.target.value)} />
+              </div>
+            )}
+
+            {loaiDon === 'Đơn onl' && hinhThucVanChuyen === 'GHTK' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Mã đơn hàng GHTK</label>
+                <Input placeholder="VD: S1.A1.xxxxxxx" value={maGhtk} onChange={(e) => setMaGhtk(e.target.value)} />
               </div>
             )}
           </div>

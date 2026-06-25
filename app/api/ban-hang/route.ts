@@ -244,6 +244,8 @@ export async function GET(request: NextRequest) {
     const idx = idxBanHang(header)
     const idxLoaiDon = header.indexOf("Loại Đơn")
     const idxTrangThai = colIndex(header, "Trạng Thái", "trang_thai")
+    const idxGhiChu = colIndex(header, "Ghi chú", "Ghi Chú")
+    const idxVanChuyen = colIndex(header, "Hình Thức Vận Chuyển")
 
     // Tra USERS để hiển thị ĐÚNG tên + vai trò người bán (cột "Người Bán" có thể là
     // ID/email/tên — đôi khi bị URL-encode "D%C5%A9ng"). Resolve về { id, name, role }.
@@ -315,6 +317,17 @@ export async function GET(request: NextRequest) {
         nhan_vien: resolveSeller(row[idx.nguoiBan]),
         loai_don: idxLoaiDon !== -1 ? row[idxLoaiDon] : "",
         trang_thai: idxTrangThai !== -1 ? row[idxTrangThai] : "hoan_thanh",
+        hinh_thuc_van_chuyen: idxVanChuyen !== -1 ? row[idxVanChuyen] : "",
+        // Mã GHTK lưu trong cột "Hình Thức Vận Chuyển" dạng "GHTK - 1990038382"
+        // (fallback: định dạng cũ "[GHTK: ...]" trong Ghi chú).
+        ma_ghtk: (() => {
+          const vc = idxVanChuyen !== -1 ? String(row[idxVanChuyen] || "") : ""
+          const m1 = vc.match(/GHTK\s*[-–]\s*(\S+)/i)
+          if (m1) return m1[1].trim()
+          const gc = idxGhiChu !== -1 ? String(row[idxGhiChu] || "") : ""
+          const m2 = gc.match(/\[GHTK:\s*([^\]]+)\]/i)
+          return m2 ? m2[1].trim() : ""
+        })(),
       })
     })
 
@@ -337,11 +350,17 @@ export async function GET(request: NextRequest) {
     // Reverse to get newest first (new rows are appended naturally)
     orderSummaries.reverse()
 
-    const total = orderSummaries.length
+    // ?ghtk=1 -> chỉ lấy đơn có mã GHTK (cho tab Đơn online)
+    const onlyGhtk = searchParams.get("ghtk") === "1"
+    const filteredSummaries = onlyGhtk
+      ? orderSummaries.filter((o: any) => o.ma_ghtk && String(o.ma_ghtk).trim())
+      : orderSummaries
+
+    const total = filteredSummaries.length
     const totalPages = Math.max(1, Math.ceil(total / limit))
     const start = (page - 1) * limit
     const end = start + limit
-    const paginatedOrders = orderSummaries.slice(start, end)
+    const paginatedOrders = filteredSummaries.slice(start, end)
 
     return NextResponse.json({
       data: paginatedOrders,

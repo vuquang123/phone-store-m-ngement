@@ -140,11 +140,48 @@ export async function GET(req: NextRequest) {
     // Giả sử bạn đã có biến header là mảng tiêu đề cột của sheet
     const idxKhachHangMoi = colIndex(header, "Tổng khách hàng mới", "Khách hàng mới", "newCustomers");
 
+    // ===== Tính DOANH THU & LỢI NHUẬN trực tiếp từ Ban_Hang =====
+    // (sheet Thong_Ke chỉ đếm đơn, cột doanh thu/lợi nhuận luôn = 0 đ nên không dùng được)
+    const revByMonth = new Map<string, number>()
+    const profByMonth = new Map<string, number>()
+    const revByDate = new Map<string, number>()
+    const profByDate = new Map<string, number>()
+    const dateKey = (s: any) => {
+      const m = String(s ?? "").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+      return m ? { day: Number(m[1]), mon: Number(m[2]), yr: Number(m[3]) } : null
+    }
+    try {
+      const { header: bh, rows: br } = await readFromGoogleSheets("Ban_Hang")
+      const bNgay = colIndex(bh, "Ngày Xuất")
+      const bGia = colIndex(bh, "Giá Bán")
+      const bLai = colIndex(bh, "Lãi")
+      const bTrang = colIndex(bh, "Trạng Thái")
+      for (const r of br) {
+        if (bTrang !== -1 && String(r[bTrang] || "").trim() === "Hoàn trả") continue // bỏ đơn đã hoàn
+        const dk = dateKey(r[bNgay])
+        if (!dk) continue
+        const rev = bGia !== -1 ? toNumber(r[bGia]) : 0
+        const prof = bLai !== -1 ? toNumber(r[bLai]) : 0
+        const mKey = `${dk.mon}/${dk.yr}`
+        const dKey = `${dk.day}/${dk.mon}/${dk.yr}`
+        revByMonth.set(mKey, (revByMonth.get(mKey) || 0) + rev)
+        profByMonth.set(mKey, (profByMonth.get(mKey) || 0) + prof)
+        revByDate.set(dKey, (revByDate.get(dKey) || 0) + rev)
+        profByDate.set(dKey, (profByDate.get(dKey) || 0) + prof)
+      }
+    } catch (e) {
+      console.warn("[dashboard] Tính doanh thu từ Ban_Hang thất bại:", e)
+    }
+    const normDateKey = (s: any) => {
+      const dk = dateKey(s)
+      return dk ? `${dk.day}/${dk.mon}/${dk.yr}` : String(s ?? "")
+    }
+
     // Tạo dailyStats từ vùng ngày
     const dailyStats = rowsNgay.map(row => ({
       date: row[idxNgay],
-      revenue: toNumber(row[idxTongDoanhThu]),
-      profit: toNumber(row[idxTongLoiNhuan]),
+      revenue: revByDate.get(normDateKey(row[idxNgay])) ?? toNumber(row[idxTongDoanhThu]),
+      profit: profByDate.get(normDateKey(row[idxNgay])) ?? toNumber(row[idxTongLoiNhuan]),
       orders: Number(row[idxTongDon] || 0),
       ordersOnl: Number(row[idxDonHangOnl] || 0),
       ordersOff: Number(row[idxDonHangOff] || 0),
@@ -176,8 +213,8 @@ export async function GET(req: NextRequest) {
       totalOrdersOffYear += ordersOff
       return {
         month: monthStr,
-        revenue: toNumber(row?.[idxTongDoanhThuThang] ?? 0),
-        profit: toNumber(row?.[idxTongLoiNhuanThang] ?? 0),
+        revenue: revByMonth.get(monthStr) ?? toNumber(row?.[idxTongDoanhThuThang] ?? 0),
+        profit: profByMonth.get(monthStr) ?? toNumber(row?.[idxTongLoiNhuanThang] ?? 0),
         orders: Number(row?.[idxTongDonThang] ?? 0),
         customers,
         ordersOnl,
@@ -191,20 +228,22 @@ export async function GET(req: NextRequest) {
     if (!monthlyRow) monthlyRow = []
 
     // Trả về đúng shape cho dashboard
+    const revMonthSel = revByMonth.get(`${monthForRow}/${year}`) ?? toNumber(monthlyRow[idxTongDoanhThuThang])
+    const profMonthSel = profByMonth.get(`${monthForRow}/${year}`) ?? toNumber(monthlyRow[idxTongLoiNhuanThang])
     const result = {
       revenue: {
-        monthly: toNumber(monthlyRow[idxTongDoanhThuThang]),
-        today: dailyStats.find(d => d.date === todayStr)?.revenue || 0,
+        monthly: revMonthSel,
+        today: revByDate.get(todayStr) ?? (dailyStats.find(d => d.date === todayStr)?.revenue || 0),
         yearly: monthlyStats.reduce((s, m) => s + (m.revenue || 0), 0),
       },
       profit: {
-        monthly: toNumber(monthlyRow[idxTongLoiNhuanThang]),
-        today: dailyStats.find(d => d.date === todayStr)?.profit || 0,
+        monthly: profMonthSel,
+        today: profByDate.get(todayStr) ?? (dailyStats.find(d => d.date === todayStr)?.profit || 0),
         yearly: monthlyStats.reduce((s, m) => s + (m.profit || 0), 0),
         lastYear: 0,
       },
       margin: {
-        monthly: toNumber(monthlyRow[idxTongDoanhThuThang]) > 0 ? Math.round(toNumber(monthlyRow[idxTongLoiNhuanThang]) / toNumber(monthlyRow[idxTongDoanhThuThang]) * 100) : 0,
+        monthly: revMonthSel > 0 ? Math.round((profMonthSel / revMonthSel) * 100) : 0,
         yearly: 0,
       },
       orders: {

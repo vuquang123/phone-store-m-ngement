@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Settings, User, LogOut } from "lucide-react"
+import { Settings, User, LogOut, ClipboardCheck, ClipboardX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
@@ -34,6 +34,9 @@ const PAGE_TITLES: [string, string][] = [
   ["/dashboard/khach-hang", "Khách hàng"],
   ["/dashboard/hoan-tra", "Hoàn trả"],
   ["/dashboard/tien-mat", "Quỹ tiền mặt"],
+  ["/dashboard/don-online", "Đơn online"],
+  ["/dashboard/check-in", "Check-in đầu ca"],
+  ["/dashboard/check-out", "Báo cáo cuối ca"],
   ["/dashboard/nhan-vien", "Nhân viên"],
   ["/dashboard/thong-bao", "Thông báo"],
   ["/dashboard/cai-dat", "Cài đặt"],
@@ -163,6 +166,22 @@ export function Header({ title, onMenuClick }: HeaderProps) {
                   )}
                 </div>
               </DropdownMenuLabel>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => router.push("/dashboard/check-in")}
+                className="cursor-pointer hover:bg-accent"
+              >
+                <ClipboardCheck className="mr-3 h-4 w-4" />
+                <span>Check-in đầu ca</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => router.push("/dashboard/check-out")}
+                className="cursor-pointer hover:bg-accent"
+              >
+                <ClipboardX className="mr-3 h-4 w-4" />
+                <span>Báo cáo cuối ca</span>
+              </DropdownMenuItem>
 
               {me?.role !== "nhan_vien" && (
                 <>

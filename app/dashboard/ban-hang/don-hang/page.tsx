@@ -14,6 +14,7 @@ import Link from "next/link"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { OrderDetailDialog } from "@/components/ban-hang/order-detail-dialog"
 import OrderProductsCell from "@/app/dashboard/ban-hang/OrderProductsCell"
+import { GhtkStatusBadge } from "@/components/ghtk/ghtk-status-badge"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface Order {
@@ -29,6 +30,7 @@ interface Order {
   khach_hang?: { ho_ten: string; so_dien_thoai: string }
   nhan_vien?: { id?: string; name?: string; role?: string }
   loai_don?: string
+  ma_ghtk?: string
   hinh_thuc_van_chuyen?: string
   imeis?: string[]
   imei?: string // raw from each row for grouping convenience
@@ -320,6 +322,11 @@ export default function DonHangPage() {
                             {order.loai_don && (
                               <div className="text-xs text-muted-foreground">{order.loai_don}</div>
                             )}
+                            {String(order.loai_don || "").toLowerCase().includes("onl") && (
+                              <div className="mt-1 flex justify-end">
+                                <GhtkStatusBadge code={order.ma_ghtk || order.ma_don_hang || order.id} />
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="mt-2">
@@ -459,7 +466,12 @@ export default function DonHangPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">{order.loai_don || <span className="text-muted-foreground">-</span>}</Badge>
+                              <div className="flex flex-col items-start gap-1">
+                                <Badge variant="outline">{order.loai_don || <span className="text-muted-foreground">-</span>}</Badge>
+                                {String(order.loai_don || "").toLowerCase().includes("onl") && (
+                                  <GhtkStatusBadge code={order.ma_ghtk || order.ma_don_hang || order.id} />
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <Badge className={getTrangThaiColor(order.trang_thai)}>

@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { GhtkTrackingPanel } from "@/components/ghtk/ghtk-tracking-panel"
 
 interface OrderDetail {
   id: string
@@ -26,6 +27,7 @@ interface OrderDetail {
   trang_thai: string
   ngay_ban: string
   ghi_chu?: string
+  ma_ghtk?: string
   phu_kien_text?: string
   khach_hang?: {
     ho_ten: string
@@ -164,6 +166,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
         trang_thai: data.trang_thai || "hoan_thanh",
         ngay_ban: ngayBan,
         ghi_chu: data.ghi_chu || data["Ghi Chú"] || "",
+        ma_ghtk: data.ma_ghtk || "",
         phu_kien_text: (data.phu_kien_text || data["Phụ Kiện"] || "").toString(),
         khach_hang: data.khach_hang || (data.ten_khach_hang || data["Tên Khách Hàng"]
           ? {
@@ -421,6 +424,20 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                   <p className="text-muted-foreground">Khách lẻ</p>
                 )}
               </div>
+            </div>
+
+            <Separator />
+
+            {/* Vận chuyển GHTK */}
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Vận chuyển (GHTK)</h3>
+              <GhtkTrackingPanel
+                defaultCode={
+                  order.ma_ghtk ||
+                  order.ghi_chu?.match(/\[GHTK:\s*([^\]]+)\]/i)?.[1]?.trim() ||
+                  order.ma_don_hang
+                }
+              />
             </div>
 
             <Separator />

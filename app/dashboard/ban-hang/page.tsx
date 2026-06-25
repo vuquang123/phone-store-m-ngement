@@ -173,6 +173,15 @@ export default function BanHangPage() {
   const [hinhThucVanChuyen, setHinhThucVanChuyen] = useState("")
   const [diaChiNhan, setDiaChiNhan] = useState("")
   const [ghiChu, setGhiChu] = useState("")
+  const [maGhtk, setMaGhtk] = useState("")
+
+  // Hình thức vận chuyển: GHTK kèm luôn mã đơn -> "GHTK - 1990038382" để lưu thẳng vào sheet.
+  const buildShipMethod = () => {
+    if (loaiDon !== "Đơn onl") return ""
+    const code = maGhtk.trim()
+    if (hinhThucVanChuyen === "GHTK" && code) return `GHTK - ${code}`
+    return hinhThucVanChuyen
+  }
   const [copiedImei, setCopiedImei] = useState<string | null>(null)
   const [justAddedKey, setJustAddedKey] = useState<string | null>(null)
   // Discount input string (5.2)
@@ -705,7 +714,7 @@ export default function BanHangPage() {
             nguoi_ban: employeeId,
             loai_don: loaiDon,
             loai_don_ban: loaiDon,
-            hinh_thuc_van_chuyen: loaiDon === "Đơn onl" ? hinhThucVanChuyen : "",
+            hinh_thuc_van_chuyen: buildShipMethod(),
             dia_chi_nhan: loaiDon === "Đơn onl" ? diaChiNhan : "",
             "Địa Chỉ Nhận": loaiDon === "Đơn onl" ? diaChiNhan : "",
             ngay_dat_coc: new Date().toLocaleDateString("vi-VN"),
@@ -739,6 +748,7 @@ export default function BanHangPage() {
           setGiamGia(0)
           setGiamGiaInput("")
           setGhiChu("")
+          setMaGhtk("")
           setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false)
           setCashAmount(0); setTransferAmount(0); setCardAmount(0)
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0)
@@ -808,7 +818,7 @@ export default function BanHangPage() {
           "Hình Thức Thanh Toán": paymentSummary,
           "Người Bán": employeeId,
           "Loại Đơn": loaiDon,
-          "Hình Thức Vận Chuyển": loaiDon === "Đơn onl" ? hinhThucVanChuyen : "",
+          "Hình Thức Vận Chuyển": buildShipMethod(),
           "Lãi": "",
           "Ghi Chú": ghiChu,
           "Giảm Giá": giamGiaToUse,
@@ -891,7 +901,7 @@ export default function BanHangPage() {
               dia_chi_nhan: loaiDon === 'Đơn onl' ? diaChiNhan : '',
               address: loaiDon === 'Đơn onl' ? diaChiNhan : '',
               shippingAddress: loaiDon === 'Đơn onl' ? diaChiNhan : '',
-              hinh_thuc_van_chuyen: loaiDon === 'Đơn onl' ? hinhThucVanChuyen : '',
+              hinh_thuc_van_chuyen: buildShipMethod(),
               shipping_method: loaiDon === 'Đơn onl' ? hinhThucVanChuyen : '',
               phuong_thuc_thanh_toan: paymentSummary,
               paymentMethod: paymentSummary,
@@ -967,7 +977,8 @@ export default function BanHangPage() {
           setCart([]);
           setSelectedCustomer(null);
           setGiamGia(0);
-          setGhiChu("");
+          setGhiChu("")
+          setMaGhtk("");
           setDiaChiNhan("");
           setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false);
           setCashAmount(0); setTransferAmount(0); setCardAmount(0);
@@ -1206,6 +1217,7 @@ export default function BanHangPage() {
                     finalThanhToan={finalThanhToan}
                     loaiDon={loaiDon} setLoaiDon={setLoaiDon}
                     hinhThucVanChuyen={hinhThucVanChuyen} setHinhThucVanChuyen={setHinhThucVanChuyen}
+                    maGhtk={maGhtk} setMaGhtk={setMaGhtk}
                     diaChiNhan={diaChiNhan} setDiaChiNhan={setDiaChiNhan}
                     loaiThanhToan={loaiThanhToan} setLoaiThanhToan={setLoaiThanhToan}
                     soTienCoc={soTienCoc} setSoTienCoc={setSoTienCoc}
