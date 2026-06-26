@@ -49,12 +49,12 @@ const StatCard = ({
   accentClass: string
   children?: React.ReactNode
 }) => (
-  <div className="rounded-xl border bg-card px-4 py-3 shadow-sm">
+  <div className="min-w-0 rounded-xl border bg-card px-3 py-3 shadow-sm sm:px-4">
     <div className="flex items-center gap-2">
-      <span className={`inline-block h-2.5 w-2.5 rounded-full ${accentClass}`} />
+      <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${accentClass}`} />
       <span className="text-sm font-medium text-muted-foreground">{label}</span>
     </div>
-    <div className={`mt-1 text-xl font-extrabold leading-tight ${valueClass}`}>{value}</div>
+    <div className={`mt-1 break-words tabular-nums text-base font-extrabold leading-tight sm:text-lg lg:text-xl ${valueClass}`}>{value}</div>
     {children}
   </div>
 )

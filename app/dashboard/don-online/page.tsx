@@ -103,6 +103,46 @@ function GhtkOrderRow({ order, onView }: { order: OnlineOrder; onView: (id: stri
   )
 }
 
+/** Card đơn online cho mobile (< md) — cùng dữ liệu tra cứu GHTK (React Query dedup). */
+function GhtkOrderCard({ order, onView }: { order: OnlineOrder; onView: (id: string) => void }) {
+  const { data, isLoading, error } = useGhtkTracking(order.ma_ghtk || null)
+  const prog = data ? deriveProgress(data.statusCode) : { picked: false, shipped: false }
+  const cod = data?.codMoney || order.tong_tien || 0
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-medium">{order.ma_don_hang}</div>
+          <div className="truncate text-xs text-muted-foreground">
+            {order.ten_khach_hang || "Khách lẻ"}{order.so_dien_thoai ? ` • ${order.so_dien_thoai}` : ""}
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => onView(order.ma_don_hang)} aria-label="Xem chi tiết">
+          <Eye className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className="text-sm">{order.ten_san_pham || "—"}{(order.items_count || 0) > 1 ? ` (${order.items_count} sp)` : ""}</div>
+      <div className="flex items-center justify-between gap-2">
+        {isLoading ? (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Đang tra…</span>
+        ) : error ? (
+          <span className="text-xs text-red-600 dark:text-red-400">{(error as Error).message}</span>
+        ) : data ? (
+          <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_GROUP_COLOR[data.statusGroup])}>{data.statusLabel}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+        <span className="font-medium">{fmt(cod)}</span>
+      </div>
+      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1">Lấy hàng {prog.picked ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : "—"}</span>
+        <span className="inline-flex items-center gap-1">Vận chuyển {prog.shipped ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : "—"}</span>
+      </div>
+      <div className="font-mono text-[11px] text-muted-foreground">{order.ma_ghtk}</div>
+    </div>
+  )
+}
+
 export default function DonOnlinePage() {
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -176,7 +216,15 @@ export default function DonOnlinePage() {
                 Chưa có đơn nào có mã GHTK. Nhập mã GHTK khi tạo đơn online để theo dõi tại đây.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                {/* Mobile: card list */}
+                <div className="space-y-3 md:hidden">
+                  {orders.map((o) => (
+                    <GhtkOrderCard key={o.ma_don_hang || o.id} order={o} onView={handleView} />
+                  ))}
+                </div>
+                {/* Desktop: bảng */}
+                <div className="hidden overflow-x-auto md:block">
                 <Table className="min-w-[860px]">
                   <TableHeader>
                     <TableRow>
@@ -197,7 +245,8 @@ export default function DonOnlinePage() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

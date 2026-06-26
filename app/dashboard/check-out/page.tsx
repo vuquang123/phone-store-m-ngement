@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
+import { ResponsiveTable } from "@/components/ui/responsive-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { RefreshButton } from "@/components/ui/refresh-button"
 import { useToast } from "@/hooks/use-toast"
@@ -341,44 +341,46 @@ export default function CheckOutPage() {
             ) : !history || history.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">Chưa có báo cáo cuối ca</div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[820px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Thời gian</TableHead>
-                      <TableHead className="text-center">Ca</TableHead>
-                      <TableHead>Nhân viên</TableHead>
-                      <TableHead>Trạng thái</TableHead>
-                      <TableHead className="text-center">Ngoài (TT/Web)</TableHead>
-                      <TableHead className="text-center">Trong (TT/Web)</TableHead>
-                      <TableHead className="text-center">Bán ra</TableHead>
-                      <TableHead className="text-right">Tiền mặt</TableHead>
-                      <TableHead className="text-center">Ảnh</TableHead>
-                      <TableHead className="text-right">Xem</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {history.map((h) => (
-                      <TableRow key={h.id}>
-                        <TableCell className="whitespace-nowrap text-sm">{fmtDate(h.created_at)}</TableCell>
-                        <TableCell className="text-center text-sm">{h.ca}</TableCell>
-                        <TableCell className="text-sm">{h.nhanVien || "—"}</TableCell>
-                        <TableCell><StatusBadge tt={h.trangThai} /></TableCell>
-                        <TableCell className="text-center text-sm tabular-nums">{h.khoNgoai.thucTe}/{h.khoNgoai.website}</TableCell>
-                        <TableCell className="text-center text-sm tabular-nums">{h.khoTrong.thucTe}/{h.khoTrong.website}</TableCell>
-                        <TableCell className="text-center text-sm">{h.taiChinh.banRa}</TableCell>
-                        <TableCell className="text-right text-sm">{fmt(h.taiChinh.tienMatBanGiao)}</TableCell>
-                        <TableCell className="text-center text-sm">{h.so_anh || 0}</TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => { setSelected(h); setOpen(true) }} aria-label="Xem chi tiết">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <ResponsiveTable
+                data={history}
+                rowKey={(h) => h.id}
+                minWidth="min-w-[820px]"
+                columns={[
+                  { key: "time", header: "Thời gian", className: "whitespace-nowrap text-sm", cell: (h) => fmtDate(h.created_at) },
+                  { key: "ca", header: "Ca", className: "text-center text-sm", cell: (h) => h.ca },
+                  { key: "nv", header: "Nhân viên", className: "text-sm", cell: (h) => h.nhanVien || "—" },
+                  { key: "tt", header: "Trạng thái", cell: (h) => <StatusBadge tt={h.trangThai} /> },
+                  { key: "ngoai", header: "Ngoài (TT/Web)", className: "text-center text-sm tabular-nums", cell: (h) => `${h.khoNgoai.thucTe}/${h.khoNgoai.website}` },
+                  { key: "trong", header: "Trong (TT/Web)", className: "text-center text-sm tabular-nums", cell: (h) => `${h.khoTrong.thucTe}/${h.khoTrong.website}` },
+                  { key: "banra", header: "Bán ra", className: "text-center text-sm", cell: (h) => h.taiChinh.banRa },
+                  { key: "tienmat", header: "Tiền mặt", className: "text-right text-sm", cell: (h) => fmt(h.taiChinh.tienMatBanGiao) },
+                  { key: "anh", header: "Ảnh", className: "text-center text-sm", cell: (h) => h.so_anh || 0 },
+                  { key: "xem", header: "Xem", className: "text-right", cell: (h) => (
+                    <Button variant="ghost" size="icon" onClick={() => { setSelected(h); setOpen(true) }} aria-label="Xem chi tiết">
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  ) },
+                ]}
+                renderCard={(h) => (
+                  <button
+                    type="button"
+                    onClick={() => { setSelected(h); setOpen(true) }}
+                    className="w-full space-y-2 rounded-lg border p-3 text-left transition-colors hover:bg-accent"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">{fmtDate(h.created_at)}</span>
+                      <StatusBadge tt={h.trangThai} />
+                    </div>
+                    <div className="text-sm">Ca <span className="font-medium">{h.ca}</span> • {h.nhanVien || "—"}</div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm text-muted-foreground">
+                      <div>Ngoài: <span className="text-foreground tabular-nums">{h.khoNgoai.thucTe}/{h.khoNgoai.website}</span></div>
+                      <div>Trong: <span className="text-foreground tabular-nums">{h.khoTrong.thucTe}/{h.khoTrong.website}</span></div>
+                      <div>Bán ra: <span className="text-foreground">{h.taiChinh.banRa}</span></div>
+                      <div>Tiền mặt: <span className="text-foreground">{fmt(h.taiChinh.tienMatBanGiao)}</span></div>
+                    </div>
+                  </button>
+                )}
+              />
             )}
           </CardContent>
         </Card>
@@ -402,7 +404,7 @@ export default function CheckOutPage() {
                   {([["KHO NGOÀI", selected.khoNgoai], ["KHO TRONG", selected.khoTrong]] as const).map(([title, k]) => (
                     <div key={title} className="rounded-lg border p-3">
                       <div className="mb-2 font-semibold">{title}</div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
                         <div>Website: <span className="text-foreground">{k.website}</span></div>
                         <div>Thực tế: <span className="text-foreground">{k.thucTe}</span></div>
                         <div>17: <span className="text-foreground">{k.s17}</span></div>
@@ -417,7 +419,7 @@ export default function CheckOutPage() {
 
                 <div className="rounded-lg border p-3">
                   <div className="mb-2 font-semibold">Tài chính & đơn hàng</div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
                     <div>Bán ra: <span className="text-foreground">{selected.taiChinh.banRa}</span></div>
                     <div>Tiền mặt bàn giao: <span className="font-medium text-foreground">{fmt(selected.taiChinh.tienMatBanGiao)}</span></div>
                     <div>Off: <span className="text-foreground">{selected.taiChinh.banRaOff || "—"}</span></div>

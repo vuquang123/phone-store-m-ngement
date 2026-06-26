@@ -74,7 +74,7 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-card max-w-md">
+      <DialogContent className="bg-card max-w-md w-[90%]">
         <DialogHeader>
           <DialogTitle>Gửi sản phẩm đi CNC</DialogTitle>
         </DialogHeader>

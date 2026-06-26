@@ -413,6 +413,22 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
       return parts.length ? ` | ${parts.join(" - ")}` : ""
     })()
 
+    // Tình trạng + Pin của máy
+    const statusLine = (() => {
+      const pinRaw = p.pin ?? p["Pin (%)"] ?? p.pin_pct
+      const tinhTrang = p.tinh_trang || p.tinhTrang || p["Tình Trạng Máy"]
+      const pinStr = (() => {
+        const s = String(pinRaw ?? "").trim()
+        if (!s) return ""
+        return /^\d+$/.test(s) ? `${s}%` : s
+      })()
+      const escTT = String(tinhTrang ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      const parts: string[] = []
+      if (pinStr) parts.push(`Pin: ${pinStr}`)
+      if (escTT) parts.push(`Tình trạng: ${escTT}`)
+      return parts.length ? `\n   <i>${parts.join(" | ")}</i>` : ""
+    })()
+
     // Thêm giá niêm yết và giảm giá máy
     const giaNiemYet = p.gia_niemyet || p.gia_niem_yet
     const giaBan = p.gia_ban
@@ -424,7 +440,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
       priceLine = `\n   <i>Giá bán: ₫${giaBan.toLocaleString('vi-VN')}</i>`
     }
 
-    return `• ${head}${idLine}${priceLine}`
+    return `• ${head}${idLine}${statusLine}${priceLine}`
   })
 
   // Gói bảo hành: ưu tiên mảng codes, hoặc chuỗi có sẵn

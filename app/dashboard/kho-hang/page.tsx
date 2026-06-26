@@ -487,7 +487,7 @@ export default function KhoHangPage() {
       <div className="mt-4">
         {activeTab === "san-pham" && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center gap-2">
+            <div className="flex flex-wrap justify-between items-center gap-2">
               <div className="flex gap-2">
                 <Button
                   onClick={() => { setSelectedProduct(null); setIsDialogOpen(true) }}
@@ -506,7 +506,7 @@ export default function KhoHangPage() {
                 <RefreshButton onRefresh={handleRefresh} loading={refreshing} className="h-10 w-10" />
               </div>
               {isEditMode && selectedIds.length > 0 && (
-                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">
+                <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">
                   <Badge variant="secondary" className="h-9 rounded-md px-3">
                     Đã chọn {selectedIds.length}
                   </Badge>
@@ -637,7 +637,7 @@ export default function KhoHangPage() {
               </div>
 
               {isEditMode && selectedIds.length > 0 && (
-                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">
+                <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">
                   <Badge variant="secondary" className="px-3 py-1 bg-blue-50 text-blue-700 border-blue-100">
                     Đã chọn {selectedIds.length} máy
                   </Badge>
@@ -787,7 +787,7 @@ export default function KhoHangPage() {
             </div>
 
             {isEditMode && selectedIds.length > 0 && (
-              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">
+              <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">
                 <Badge variant="secondary" className="px-3 py-1 bg-purple-50 text-purple-700 border-purple-100">
                   Đã chọn {selectedIds.length} máy
                 </Badge>

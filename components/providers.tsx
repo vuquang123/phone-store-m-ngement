@@ -9,6 +9,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     defaultOptions: {
       queries: {
         staleTime: 1000 * 60, // 1 minute
+        refetchOnWindowFocus: false, // bỏ refetch thừa khi focus lại tab (đỡ gọi lại API Sheets)
         retry: 1,
       },
     },

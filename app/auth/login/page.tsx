@@ -53,17 +53,19 @@ const handleLogin = async (e: React.FormEvent) => {
 }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-blue-50 to-purple-50 p-4 relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-      <div className="absolute top-10 left-10 w-72 h-72 bg-emerald-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-pulse"></div>
-      <div className="absolute top-10 right-10 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-pulse delay-1000"></div>
-      <div className="absolute -bottom-8 left-20 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-pulse delay-2000"></div>
+    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+      {/* Ảnh nền cửa hàng DEV PỒ */}
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: "url('/bgdevpo.jpg')" }}
+      />
+      {/* Lớp phủ tối + blur nhẹ để form đăng nhập nổi & chữ dễ đọc */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
 
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8 animate-fade-in">
           <div className="flex justify-center mb-6">
-            <div className="h-16 w-16 rounded-2xl overflow-hidden shadow-lg transform hover:scale-105 transition-transform duration-200 bg-card">
+            <div className="h-32 w-32 rounded-2xl overflow-hidden shadow-lg transform hover:scale-105 transition-transform duration-200 bg-card">
               <img
                 src="/apple-touch-icon.png"
                 alt="DEV PỒ Logo"
@@ -71,16 +73,13 @@ const handleLogin = async (e: React.FormEvent) => {
               />
             </div>
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent mb-2">
-            DEV PỒ 
-          </h1>
-          <p className="text-muted-foreground text-lg">Hệ thống quản lý cửa hàng chuyên nghiệp</p>
+         
         </div>
 
         <Card className="backdrop-blur-sm bg-card/80 border-0 shadow-2xl animate-slide-up">
           <CardHeader className="text-center pb-4">
             <CardTitle className="text-2xl font-semibold text-foreground">Đăng nhập hệ thống</CardTitle>
-            <CardDescription className="text-muted-foreground">Nhập thông tin để truy cập vào hệ thống quản lý</CardDescription>
+            <CardDescription className="text-muted-foreground">Nhập thông tin để truy cập vào hệ thống</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <form onSubmit={handleLogin} className="space-y-5">

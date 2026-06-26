@@ -111,7 +111,7 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-card rounded-xl shadow-xl p-6 min-w-[350px] max-w-[600px] border border-border">
+      <DialogContent className="bg-card rounded-xl shadow-xl p-6 sm:max-w-[600px] border border-border">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-blue-700 mb-2">Thêm máy bảo hành ngoài kho</DialogTitle>
           <p className="text-muted-foreground text-sm mb-4">Nhập thông tin máy bảo hành ngoài kho để quản lý và theo dõi trạng thái.</p>

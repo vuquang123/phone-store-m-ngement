@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Edit2, Eye, Hammer, UserPlus } from "lucide-react"
 import { getTrangThaiColor, getTrangThaiKhoColor, getLoaiMayLabel, getLoaiMayBadgeClass, getPinColorClass, getAppleColorHex, formatPinDisplay } from "@/lib/utils/inventory-helpers"
+import { cn } from "@/lib/utils"
 
 interface Product {
   id: string
@@ -56,8 +57,130 @@ export function ProductTable({
   totalCount
 }: ProductTableProps) {
   return (
-    <div className="rounded-md border border-border overflow-hidden bg-card shadow-sm">
-      <Table>
+    <>
+      {/* Mobile (< md): danh sách card — hiện đủ thông tin, KHÔNG scroll ngang */}
+      <div className="space-y-3 md:hidden">
+        {products.length === 0 ? (
+          <div className="rounded-md border py-10 text-center text-sm text-muted-foreground">
+            Không tìm thấy sản phẩm nào phù hợp.
+          </div>
+        ) : (
+          products.map((product) => {
+            const giaSau = product.gia_ban - (product.giam_gia || 0)
+            const isPartner = String(product.nguon || "").toLowerCase().includes("kho ngoài")
+            return (
+              <div
+                key={product.id}
+                className={cn(
+                  "rounded-lg border bg-card p-3 shadow-sm",
+                  isEditMode && selectedIds.includes(product.id) && "border-primary ring-1 ring-primary/40",
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  {isEditMode && (
+                    <Checkbox
+                      className="mt-1 shrink-0"
+                      checked={selectedIds.includes(product.id)}
+                      onCheckedChange={() => onSelect(product.id)}
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium leading-tight text-foreground">{product.ten_san_pham}</span>
+                      <Badge className={`${getTrangThaiColor(product.trang_thai)} shrink-0 border-none text-[11px]`}>
+                        {product.trang_thai}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full ring-1 ring-black/10 dark:ring-white/20"
+                          style={{ backgroundColor: getAppleColorHex(product.mau_sac) }}
+                        />
+                        {product.mau_sac}
+                      </span>
+                      <span className="text-xs text-muted-foreground">• {product.dung_luong}</span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "h-4 px-1 py-0 text-[10px] leading-none",
+                          isPartner
+                            ? "border-blue-100 bg-blue-50 text-blue-600 dark:border-transparent dark:bg-blue-500/15 dark:text-blue-400"
+                            : "border-emerald-100 bg-emerald-50 text-emerald-600 dark:border-transparent dark:bg-emerald-500/15 dark:text-emerald-400",
+                        )}
+                      >
+                        {isPartner ? "Kho ngoài" : "Kho trong"}
+                      </Badge>
+                      {product.do_sim && (
+                        <Badge variant="outline" className="h-4 max-w-[120px] truncate px-1 py-0 text-[10px] leading-none" title={product.do_sim}>
+                          {product.do_sim}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {(product.imei || product.serial) && (
+                      <div className="mt-1.5">
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                          {product.imei || product.serial}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className={`${getLoaiMayBadgeClass(product.loai_may)} h-5 px-1.5 py-0 text-[11px] font-medium`}>
+                        {getLoaiMayLabel(product.loai_may)}
+                      </Badge>
+                      {product.pin && (
+                        <span className="text-xs text-muted-foreground">
+                          Pin: <span className={`font-semibold ${getPinColorClass(product.pin)}`}>{formatPinDisplay(product.pin)}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {product.tinh_trang && (
+                      <p className="mt-1.5 rounded border border-orange-100/50 bg-orange-50/50 p-1.5 text-[11px] italic text-muted-foreground dark:border-orange-500/20 dark:bg-orange-500/10">
+                        {product.tinh_trang}
+                      </p>
+                    )}
+
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="leading-tight">
+                        <span className="font-bold text-emerald-600">₫{giaSau.toLocaleString()}</span>
+                        {(product.giam_gia || 0) > 0 && (
+                          <span className="ml-1 text-[10px] text-muted-foreground line-through">{product.gia_ban.toLocaleString()}</span>
+                        )}
+                        {isManager && product.gia_nhap > 0 && (
+                          <span className="ml-2 text-[10px] text-muted-foreground">Nhập: {product.gia_nhap.toLocaleString()}</span>
+                        )}
+                      </div>
+                      {!isEditMode && (
+                        <div className="flex shrink-0 gap-1">
+                          <Button variant="outline" size="icon" className="h-8 w-8 text-muted-foreground hover:text-orange-500" title="Gửi CNC" onClick={() => onSendCNC?.(product)}>
+                            <Hammer className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="icon" className="h-8 w-8 text-muted-foreground hover:text-purple-600" title="Giao đối tác" onClick={() => onSendPartner?.(product)}>
+                            <UserPlus className="h-4 w-4" />
+                          </Button>
+                          {onViewCustomer && (
+                            <Button variant="outline" size="icon" className="h-8 w-8 text-muted-foreground hover:text-blue-600" onClick={() => onViewCustomer(product)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {/* Desktop (>= md): bảng như cũ */}
+      <div className="hidden overflow-x-auto rounded-md border border-border bg-card shadow-sm md:block">
+      <Table className="min-w-[560px]">
         <TableHeader className="bg-muted/80">
           <TableRow>
             {isEditMode && (
@@ -245,6 +368,7 @@ export function ProductTable({
           )}
         </TableBody>
       </Table>
-    </div>
+      </div>
+    </>
   )
 }

@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
+import { ResponsiveTable } from "@/components/ui/responsive-table"
 import { RefreshButton } from "@/components/ui/refresh-button"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, ImagePlus, X, Send } from "lucide-react"
@@ -46,6 +46,13 @@ const EMPTY: CountState = { website: "", thucTe: "", s17: "", s16: "", s15: "", 
 const MAX_IMAGES = 6
 
 const n = (v: string) => Number(v || 0) || 0
+
+const statusBadge = (tt: string) =>
+  /khớp/i.test(tt) && !/không/i.test(tt) ? (
+    <Badge className="bg-emerald-600 hover:bg-emerald-600">Khớp</Badge>
+  ) : (
+    <Badge variant="destructive">Không khớp</Badge>
+  )
 
 export default function CheckInPage() {
   const { toast } = useToast()
@@ -304,44 +311,34 @@ export default function CheckInPage() {
             ) : !history || history.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">Chưa có lịch sử check-in</div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[720px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Thời gian</TableHead>
-                      <TableHead>Nhân viên</TableHead>
-                      <TableHead className="text-center">Ca</TableHead>
-                      <TableHead>Trạng thái</TableHead>
-                      <TableHead className="text-center">Thực tế / Web</TableHead>
-                      <TableHead className="text-center">Ảnh</TableHead>
-                      <TableHead>Lý do</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {history.map((h) => (
-                      <TableRow key={h.id}>
-                        <TableCell className="whitespace-nowrap text-sm">{h.thoi_gian}</TableCell>
-                        <TableCell className="text-sm">{h.nhan_vien || "—"}</TableCell>
-                        <TableCell className="text-center text-sm">{h.ca}</TableCell>
-                        <TableCell>
-                          {/khớp/i.test(h.trang_thai) && !/không/i.test(h.trang_thai) ? (
-                            <Badge className="bg-emerald-600 hover:bg-emerald-600">Khớp</Badge>
-                          ) : (
-                            <Badge variant="destructive">Không khớp</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center text-sm tabular-nums">
-                          {h.tong_thuc_te}/{h.tong_web}
-                        </TableCell>
-                        <TableCell className="text-center text-sm">{h.so_anh || 0}</TableCell>
-                        <TableCell className="max-w-[220px] text-sm">
-                          <span className="line-clamp-1" title={h.ly_do}>{h.ly_do || "—"}</span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <ResponsiveTable
+                data={history}
+                rowKey={(h) => h.id}
+                minWidth="min-w-[720px]"
+                columns={[
+                  { key: "time", header: "Thời gian", className: "whitespace-nowrap text-sm", cell: (h) => h.thoi_gian },
+                  { key: "nv", header: "Nhân viên", className: "text-sm", cell: (h) => h.nhan_vien || "—" },
+                  { key: "ca", header: "Ca", className: "text-center text-sm", cell: (h) => h.ca },
+                  { key: "tt", header: "Trạng thái", cell: (h) => statusBadge(h.trang_thai) },
+                  { key: "ttweb", header: "Thực tế / Web", className: "text-center text-sm tabular-nums", cell: (h) => `${h.tong_thuc_te}/${h.tong_web}` },
+                  { key: "anh", header: "Ảnh", className: "text-center text-sm", cell: (h) => h.so_anh || 0 },
+                  { key: "lydo", header: "Lý do", className: "max-w-[220px] text-sm", cell: (h) => <span className="line-clamp-1" title={h.ly_do}>{h.ly_do || "—"}</span> },
+                ]}
+                renderCard={(h) => (
+                  <div className="space-y-2 rounded-lg border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">{h.thoi_gian}</span>
+                      {statusBadge(h.trang_thai)}
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Ca <span className="font-medium text-foreground">{h.ca}</span> • {h.nhan_vien || "—"}</span>
+                      <span className="tabular-nums text-muted-foreground">TT/Web: <span className="font-medium text-foreground">{h.tong_thuc_te}/{h.tong_web}</span></span>
+                    </div>
+                    {h.ly_do ? <div className="text-sm text-muted-foreground">Lý do: <span className="text-foreground">{h.ly_do}</span></div> : null}
+                    <div className="text-xs text-muted-foreground">Ảnh: {h.so_anh || 0}</div>
+                  </div>
+                )}
+              />
             )}
           </CardContent>
         </Card>

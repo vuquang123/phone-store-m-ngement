@@ -169,7 +169,7 @@ export default function BanHangPage() {
   const [installmentType, setInstallmentType] = useState<'' | 'Góp iCloud' | 'Thẻ tín dụng' | 'Mira'>('')
   const [installmentDown, setInstallmentDown] = useState(0)
   const [installmentLoan, setInstallmentLoan] = useState(0)
-  const [loaiDon, setLoaiDon] = useState("")
+  const [loaiDon, setLoaiDon] = useState("Đơn off")
   const [hinhThucVanChuyen, setHinhThucVanChuyen] = useState("")
   const [diaChiNhan, setDiaChiNhan] = useState("")
   const [ghiChu, setGhiChu] = useState("")
@@ -923,6 +923,8 @@ export default function BanHangPage() {
                   mau_sac: i.mau_sac || (i as any)["Màu Sắc"] || '',
                   imei: i.imei || '',
                   serial: i.serial || '',
+                  pin: (i as any).pin ?? (i as any)["Pin (%)"] ?? '',
+                  tinh_trang: (i as any).tinh_trang || (i as any)["Tình Trạng Máy"] || '',
                   gia_niemyet: i.gia_niemyet,
                   gia_ban: i.gia_ban,
                   so_luong: i.so_luong,
@@ -1151,7 +1153,7 @@ export default function BanHangPage() {
                 />
 
                 {(!isMobile || mobileView === 'gio-hang') && (
-                  <Card className="min-h-[220px] h-full w-full flex flex-col lg:min-h-[360px]">
+                  <Card className="min-h-[120px] h-full w-full flex flex-col lg:min-h-[360px]">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <ShoppingCart className="h-5 w-5" />

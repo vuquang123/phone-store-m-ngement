@@ -352,9 +352,27 @@ export async function GET(request: NextRequest) {
 
     // ?ghtk=1 -> chỉ lấy đơn có mã GHTK (cho tab Đơn online)
     const onlyGhtk = searchParams.get("ghtk") === "1"
-    const filteredSummaries = onlyGhtk
+    let filteredSummaries = onlyGhtk
       ? orderSummaries.filter((o: any) => o.ma_ghtk && String(o.ma_ghtk).trim())
       : orderSummaries
+
+    // ?search= -> tìm trên TOÀN BỘ đơn (mã đơn / tên KH / SĐT / IMEI), không chỉ trang hiện tại
+    const searchQ = (searchParams.get("search") || "").trim().toLowerCase()
+    if (searchQ) {
+      const searchDigits = searchQ.replace(/\D/g, "")
+      filteredSummaries = filteredSummaries.filter((o: any) => {
+        const ma = String(o.ma_don_hang || o.id || "").toLowerCase()
+        const ten = String(o.ten_khach_hang || "").toLowerCase()
+        const sdt = String(o.so_dien_thoai || "").replace(/\D/g, "")
+        const imeiHit = Array.isArray(o.imeis) && o.imeis.some((i: any) => String(i || "").toLowerCase().includes(searchQ))
+        return (
+          ma.includes(searchQ) ||
+          ten.includes(searchQ) ||
+          (searchDigits.length >= 3 && sdt.includes(searchDigits)) ||
+          imeiHit
+        )
+      })
+    }
 
     const total = filteredSummaries.length
     const totalPages = Math.max(1, Math.ceil(total / limit))
@@ -1004,6 +1022,8 @@ export async function POST(request: NextRequest) {
           dung_luong: may.dung_luong || may["Dung Lượng"] || '',
           mau_sac: may.mau_sac || may["Màu Sắc"] || '',
           imei: may.imei || may["IMEI"] || '',
+          pin: may.pin ?? may["Pin (%)"] ?? '',
+          tinh_trang: may.tinh_trang || may["Tình Trạng Máy"] || '',
           nguon: isPartner ? "Kho ngoài" : "Kho trong",
         })
       }

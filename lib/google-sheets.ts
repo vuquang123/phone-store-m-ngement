@@ -139,10 +139,21 @@ function buildAuth() {
   })
 }
 
-const auth = buildAuth()
+// ===== MỤC 1 — Singleton Sheets client, sống sót qua HMR =====
+// Cache client (kèm JWT đã xác thực) trên globalThis. Ở dev, mỗi lần hot-reload
+// module bị đánh giá lại; nếu tạo mới google.auth.JWT + google.sheets() mỗi lần thì
+// phải xác thực lại (tốn vài giây). Dùng cache global để TÁI SỬ DỤNG qua các lần HMR.
+const g = globalThis as any
+function getSheetsClient() {
+  if (!g.__sheetsClient) {
+    g.__sheetsClient = google.sheets({ version: "v4", auth: buildAuth() })
+  }
+  return g.__sheetsClient
+}
 
-
-const sheets = google.sheets({ version: "v4", auth })
+// Tiện dùng trong toàn file; trỏ tới client ĐÃ CACHE (an toàn qua HMR vì
+// getSheetsClient() trả về instance global, không tạo JWT mới).
+const sheets = getSheetsClient()
 
 type SheetData = { header: string[]; rows: string[][] }
 
@@ -162,7 +173,11 @@ const LAST_GOOD_DATA: Map<string, SheetData> = (globalThis as any).__GS_LAST_GOO
 ;(globalThis as any).__GS_LAST_GOOD_DATA = LAST_GOOD_DATA
 
 const READ_MIN_INTERVAL_MS = 250
-const CACHE_TTL_MS = 15_000
+// ===== MỤC 2 — TTL cache ĐỌC (ms). Mặc định 15s, NGẮN cho an toàn production. =====
+// Đặt SHEETS_READ_TTL_MS=0 để TẮT cache (luôn đọc mới): cần thiết cho flow bán hàng
+// kiểm tra "máy đã bán chưa" — không được trả dữ liệu cũ. Lưu ý: chỉ cache ĐỌC; mọi
+// hàm GHI (append/update/sync...) đều gọi invalidateSheetCache() ngay sau khi ghi.
+const CACHE_TTL_MS = Number(process.env.SHEETS_READ_TTL_MS || 15_000)
 const MAX_CACHE_ENTRIES = 8
 let lastReadAt = 0
 
@@ -408,7 +423,7 @@ export async function updateRowInGoogleSheets(sheetName: string, key: string, ke
 }
 
 export async function updateRangeValues(range: string, values: any[][]) {
-  const sheets = google.sheets({ version: "v4", auth })
+  // Dùng client singleton (getSheetsClient) thay vì tạo google.sheets() mới mỗi lần.
   await sheets.spreadsheets.values.update({
     spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
     range,

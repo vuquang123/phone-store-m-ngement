@@ -19,14 +19,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table"
+import { ResponsiveTable } from "@/components/ui/responsive-table"
 import {
   Dialog,
   DialogContent,
@@ -37,6 +30,7 @@ import {
 } from "@/components/ui/dialog"
 import { RefreshButton } from "@/components/ui/refresh-button"
 import { useToast } from "@/hooks/use-toast"
+import { useAuthMe } from "@/hooks/use-auth-me"
 import { ArrowDownCircle, ArrowUpCircle, Wallet, Loader2, ImagePlus, X } from "lucide-react"
 
 type CashType = "thu" | "chi"
@@ -87,6 +81,8 @@ const toYM = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
 export default function TienMatPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const { me } = useAuthMe()
+  const isManager = me?.role === "quan_ly" // Chỉ Quản lý mới xem Tổng thu/chi + biểu đồ
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   const { data, isLoading, isFetching, refetch } = useQuery<CashResponse>({
@@ -275,8 +271,8 @@ export default function TienMatPage() {
           )}
         </div>
 
-        {/* 3 card tổng quan */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        {/* Card tổng quan — Số dư luôn hiện; Tổng thu/chi chỉ Quản lý */}
+        <div className={`grid gap-4 ${isManager ? "sm:grid-cols-3" : ""}`}>
           <Card>
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
@@ -287,29 +283,34 @@ export default function TienMatPage() {
               <div className="text-2xl sm:text-3xl font-bold text-green-600">{fmt(balance)}</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <ArrowUpCircle className="h-4 w-4" /> Tổng thu {filterType !== "all" ? "(trong kỳ)" : ""}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{fmt(periodThu)}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <ArrowDownCircle className="h-4 w-4" /> Tổng chi {filterType !== "all" ? "(trong kỳ)" : ""}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{fmt(periodChi)}</div>
-            </CardContent>
-          </Card>
+          {isManager && (
+            <>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="flex items-center gap-2">
+                    <ArrowUpCircle className="h-4 w-4" /> Tổng thu {filterType !== "all" ? "(trong kỳ)" : ""}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-600">{fmt(periodThu)}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="flex items-center gap-2">
+                    <ArrowDownCircle className="h-4 w-4" /> Tổng chi {filterType !== "all" ? "(trong kỳ)" : ""}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-600">{fmt(periodChi)}</div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
 
-        {/* Biểu đồ thu/chi */}
+        {/* Biểu đồ thu/chi — chỉ Quản lý */}
+        {isManager && (
         <Card>
           <CardHeader>
             <CardTitle>Biểu đồ thu / chi</CardTitle>
@@ -353,6 +354,7 @@ export default function TienMatPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* 2 nút thu/chi */}
         <div className="flex flex-wrap gap-3">
@@ -380,53 +382,37 @@ export default function TienMatPage() {
             ) : filtered.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">Chưa có giao dịch nào</div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[780px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Thời gian</TableHead>
-                      <TableHead>Loại</TableHead>
-                      <TableHead className="text-right">Số tiền</TableHead>
-                      <TableHead className="text-right">Số dư sau</TableHead>
-                      <TableHead>Nguồn</TableHead>
-                      <TableHead>Lý do</TableHead>
-                      <TableHead>Nhân viên</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pagedEntries.map((e) => (
-                      <TableRow key={e.id}>
-                        <TableCell className="whitespace-nowrap text-sm">{formatDate(e.created_at)}</TableCell>
-                        <TableCell>
-                          {e.loai === "thu" ? (
-                            <Badge className="bg-green-600 hover:bg-green-600">Thu</Badge>
-                          ) : (
-                            <Badge variant="destructive">Chi</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right font-medium ${e.loai === "thu" ? "text-green-600" : "text-red-600"}`}
-                        >
-                          {e.loai === "thu" ? "+" : "-"}
-                          {fmt(e.so_tien)}
-                        </TableCell>
-                        <TableCell className="text-right">{fmt(e.so_du_sau)}</TableCell>
-                        <TableCell className="text-sm">
-                          {nguonLabel(e.nguon)}
-                          {e.ma_tham_chieu && (
-                            <span className="block text-xs text-muted-foreground font-mono">{e.ma_tham_chieu}</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {e.ly_do || "—"}
-                          {e.ghi_chu?.includes("📎") && <span title="Có ảnh đính kèm"> 📎</span>}
-                        </TableCell>
-                        <TableCell className="text-sm">{e.nhan_vien || "—"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <ResponsiveTable
+                data={pagedEntries}
+                rowKey={(e) => e.id}
+                minWidth="min-w-[780px]"
+                columns={[
+                  { key: "time", header: "Thời gian", className: "whitespace-nowrap text-sm", cell: (e) => formatDate(e.created_at) },
+                  { key: "loai", header: "Loại", cell: (e) => e.loai === "thu" ? <Badge className="bg-green-600 hover:bg-green-600">Thu</Badge> : <Badge variant="destructive">Chi</Badge> },
+                  { key: "sotien", header: "Số tiền", className: "text-right", cell: (e) => <span className={`font-medium ${e.loai === "thu" ? "text-green-600" : "text-red-600"}`}>{e.loai === "thu" ? "+" : "-"}{fmt(e.so_tien)}</span> },
+                  { key: "sodu", header: "Số dư sau", className: "text-right", cell: (e) => fmt(e.so_du_sau) },
+                  { key: "nguon", header: "Nguồn", className: "text-sm", cell: (e) => <>{nguonLabel(e.nguon)}{e.ma_tham_chieu && <span className="block font-mono text-xs text-muted-foreground">{e.ma_tham_chieu}</span>}</> },
+                  { key: "lydo", header: "Lý do", className: "text-sm", cell: (e) => <>{e.ly_do || "—"}{e.ghi_chu?.includes("📎") && <span title="Có ảnh đính kèm"> 📎</span>}</> },
+                  { key: "nv", header: "Nhân viên", className: "text-sm", cell: (e) => e.nhan_vien || "—" },
+                ]}
+                renderCard={(e) => (
+                  <div className="space-y-2 rounded-lg border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">{formatDate(e.created_at)}</span>
+                      {e.loai === "thu" ? <Badge className="bg-green-600 hover:bg-green-600">Thu</Badge> : <Badge variant="destructive">Chi</Badge>}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-base font-semibold ${e.loai === "thu" ? "text-green-600" : "text-red-600"}`}>{e.loai === "thu" ? "+" : "-"}{fmt(e.so_tien)}</span>
+                      <span className="text-xs text-muted-foreground">Dư: {fmt(e.so_du_sau)}</span>
+                    </div>
+                    <div className="space-y-0.5 text-sm text-muted-foreground">
+                      <div>Nguồn: <span className="text-foreground">{nguonLabel(e.nguon)}</span>{e.ma_tham_chieu ? <span className="ml-1 font-mono text-xs">({e.ma_tham_chieu})</span> : null}</div>
+                      {e.ly_do ? <div>Lý do: <span className="text-foreground">{e.ly_do}</span>{e.ghi_chu?.includes("📎") ? " 📎" : ""}</div> : null}
+                      {e.nhan_vien ? <div>NV: <span className="text-foreground">{e.nhan_vien}</span></div> : null}
+                    </div>
+                  </div>
+                )}
+              />
             )}
 
             {filtered.length > PAGE_SIZE && (
