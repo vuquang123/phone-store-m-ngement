@@ -29,7 +29,12 @@ const handleLogin = async (e: React.FormEvent) => {
     })
     const data = await res.json()
 
-    if (!res.ok || !data.success || !data.user?.role) throw new Error("Đã xảy ra lỗi")
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || "Đăng nhập thất bại")
+    }
+    if (!data.user?.role) {
+      throw new Error("Tài khoản chưa được cấp quyền, liên hệ quản lý.")
+    }
 
     // Lưu thông tin user vào localStorage (nếu cần)
     localStorage.setItem("auth_user", JSON.stringify(data.user))
@@ -93,6 +98,9 @@ const handleLogin = async (e: React.FormEvent) => {
                   type="email"
                   placeholder="Nhập tài khoản email"
                   required
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-12 border-border focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
@@ -107,6 +115,9 @@ const handleLogin = async (e: React.FormEvent) => {
                   type="password"
                   placeholder="Nhập mật khẩu"
                   required
+                  autoComplete="current-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="h-12 border-border focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
