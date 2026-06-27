@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/user-avatar"
+import { RefreshButton } from "@/components/ui/refresh-button"
 import { Search, Plus, Edit, Trash2, UserCheck, UserX } from "lucide-react"
 import { EmployeeDialog } from "@/components/nhan-vien/employee-dialog"
 import { useToast } from "@/hooks/use-toast"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface Employee {
   id: string
@@ -77,9 +79,8 @@ export default function NhanVienPage() {
   /** Kiểm tra quyền từ API /api/auth/me (hoặc trả về từ sheets-auth) */
   const checkUserRole = async () => {
     try {
-      const res = await fetch("/api/auth/me", {
+      const res = await fetchWithTimeout("/api/auth/me", {
         headers: getAuthHeaders(),
-        cache: "no-store",
       })
       if (!res.ok) {
         router.push("/dashboard")
@@ -96,9 +97,9 @@ export default function NhanVienPage() {
     }
   }
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (force = false) => {
     try {
-      const response = await fetch("/api/nhan-vien", {
+      const response = await fetchWithTimeout(`/api/nhan-vien${force ? "?refresh=1" : ""}`, {
         headers: getAuthHeaders(),
       })
       if (response.ok) {
@@ -220,12 +221,15 @@ export default function NhanVienPage() {
           <h1 className="text-2xl sm:text-3xl font-bold">Quản lý Nhân viên</h1>
           <p className="text-muted-foreground">Quản lý tài khoản và phân quyền nhân viên</p>
         </div>
-        {userRole === "quan_ly" && (
-          <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
-            <Plus className="w-4 h-4 mr-2" />
-            Thêm nhân viên
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <RefreshButton onRefresh={() => fetchEmployees(true)} label />
+          {userRole === "quan_ly" && (
+            <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
+              <Plus className="w-4 h-4 mr-2" />
+              Thêm nhân viên
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
@@ -251,16 +255,7 @@ export default function NhanVienPage() {
                 className="relative p-4 border rounded-lg hover:bg-muted/50 flex flex-col gap-3 sm:flex-row sm:items-center"
               >
                 <div className="flex items-start gap-3 pr-16 sm:pr-0 w-full">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback>
-                      {(employee.ho_ten || "NV")
-                        .split(" ")
-                        .filter(Boolean)
-                        .map((n) => n[0])
-                        .join("")
-                        .toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar name={employee.ho_ten} email={employee.email} className="h-10 w-10" />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                       <h3 className="font-medium truncate max-w-[200px] sm:max-w-none">{employee.ho_ten}</h3>

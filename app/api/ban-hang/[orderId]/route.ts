@@ -85,6 +85,16 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderI
       }, 0),
       giam_gia: 0,
       ghi_chu: first[idx("Ghi Chú")],
+      hinh_thuc_van_chuyen: first[idx("Hình Thức Vận Chuyển")] || "",
+      // Mã GHTK lấy từ "Hình Thức Vận Chuyển" dạng "GHTK - 1990038382" (fallback Ghi chú cũ).
+      ma_ghtk: (() => {
+        const vc = String(first[idx("Hình Thức Vận Chuyển")] || "")
+        const m = vc.match(/GHTK\s*[-–]\s*(\S+)/i)
+        if (m) return m[1].trim()
+        const gc = String(first[idx("Ghi Chú")] || "")
+        const m2 = gc.match(/\[GHTK:\s*([^\]]+)\]/i)
+        return m2 ? m2[1].trim() : ""
+      })(),
     }
 
     return NextResponse.json(orderDetail)

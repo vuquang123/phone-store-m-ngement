@@ -392,7 +392,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={`${isBulkMode ? "sm:max-w-[1800px] w-[98vw]" : "sm:max-w-[1200px] w-[94vw]"} max-h-[90vh] overflow-y-auto bg-white`}>
+      <DialogContent className={`${isBulkMode ? "sm:max-w-[1400px] w-[90vw]" : "sm:max-w-[1400px] w-[90vw]"} max-h-[90vh] overflow-y-auto bg-card`}>
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">{product ? "Sửa sản phẩm" : "Thêm sản phẩm mới"}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
@@ -410,22 +410,22 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
 
         {isBulkMode ? (
           <form onSubmit={handleBulkSubmit} className="space-y-3 flex flex-col pt-2 block overflow-hidden">
-            <div className="flex flex-col md:flex-row gap-4 items-start md:items-end justify-between border-b pb-3 border-transparent shadow-none bg-white">
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-end justify-between border-b pb-3 border-transparent shadow-none bg-card">
               <div className="flex-1 w-full md:w-auto">
-                <Label className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                <Label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                   <span className="w-1.5 h-4 bg-purple-500 rounded-full"></span>
                   Ảnh xác nhận (Tuỳ chọn)
                 </Label>
-                <div className="border border-dashed border-slate-300 rounded-lg p-3 flex flex-col items-center justify-center gap-1 bg-slate-50 hover:bg-slate-100 transition-colors relative cursor-pointer min-h-[80px]">
+                <div className="border border-dashed border-border rounded-lg p-3 flex flex-col items-center justify-center gap-1 bg-muted hover:bg-accent transition-colors relative cursor-pointer min-h-[80px]">
                   <Input type="file" multiple accept="image/*" onChange={e => setBulkProofFiles(Array.from(e.target.files || []))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" title="" />
-                  <Camera className="w-6 h-6 text-slate-400" />
-                  <div className="text-xs font-medium text-slate-600">
+                  <Camera className="w-6 h-6 text-muted-foreground" />
+                  <div className="text-xs font-medium text-muted-foreground">
                     {bulkProofFiles.length > 0 ? <span className="text-blue-600">Đã chọn {bulkProofFiles.length} ảnh</span> : "Kéo thả hoặc nhấn tải ảnh lên"}
                   </div>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2 text-right">
-                <div className="text-xs text-slate-500">Cần IMEI 15 số hoặc Serial 6-30 ký tự</div>
+                <div className="text-xs text-muted-foreground">Cần IMEI 15 số hoặc Serial 6-30 ký tự</div>
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => setBulkRows([newBulkRow(), newBulkRow()])}>
                     Làm mới bảng
@@ -436,9 +436,9 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                 </div>
               </div>
             </div>
-            <div className="overflow-x-auto border border-slate-200 rounded-lg shadow-sm">
+            <div className="overflow-x-auto border border-border rounded-lg shadow-sm">
               <table className="w-full text-xs min-w-[1700px]">
-                <thead className="bg-slate-100 text-slate-600 uppercase tracking-wider font-semibold border-b border-slate-200">
+                <thead className="bg-muted text-muted-foreground uppercase tracking-wider font-semibold border-b border-border">
                   <tr>
                     <th className="px-2 py-2 text-left min-w-[150px]">Tên sản phẩm*</th>
                     <th className="px-2 py-2 text-left min-w-[100px]">Loại*</th>
@@ -467,11 +467,11 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                       setBulkRows(prev => prev.map(r => r.rowId === row.rowId ? { ...r, [key]: value } : r))
                     }
                     return (
-                      <tr key={row.rowId} className="bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                      <tr key={row.rowId} className="bg-card border-b border-slate-100 hover:bg-accent transition-colors">
                         <td className="px-1 py-1">
                           <Select value={row.ten_san_pham} onValueChange={(v) => setField("ten_san_pham", v)}>
-                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 w-full min-w-[150px]"><SelectValue placeholder="Chọn..." /></SelectTrigger>
-                            <SelectContent className="bg-white max-h-72 overflow-y-auto">
+                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[150px]"><SelectValue placeholder="Chọn..." /></SelectTrigger>
+                            <SelectContent className="bg-card max-h-72 overflow-y-auto">
                               {ensureOption(productNameOptions, row.ten_san_pham).map((item) => (
                                 <SelectItem key={item} value={item} className="text-xs">{item}</SelectItem>
                               ))}
@@ -480,8 +480,8 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                         </td>
                         <td className="px-1 py-1">
                           <Select value={row.loai_phu_kien} onValueChange={(v) => setField("loai_phu_kien", v)}>
-                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 w-full min-w-[100px]"><SelectValue placeholder="Loại" /></SelectTrigger>
-                            <SelectContent className="bg-white">
+                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[100px]"><SelectValue placeholder="Loại" /></SelectTrigger>
+                            <SelectContent className="bg-card">
                               <SelectItem value="Lock" className="text-xs">Lock</SelectItem>
                               <SelectItem value="Quốc tế" className="text-xs">Quốc tế</SelectItem>
                             </SelectContent>
@@ -489,8 +489,8 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                         </td>
                         <td className="px-1 py-1">
                           <Select value={row.dung_luong} onValueChange={(v) => setField("dung_luong", v)}>
-                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 w-full min-w-[90px]"><SelectValue placeholder="D.lượng" /></SelectTrigger>
-                            <SelectContent className="bg-white">
+                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[90px]"><SelectValue placeholder="D.lượng" /></SelectTrigger>
+                            <SelectContent className="bg-card">
                               {ensureOption(storageOptions, row.dung_luong).map((item) => (
                                 <SelectItem key={item} value={item} className="text-xs">{item}</SelectItem>
                               ))}
@@ -499,8 +499,8 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                         </td>
                         <td className="px-1 py-1">
                           <Select value={row.mau_sac} onValueChange={(v) => setField("mau_sac", v)}>
-                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 w-full min-w-[100px]"><SelectValue placeholder="Màu" /></SelectTrigger>
-                            <SelectContent className="bg-white max-h-64 overflow-y-auto">
+                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[100px]"><SelectValue placeholder="Màu" /></SelectTrigger>
+                            <SelectContent className="bg-card max-h-64 overflow-y-auto">
                               {ensureOption(colorOptions[row.ten_san_pham] || [], row.mau_sac).map((color) => (
                                 <SelectItem key={color} value={color} className="text-xs">{color}</SelectItem>
                               ))}
@@ -509,8 +509,8 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                         </td>
                         <td className="px-1 py-1">
                           <Select value={row.do_sim || "Không rõ"} onValueChange={(v) => setField("do_sim", v)}>
-                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 w-full min-w-[80px]"><SelectValue placeholder="Dạng Sim" /></SelectTrigger>
-                            <SelectContent className="bg-white">
+                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[80px]"><SelectValue placeholder="Dạng Sim" /></SelectTrigger>
+                            <SelectContent className="bg-card">
                               <SelectItem value="Không rõ" className="text-xs">Trống</SelectItem>
                               <SelectItem value="Nguyên bản" className="text-xs">Nguyên bản</SelectItem>
                               <SelectItem value="Sim ghép" className="text-xs">Sim ghép</SelectItem>
@@ -521,7 +521,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                           </Select>
                         </td>
                         <td className="px-1 py-1">
-                          <Input value={row.pin} onChange={(e) => setField("pin", e.target.value)} placeholder="%" className="h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 px-2" />
+                          <Input value={row.pin} onChange={(e) => setField("pin", e.target.value)} placeholder="%" className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 px-2" />
                         </td>
                         <td className="px-1 py-1">
                           <div className="flex gap-1">
@@ -529,7 +529,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                               value={row.imei}
                               onChange={(e) => setField("imei", e.target.value.replace(/\D/g, "").slice(0, 15))}
                               placeholder="IMEI"
-                              className="font-mono h-8 text-[11px] border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 px-2 w-[85px]"
+                              className="font-mono h-8 text-[11px] border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 px-2 w-[85px]"
                             />
                             <Input
                               value={row.serial}
@@ -539,17 +539,17 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                                 setField("serial", val.slice(0, 30))
                               }}
                               placeholder="Serial"
-                              className="font-mono h-8 text-[11px] border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 px-2 w-[85px]"
+                              className="font-mono h-8 text-[11px] border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 px-2 w-[85px]"
                             />
                           </div>
                         </td>
                         <td className="px-1 py-1">
-                          <Input value={row.tinh_trang} onChange={(e) => setField("tinh_trang", e.target.value)} placeholder="Nhập..." className="h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 px-2" />
+                          <Input value={row.tinh_trang} onChange={(e) => setField("tinh_trang", e.target.value)} placeholder="Nhập..." className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 px-2" />
                         </td>
                         <td className="px-1 py-1">
                           <Select value={row.nguon} onValueChange={(v) => setField("nguon", v)}>
-                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 w-full min-w-[100px]"><SelectValue placeholder="Nguồn" /></SelectTrigger>
-                            <SelectContent className="bg-white">
+                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[100px]"><SelectValue placeholder="Nguồn" /></SelectTrigger>
+                            <SelectContent className="bg-card">
                               <SelectItem value="Kho trong" className="text-xs">Kho trong</SelectItem>
                               <SelectItem value="Kho ngoài" className="text-xs">Kho ngoài</SelectItem>
                             </SelectContent>
@@ -560,7 +560,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                             value={row.gia_nhap ? Number(row.gia_nhap).toLocaleString("vi-VN") : ""}
                             onChange={(e) => setField("gia_nhap", e.target.value.replace(/[^0-9]/g, ""))}
                             placeholder="0"
-                            className="text-right h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 font-mono px-2"
+                            className="text-right h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 font-mono px-2"
                           />
                         </td>
                         <td className="px-1 py-1">
@@ -568,7 +568,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                             value={row.gia_ban ? Number(row.gia_ban).toLocaleString("vi-VN") : ""}
                             onChange={(e) => setField("gia_ban", e.target.value.replace(/[^0-9]/g, ""))}
                             placeholder="0"
-                            className="text-right h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 font-mono px-2"
+                            className="text-right h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 font-mono px-2"
                           />
                         </td>
                         <td className="px-1 py-1">
@@ -576,7 +576,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                             value={row.giam_gia ? Number(row.giam_gia).toLocaleString("vi-VN") : ""}
                             onChange={(e) => setField("giam_gia", e.target.value.replace(/[^0-9]/g, ""))}
                             placeholder="0"
-                            className="text-right h-8 text-xs border-transparent shadow-none text-red-600 hover:bg-white focus:ring-1 focus:ring-blue-500 font-mono px-2"
+                            className="text-right h-8 text-xs border-transparent shadow-none text-red-600 hover:bg-card focus:ring-1 focus:ring-blue-500 font-mono px-2"
                           />
                         </td>
                         <td className="px-1 py-1">
@@ -584,18 +584,18 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                             type="date"
                             value={row.ngay_nhap || today}
                             onChange={(e) => setField("ngay_nhap", e.target.value)}
-                            className="h-8 text-[11px] border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 px-2 uppercase"
+                            className="h-8 text-[11px] border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 px-2 uppercase"
                           />
                         </td>
                         <td className="px-1 py-1">
-                          <Input value={row.ghi_chu} onChange={(e) => setField("ghi_chu", e.target.value)} placeholder="..." className="h-8 text-xs border-transparent shadow-none hover:bg-white focus:ring-1 focus:ring-blue-500 px-2" />
+                          <Input value={row.ghi_chu} onChange={(e) => setField("ghi_chu", e.target.value)} placeholder="..." className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 px-2" />
                         </td>
                         <td className="px-1 py-1 text-center">
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                            className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50"
                             onClick={() => setBulkRows(prev => prev.length > 1 ? prev.filter(r => r.rowId !== row.rowId) : prev)}
                           >
                             <Trash2 className="w-4 h-4" />
@@ -618,9 +618,9 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
           </form>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            <Card className="shadow-sm border-slate-200">
+            <Card className="shadow-sm border-border">
               <CardContent className="p-4 space-y-4">
-                <div className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                <div className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                   <span className="w-1.5 h-4 bg-blue-600 rounded-full"></span>
                   Thông tin cơ bản
                 </div>
@@ -631,7 +631,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                       <SelectTrigger id="ten_san_pham_select" className="w-full">
                         <SelectValue placeholder="Chọn sản phẩm" />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-50">
+                      <SelectContent className="bg-muted">
                         {ensureOption([
                           "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17", "iPhone 17 Air", "iPhone 17 E",
                           "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16", "iPhone 16 E",
@@ -652,7 +652,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                       <SelectTrigger id="mau_sac_select">
                         <SelectValue placeholder="Chọn màu sắc" />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-50">
+                      <SelectContent className="bg-muted">
                         {ensureOption(colorOptions[formData.ten_san_pham] || [], formData.mau_sac).map((color) => (
                           <SelectItem key={color} value={color}>{color}</SelectItem>
                         ))}
@@ -665,7 +665,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                       <SelectTrigger id="model_select" className="w-full">
                         <SelectValue placeholder="Chọn loại máy" />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-50">
+                      <SelectContent className="bg-muted">
                         <SelectItem value="Lock">Lock</SelectItem>
                         <SelectItem value="Quốc tế">Quốc tế</SelectItem>
                       </SelectContent>
@@ -677,7 +677,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                       <SelectTrigger id="dung_luong_select">
                         <SelectValue placeholder="Chọn dung lượng" />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-50">
+                      <SelectContent className="bg-muted">
                         {storageOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -688,7 +688,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                       <SelectTrigger id="do_sim_select">
                         <SelectValue placeholder="Chọn dạng sim" />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-50">
+                      <SelectContent className="bg-muted">
                         <SelectItem value="Không rõ">Trống</SelectItem>
                         <SelectItem value="Nguyên bản">Nguyên bản</SelectItem>
                         <SelectItem value="Sim ghép">Sim ghép</SelectItem>
@@ -702,9 +702,9 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm border-slate-200">
+            <Card className="shadow-sm border-border">
               <CardContent className="p-4 space-y-4">
-                <div className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                <div className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                   <span className="w-1.5 h-4 bg-emerald-500 rounded-full"></span>
                   Định danh & Tình trạng
                 </div>
@@ -745,9 +745,9 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm border-slate-200">
+            <Card className="shadow-sm border-border">
               <CardContent className="p-4 space-y-4">
-                <div className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                <div className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                   <span className="w-1.5 h-4 bg-orange-500 rounded-full"></span>
                   Giá & Giao dịch
                 </div>
@@ -755,21 +755,21 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                   <div className="space-y-2">
                     <Label htmlFor="gia_nhap">Giá nhập <span className="text-red-500">*</span></Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium">₫</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">₫</span>
                       <Input id="gia_nhap" type="text" value={formData.gia_nhap ? Number(formData.gia_nhap).toLocaleString("vi-VN") : ""} onChange={(e) => setFormData({ ...formData, gia_nhap: e.target.value.replace(/[^0-9]/g, "") })} placeholder="0" required className="pl-7 font-mono text-sm" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="gia_ban">Giá Bán <span className="text-red-500">*</span></Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium">₫</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">₫</span>
                       <Input id="gia_ban" type="text" value={formData.gia_ban ? Number(formData.gia_ban).toLocaleString("vi-VN") : ""} onChange={(e) => setFormData({ ...formData, gia_ban: e.target.value.replace(/[^0-9]/g, "") })} placeholder="0" required className="pl-7 font-mono text-sm" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="giam_gia">Giảm giá</Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium">₫</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">₫</span>
                       <Input id="giam_gia" type="text" value={formData.giam_gia ? Number(formData.giam_gia).toLocaleString("vi-VN") : ""} onChange={(e) => setFormData({ ...formData, giam_gia: e.target.value.replace(/[^0-9]/g, "") })} placeholder="0" className="pl-7 font-mono text-sm text-red-600" />
                     </div>
                   </div>
@@ -787,19 +787,19 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm border-slate-200">
+            <Card className="shadow-sm border-border">
               <CardContent className="p-4 space-y-4">
-                <div className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                <div className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                   <span className="w-1.5 h-4 bg-purple-500 rounded-full"></span>
                   Ảnh xác nhận (Tùy chọn)
                 </div>
-                <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 transition-colors relative cursor-pointer min-h-[120px]">
+                <div className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center gap-2 bg-muted hover:bg-accent transition-colors relative cursor-pointer min-h-[120px]">
                   <Input type="file" multiple accept="image/*" onChange={e => setProofFiles(Array.from(e.target.files || []))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" title="" />
-                  <Camera className="w-8 h-8 text-slate-400" />
-                  <div className="text-sm font-medium text-slate-600">
+                  <Camera className="w-8 h-8 text-muted-foreground" />
+                  <div className="text-sm font-medium text-muted-foreground">
                     {proofFiles.length > 0 ? <span className="text-blue-600">Đã chọn {proofFiles.length} ảnh</span> : "Kéo thả hoặc nhấn để tải ảnh lên"}
                   </div>
-                  {proofFiles.length === 0 && <div className="text-xs text-slate-400">Hỗ trợ định dạng JPG, PNG, WEBP</div>}
+                  {proofFiles.length === 0 && <div className="text-xs text-muted-foreground">Hỗ trợ định dạng JPG, PNG, WEBP</div>}
                 </div>
               </CardContent>
             </Card>

@@ -117,10 +117,10 @@ const GOOGLE_SHEETS_SPREADSHEET_ID =
   (process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEETS_ID || "") as string
 
 if (!GOOGLE_SHEETS_CLIENT_EMAIL || !GOOGLE_SHEETS_PRIVATE_KEY || !GOOGLE_SHEETS_SPREADSHEET_ID) {
-  console.error("[Google Sheets] Thiếu biến môi trường cần thiết.")
-  console.error("  GOOGLE_SHEETS_CLIENT_EMAIL:", GOOGLE_SHEETS_CLIENT_EMAIL ? "OK" : "MISSING")
-  console.error("  PRIVATE_KEY present:", RAW_PRIVATE_KEY ? "YES" : "NO")
-  console.error("  SPREADSHEET_ID:", GOOGLE_SHEETS_SPREADSHEET_ID ? "OK" : "MISSING")
+  console.error("[Google Sheets] Thiếu biến môi trường cần thiết (đặt trong .env.local — xem .env.example).")
+  console.error("  GOOGLE_CLIENT_EMAIL (hoặc GOOGLE_SERVICE_ACCOUNT_EMAIL):", GOOGLE_SHEETS_CLIENT_EMAIL ? "OK" : "MISSING")
+  console.error("  GOOGLE_PRIVATE_KEY (hoặc GOOGLE_SERVICE_ACCOUNT_KEY):", RAW_PRIVATE_KEY ? "OK" : "MISSING")
+  console.error("  GOOGLE_SHEETS_SPREADSHEET_ID (hoặc GOOGLE_SHEETS_ID):", GOOGLE_SHEETS_SPREADSHEET_ID ? "OK" : "MISSING")
 }
 
 
@@ -139,10 +139,21 @@ function buildAuth() {
   })
 }
 
-const auth = buildAuth()
+// ===== MỤC 1 — Singleton Sheets client, sống sót qua HMR =====
+// Cache client (kèm JWT đã xác thực) trên globalThis. Ở dev, mỗi lần hot-reload
+// module bị đánh giá lại; nếu tạo mới google.auth.JWT + google.sheets() mỗi lần thì
+// phải xác thực lại (tốn vài giây). Dùng cache global để TÁI SỬ DỤNG qua các lần HMR.
+const g = globalThis as any
+function getSheetsClient() {
+  if (!g.__sheetsClient) {
+    g.__sheetsClient = google.sheets({ version: "v4", auth: buildAuth() })
+  }
+  return g.__sheetsClient
+}
 
-
-const sheets = google.sheets({ version: "v4", auth })
+// Tiện dùng trong toàn file; trỏ tới client ĐÃ CACHE (an toàn qua HMR vì
+// getSheetsClient() trả về instance global, không tạo JWT mới).
+const sheets = getSheetsClient()
 
 type SheetData = { header: string[]; rows: string[][] }
 
@@ -162,7 +173,11 @@ const LAST_GOOD_DATA: Map<string, SheetData> = (globalThis as any).__GS_LAST_GOO
 ;(globalThis as any).__GS_LAST_GOOD_DATA = LAST_GOOD_DATA
 
 const READ_MIN_INTERVAL_MS = 250
-const CACHE_TTL_MS = 15_000
+// ===== MỤC 2 — TTL cache ĐỌC (ms). Mặc định 15s, NGẮN cho an toàn production. =====
+// Đặt SHEETS_READ_TTL_MS=0 để TẮT cache (luôn đọc mới): cần thiết cho flow bán hàng
+// kiểm tra "máy đã bán chưa" — không được trả dữ liệu cũ. Lưu ý: chỉ cache ĐỌC; mọi
+// hàm GHI (append/update/sync...) đều gọi invalidateSheetCache() ngay sau khi ghi.
+const CACHE_TTL_MS = Number(process.env.SHEETS_READ_TTL_MS || 15_000)
 const MAX_CACHE_ENTRIES = 8
 let lastReadAt = 0
 
@@ -194,9 +209,11 @@ function invalidateSheetCache(sheetName: string) {
 
 // Đọc dữ liệu, trả về { header, rows }
 // Mặc định đọc rộng tới cột ZZ để tránh thiếu cột (sheet này vượt quá Z)
-export async function readFromGoogleSheets(sheetName: string, range: string = "A1:ZZ10000", options?: { silent?: boolean }): Promise<SheetData> {
+export async function readFromGoogleSheets(sheetName: string, range: string = "A1:ZZ10000", options?: { silent?: boolean; force?: boolean }): Promise<SheetData> {
   const cacheKey = `${sheetName}::${range}`
-  const cacheEntry = SHEETS_CACHE.get(cacheKey)
+  // force = bỏ qua cache (dùng cho nút "Làm mới" để lấy data mới nhất từ sheet)
+  if (options?.force) invalidateSheetCache(sheetName)
+  const cacheEntry = options?.force ? undefined : SHEETS_CACHE.get(cacheKey)
   const now = Date.now()
 
   if (cacheEntry?.data && cacheEntry.expiresAt > now) {
@@ -406,7 +423,7 @@ export async function updateRowInGoogleSheets(sheetName: string, key: string, ke
 }
 
 export async function updateRangeValues(range: string, values: any[][]) {
-  const sheets = google.sheets({ version: "v4", auth })
+  // Dùng client singleton (getSheetsClient) thay vì tạo google.sheets() mới mỗi lần.
   await sheets.spreadsheets.values.update({
     spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
     range,

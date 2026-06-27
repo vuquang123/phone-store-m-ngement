@@ -47,9 +47,9 @@ export function CNCTable({
   const getItemKey = (p: CNCProduct, idx: number) => p.imei || p.id || `unknown-${idx}`;
 
   return (
-    <div className="rounded-md border border-slate-200 overflow-hidden bg-white shadow-sm">
+    <div className="rounded-md border border-border overflow-hidden bg-card shadow-sm">
       <Table>
-        <TableHeader className="bg-slate-50/80">
+        <TableHeader className="bg-muted/80">
           <TableRow>
             {isEditMode && (
               <TableHead className="w-12 text-center">
@@ -59,7 +59,7 @@ export function CNCTable({
                 />
               </TableHead>
             )}
-            <TableHead className="font-semibold text-slate-700">
+            <TableHead className="font-semibold text-foreground">
               <div className="flex items-center gap-2">
                 Sản phẩm
                 <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-100 py-0 leading-none h-5">
@@ -67,17 +67,17 @@ export function CNCTable({
                 </Badge>
               </div>
             </TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden sm:table-cell">IMEI</TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden md:table-cell">Địa chỉ CNC</TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden lg:table-cell">Tình trạng</TableHead>
-            <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
-            <TableHead className="hidden xl:table-cell font-semibold text-slate-700">Ngày gửi</TableHead>
+            <TableHead className="font-semibold text-foreground hidden sm:table-cell">IMEI</TableHead>
+            <TableHead className="font-semibold text-foreground hidden md:table-cell">Địa chỉ CNC</TableHead>
+            <TableHead className="font-semibold text-foreground hidden lg:table-cell">Tình trạng</TableHead>
+            <TableHead className="font-semibold text-foreground">Trạng thái</TableHead>
+            <TableHead className="hidden xl:table-cell font-semibold text-foreground">Ngày gửi</TableHead>
             {(onComplete || onCustomerReceived) && <TableHead className="w-24"></TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.map((p, idx) => (
-            <TableRow key={`${p.imei}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+            <TableRow key={`${p.imei}-${idx}`} className="hover:bg-accent/50 transition-colors">
               {isEditMode && (
                 <TableCell className="text-center">
                   <Checkbox 
@@ -88,8 +88,8 @@ export function CNCTable({
               )}
               <TableCell className="py-3">
                 <div className="flex flex-col">
-                  <span className="font-medium text-slate-900 leading-tight">{p.ten_san_pham}</span>
-                  <span className="text-xs text-slate-500 mt-0.5">
+                  <span className="font-medium text-foreground leading-tight">{p.ten_san_pham}</span>
+                  <span className="text-xs text-muted-foreground mt-0.5">
                     {p.mau_sac} • {p.loai_may}
                     {p.do_sim && (
                       <Badge variant="outline" className="ml-2 bg-orange-50 text-orange-600 border-orange-100 text-[10px] h-4 px-1 py-0 leading-none" title={p.do_sim}>
@@ -101,7 +101,7 @@ export function CNCTable({
                   {/* Additional info for Mobile */}
                   <div className="flex flex-col gap-1 mt-1.5 sm:hidden">
                     {p.imei && (
-                      <span className="text-[10px] font-mono text-slate-500 bg-slate-50 self-start px-1 rounded">
+                      <span className="text-[10px] font-mono text-muted-foreground bg-muted self-start px-1 rounded">
                         {p.imei}
                       </span>
                     )}
@@ -111,7 +111,7 @@ export function CNCTable({
                       </span>
                     </div>
                     {p.tinh_trang && (
-                      <p className="text-[10px] text-slate-500 italic bg-slate-50 p-1 rounded border border-slate-100">
+                      <p className="text-[10px] text-muted-foreground italic bg-muted p-1 rounded border border-slate-100">
                         {p.tinh_trang}
                       </p>
                     )}
@@ -125,22 +125,22 @@ export function CNCTable({
                   </div>
                   <div className="hidden sm:block lg:hidden mt-0.5">
                     {p.tinh_trang && (
-                      <p className="text-[10px] text-slate-500 italic truncate max-w-[200px]">
+                      <p className="text-[10px] text-muted-foreground italic truncate max-w-[200px]">
                         {p.tinh_trang}
                       </p>
                     )}
                   </div>
                 </div>
               </TableCell>
-              <TableCell className="text-sm font-mono text-slate-600 hidden sm:table-cell">{p.imei}</TableCell>
-              <TableCell className="hidden md:table-cell text-sm text-slate-600 font-medium text-blue-600">{p.dia_chi_cnc}</TableCell>
-              <TableCell className="hidden lg:table-cell text-sm text-slate-600">{p.tinh_trang}</TableCell>
+              <TableCell className="text-sm font-mono text-muted-foreground hidden sm:table-cell">{p.imei}</TableCell>
+              <TableCell className="hidden md:table-cell text-sm text-muted-foreground font-medium text-blue-600">{p.dia_chi_cnc}</TableCell>
+              <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">{p.tinh_trang}</TableCell>
               <TableCell>
                 <Badge className={`${getTrangThaiColor(p.trang_thai)} border-none text-[11px]`}>
                   {p.trang_thai}
                 </Badge>
               </TableCell>
-              <TableCell className="hidden xl:table-cell text-sm text-slate-500">{p.ngay_gui}</TableCell>
+              <TableCell className="hidden xl:table-cell text-sm text-muted-foreground">{p.ngay_gui}</TableCell>
               {(onComplete || onCustomerReceived) && (
                 <TableCell>
                   <div className="flex gap-2 justify-end">
@@ -161,7 +161,7 @@ export function CNCTable({
           ))}
           {products.length === 0 && (
             <TableRow>
-              <TableCell colSpan={10} className="h-32 text-center text-slate-500">
+              <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
                 Không có sản phẩm nào đang CNC.
               </TableCell>
             </TableRow>

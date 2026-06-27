@@ -93,7 +93,7 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-  <DialogContent className="sm:max-w-[425px] bg-white">
+  <DialogContent className="sm:max-w-[425px] bg-card">
         <DialogHeader>
           <DialogTitle>{employee ? "Chỉnh sửa nhân viên" : "Thêm nhân viên mới"}</DialogTitle>
           <DialogDescription>

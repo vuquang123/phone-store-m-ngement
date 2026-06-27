@@ -7,12 +7,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { RefreshButton } from "@/components/ui/refresh-button"
 import { Search, Eye, FileText } from "lucide-react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { OrderDetailDialog } from "@/components/ban-hang/order-detail-dialog"
 import OrderProductsCell from "@/app/dashboard/ban-hang/OrderProductsCell"
+import { GhtkStatusBadge } from "@/components/ghtk/ghtk-status-badge"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface Order {
   id: string
@@ -25,8 +28,9 @@ interface Order {
   trang_thai: string
   ngay_ban: string
   khach_hang?: { ho_ten: string; so_dien_thoai: string }
-  nhan_vien?: { id: string }
+  nhan_vien?: { id?: string; name?: string; role?: string }
   loai_don?: string
+  ma_ghtk?: string
   hinh_thuc_van_chuyen?: string
   imeis?: string[]
   imei?: string // raw from each row for grouping convenience
@@ -41,11 +45,12 @@ export default function DonHangPage() {
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [trangThai, setTrangThai] = useState("all")
   const [loaiDonFilter, setLoaiDonFilter] = useState<"all" | "online" | "offline">("all")
   const [timeFilter, setTimeFilter] = useState<"all" | "this_month" | "last_month">("all")
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (force = false) => {
     try {
       setIsLoading(true)
       const params = new URLSearchParams({
@@ -54,8 +59,10 @@ export default function DonHangPage() {
         // Chỉ lấy đơn hàng đã thanh toán
         trang_thai: "hoan_thanh",
       })
+      if (force) params.set("refresh", "1")
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim())
 
-      const response = await fetch(`/api/ban-hang?${params}`)
+      const response = await fetchWithTimeout(`/api/ban-hang?${params}`)
       if (!response.ok) throw new Error("Failed to fetch orders")
 
       const data = await response.json()
@@ -90,25 +97,56 @@ export default function DonHangPage() {
     }
   }
 
+  // Debounce ô tìm kiếm -> reset trang 1 + tìm trên TOÀN BỘ đơn ở server
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(1)
+      setDebouncedSearch(search)
+    }, 400)
+    return () => clearTimeout(t)
+  }, [search])
+
   useEffect(() => {
     fetchOrders()
-  }, [page])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, debouncedSearch])
 
   const handleViewOrder = (orderId: string) => {
     setSelectedOrder(orderId)
     setIsDetailDialogOpen(true)
   }
 
-  const getTrangThaiColor = (trangThai: string) => {
-    switch (trangThai) {
-      case "hoan_thanh":
-        return "bg-green-100 text-green-800"
-      case "huy":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
+  // Chuẩn hoá chuỗi trạng thái thô từ sheet (bỏ dấu, thường hoá) để so khớp.
+  const normTrangThai = (s: string) =>
+    String(s || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/gi, "d")
+      .toLowerCase()
+      .trim()
+
+  const isCancelled = (s: string) => normTrangThai(s).includes("huy")
+  const isReturned = (s: string) => normTrangThai(s).includes("hoan tra")
+
+  // Màu: đã huỷ -> đỏ; đã hoàn -> vàng; còn lại -> xanh lá.
+  const getTrangThaiColor = (trangThai: string) =>
+    isCancelled(trangThai)
+      ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+      : isReturned(trangThai)
+        ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300"
+        : "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
+
+  // Nhãn: "Hoàn trả" -> "Đã hoàn"; đã huỷ -> "Đã hủy"; còn lại -> "Thành công".
+  const getTrangThaiLabel = (trangThai: string) =>
+    isReturned(trangThai) ? "Đã hoàn" : isCancelled(trangThai) ? "Đã hủy" : "Thành công"
+
+  // Pill trạng thái viền màu + chấm (UI card mới)
+  const getStatusPillClass = (trangThai: string) =>
+    isCancelled(trangThai)
+      ? "border-red-500/40 text-red-500"
+      : isReturned(trangThai)
+        ? "border-yellow-500/40 text-yellow-600 dark:text-yellow-500"
+        : "border-emerald-500/40 text-emerald-600 dark:text-emerald-500"
 
   const getPhuongThucColor = (label: string) => {
     const s = (label || '').toLowerCase()
@@ -116,7 +154,7 @@ export default function DonHangPage() {
     if (s === 'chuyển khoản' || s === 'chuyen khoan') return 'bg-purple-100 text-purple-800'
     if (s === 'thẻ' || s === 'the') return 'bg-orange-100 text-orange-800'
     if (s === 'trả góp' || s === 'tra gop') return 'bg-amber-100 text-amber-800'
-    return 'bg-gray-100 text-gray-800'
+    return 'bg-muted text-foreground'
   }
 
   return (
@@ -127,6 +165,7 @@ export default function DonHangPage() {
             <h2 className="text-2xl font-bold tracking-tight">Danh sách đơn hàng</h2>
             <p className="text-muted-foreground">Quản lý và theo dõi các đơn hàng đã bán</p>
           </div>
+          <RefreshButton onRefresh={() => fetchOrders(true)} loading={isLoading} label />
         </div>
 
         <Card>
@@ -164,39 +203,20 @@ export default function DonHangPage() {
 
             {/* Bộ lọc nhanh cho mobile */}
             <div className="md:hidden space-y-3 mb-4">
-              {/* Trạng thái */}
-              <div>
-                <div className="text-xs text-slate-500 mb-1">Trạng thái</div>
-                <div className="flex gap-2 overflow-x-auto">
-                  {[
-                    { key: "all", label: "Tất cả" },
-                    { key: "hoan_thanh", label: "Hoàn thành" },
-                    { key: "huy", label: "Đã hủy" },
-                  ].map(opt => (
-                    <button
-                      key={opt.key}
-                      onClick={() => setTrangThai(opt.key)}
-                      className={`px-3 py-1 rounded-full text-sm border ${trangThai === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200"}`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {/* Loại đơn */}
               <div>
-                <div className="text-xs text-slate-500 mb-1">Loại đơn</div>
+                <div className="text-xs text-muted-foreground mb-1">Loại đơn</div>
                 <div className="flex gap-2 overflow-x-auto">
                   {[
                     { key: "all", label: "Tất cả" },
-                    { key: "online", label: "Đơn onl" },
-                    { key: "offline", label: "Tại quầy" },
+                    { key: "online", label: "Đơn online" },
+                    { key: "offline", label: "Đơn offline" },
                   ].map(opt => (
                     <button
                       key={opt.key}
                       onClick={() => setLoaiDonFilter(opt.key as any)}
-                      className={`px-3 py-1 rounded-full text-sm border ${loaiDonFilter === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200"}`}
+                      className={`px-3 py-1 rounded-full text-sm border ${loaiDonFilter === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-card text-foreground border-border"}`}
                     >
                       {opt.label}
                     </button>
@@ -206,7 +226,7 @@ export default function DonHangPage() {
 
               {/* Thời gian */}
               <div>
-                <div className="text-xs text-slate-500 mb-1">Thời gian</div>
+                <div className="text-xs text-muted-foreground mb-1">Thời gian</div>
                 <div className="flex gap-2 overflow-x-auto">
                   {[
                     { key: "all", label: "Tất cả" },
@@ -216,7 +236,7 @@ export default function DonHangPage() {
                     <button
                       key={opt.key}
                       onClick={() => setTimeFilter(opt.key as any)}
-                      className={`px-3 py-1 rounded-full text-sm border ${timeFilter === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200"}`}
+                      className={`px-3 py-1 rounded-full text-sm border ${timeFilter === opt.key ? "bg-blue-600 text-white border-blue-600" : "bg-card text-foreground border-border"}`}
                     >
                       {opt.label}
                     </button>
@@ -235,14 +255,7 @@ export default function DonHangPage() {
                 ) : (
                   orders
                     .filter(order => {
-                      // Tìm kiếm
-                      const s = search.trim().toLowerCase()
-                      if (s) {
-                        const ten = order.khach_hang?.ho_ten?.toLowerCase() || ""
-                        const sdt = order.khach_hang?.so_dien_thoai?.toLowerCase() || ""
-                        const imeiHit = (order.imeis || []).some(i => String(i || "").toLowerCase().includes(s))
-                        if (!ten.includes(s) && !sdt.includes(s) && !imeiHit) return false
-                      }
+                      // Tìm kiếm đã xử lý ở server (?search=) trên toàn bộ đơn
                       // Trạng thái
                       if (trangThai !== "all" && order.trang_thai !== trangThai) return false
                       // Loại đơn
@@ -266,58 +279,66 @@ export default function DonHangPage() {
                       return true
                     })
                     .map(order => (
-                      <div key={order.ma_don_hang || order.id} className="rounded-xl border p-4 bg-white shadow-sm">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="text-sm text-slate-500">Mã đơn</div>
-                            <div className="font-semibold text-slate-900">{order.ma_don_hang || order.id}</div>
+                      <div key={order.ma_don_hang || order.id} className="rounded-2xl border bg-card p-5 shadow-sm">
+                        {/* Mã đơn + trạng thái */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Mã đơn</div>
+                            <div className="truncate text-md font-bold text-foreground">{order.ma_don_hang || order.id}</div>
                           </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge className={getTrangThaiColor(order.trang_thai)}>
-                              {order.trang_thai === "hoan_thanh" ? "Hoàn thành" : "Đã hủy"}
-                            </Badge>
-                            {(order.phuong_thuc_list && order.phuong_thuc_list.length > 0
-                              ? order.phuong_thuc_list
-                              : (order.phuong_thuc_thanh_toan ? [order.phuong_thuc_thanh_toan] : [])
-                            ).map((m) => (
-                              <Badge key={m} className={getPhuongThucColor(m)}>
-                                {m}
-                              </Badge>
-                            ))}
+                          <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold ${getStatusPillClass(order.trang_thai)}`}>
+                            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                            {getTrangThaiLabel(order.trang_thai)}
+                          </span>
+                        </div>
+
+                        
+
+                        <div className="my-4 border-t" />
+
+                        {/* Ngày bán + giá */}
+                        <div className="flex items-start justify-between gap-3">
+
+                          {/* Khách hàng */}
+                        <div>
+                          <div className="">
+                            {order.khach_hang ? (
+                              <>
+                                <div className="text-lg font-bold text-foreground">{order.khach_hang.ho_ten}</div>
+                                {order.khach_hang.so_dien_thoai && (
+                                  <div className="font-mono text-sm text-muted-foreground">{order.khach_hang.so_dien_thoai}</div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-lg font-bold text-foreground">Khách lẻ</div>
+                            )}
                           </div>
+                          
+                            <div className="text-sm text-muted-foreground">{new Date(order.ngay_ban).toLocaleDateString("vi-VN")}</div>
                         </div>
-                        <div className="mt-2 text-sm text-slate-700">
-                          {order.khach_hang ? (
-                            <div>
-                              <div className="font-medium">{order.khach_hang.ho_ten}</div>
-                              <div className="text-xs text-muted-foreground">{order.khach_hang.so_dien_thoai}</div>
-                            </div>
-                          ) : (
-                            <div className="font-medium">Khách lẻ</div>
-                          )}
-                        </div>
-                        <div className="mt-2 flex items-center justify-between">
-                          <div className="text-slate-600 text-sm">{new Date(order.ngay_ban).toLocaleDateString("vi-VN")}</div>
                           <div className="text-right">
-                            <div className="font-semibold text-slate-900">₫{Number(order.thanh_toan || 0).toLocaleString()}</div>
-                            {order.loai_don && (
-                              <div className="text-xs text-muted-foreground">{order.loai_don}</div>
+                            <div className="text-xl font-bold text-foreground">đ{Number(order.thanh_toan || 0).toLocaleString("en-US")}</div>
+                            {order.loai_don && <div className="text-sm text-muted-foreground">{order.loai_don}</div>}
+                            {String(order.loai_don || "").toLowerCase().includes("onl") && (
+                              <div className="mt-1 flex justify-end">
+                                <GhtkStatusBadge code={order.ma_ghtk || order.ma_don_hang || order.id} />
+                              </div>
                             )}
                           </div>
                         </div>
-                        <div className="mt-2">
-                          <div className="text-sm font-medium">Sản phẩm</div>
-                          <div className="text-sm text-muted-foreground">
-                            <OrderProductsCell orderId={order.ma_don_hang || order.id} />
-                          </div>
-                        </div>
 
-                        <div className="mt-3 flex items-center justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => handleViewOrder(order.ma_don_hang || order.id)}>
-                            <Eye className="h-4 w-4 mr-1" /> Xem
-                          </Button>
-                          <Button variant="ghost" size="sm" asChild>
-                            <Link href="/dashboard/hoan-tra">Hoàn trả</Link>
+                        <div className="my-4 border-t" />
+
+                        {/* Sản phẩm + nút Xem */}
+                        <div className="flex items-end justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[12px] font-medium uppercase tracking-wider text-muted-foreground">Sản phẩm</div>
+                            <div className="mt-1">
+                              <OrderProductsCell orderId={order.ma_don_hang || order.id} />
+                            </div>
+                          </div>
+                          <Button variant="secondary" size="sm" className="shrink-0 gap-1.5" onClick={() => handleViewOrder(order.ma_don_hang || order.id)}>
+                            <Eye className="h-4 w-4" /> Xem
                           </Button>
                         </div>
                       </div>
@@ -334,7 +355,7 @@ export default function DonHangPage() {
                       <TableHead>Sản phẩm</TableHead>
                       <TableHead>Nhân viên</TableHead>
                       <TableHead>Thanh toán</TableHead>
-                      <TableHead>Phương thức</TableHead>
+                      
                       <TableHead>Loại đơn</TableHead>
                       <TableHead>Trạng thái</TableHead>
                       <TableHead>Ngày bán</TableHead>
@@ -357,14 +378,7 @@ export default function DonHangPage() {
                     ) : (
                       orders
                         .filter(order => {
-                          // Tìm kiếm
-                          const s = search.trim().toLowerCase()
-                          if (s) {
-                            const ten = order.khach_hang?.ho_ten?.toLowerCase() || ""
-                            const sdt = order.khach_hang?.so_dien_thoai?.toLowerCase() || ""
-                            const imeiHit = (order.imeis || []).some(i => String(i || "").toLowerCase().includes(s))
-                            if (!ten.includes(s) && !sdt.includes(s) && !imeiHit) return false
-                          }
+                          // Tìm kiếm đã xử lý ở server (?search=) trên toàn bộ đơn
                           // Trạng thái
                           if (trangThai !== "all" && order.trang_thai !== trangThai) return false
                           // Loại đơn
@@ -404,7 +418,20 @@ export default function DonHangPage() {
                             <TableCell>
                               <OrderProductsCell orderId={order.ma_don_hang || order.id} />
                             </TableCell>
-                            <TableCell>{order.nhan_vien?.id || "N/A"}</TableCell>
+                            <TableCell>
+                              {order.nhan_vien?.name || order.nhan_vien?.id ? (
+                                <div>
+                                  <div className="font-medium">{order.nhan_vien?.name || order.nhan_vien?.id}</div>
+                                  {order.nhan_vien?.role && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {order.nhan_vien.role === "quan_ly" ? "Quản lý" : "Nhân viên"}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                "N/A"
+                              )}
+                            </TableCell>
                             {/* <TableCell>₫{Number(order.tong_tien || 0).toLocaleString()}</TableCell> */}
                             <TableCell>
                               <div>
@@ -416,24 +443,18 @@ export default function DonHangPage() {
                                 )}
                               </div>
                             </TableCell>
+                            
                             <TableCell>
-                              <div className="flex items-center gap-2 flex-wrap max-w-[280px]">
-                                {(order.phuong_thuc_list && order.phuong_thuc_list.length > 0
-                                  ? order.phuong_thuc_list
-                                  : (order.phuong_thuc_thanh_toan ? [order.phuong_thuc_thanh_toan] : [])
-                                ).map((m) => (
-                                  <Badge key={m} className={getPhuongThucColor(m)}>
-                                    {m}
-                                  </Badge>
-                                ))}
+                              <div className="flex flex-col items-start gap-1">
+                                <Badge variant="outline">{order.loai_don || <span className="text-muted-foreground">-</span>}</Badge>
+                                {String(order.loai_don || "").toLowerCase().includes("onl") && (
+                                  <GhtkStatusBadge code={order.ma_ghtk || order.ma_don_hang || order.id} />
+                                )}
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">{order.loai_don || <span className="text-muted-foreground">-</span>}</Badge>
-                            </TableCell>
-                            <TableCell>
                               <Badge className={getTrangThaiColor(order.trang_thai)}>
-                                {order.trang_thai === "hoan_thanh" ? "Hoàn thành" : "Đã hủy"}
+                                {getTrangThaiLabel(order.trang_thai)}
                               </Badge>
                             </TableCell>
                             <TableCell>{new Date(order.ngay_ban).toLocaleDateString("vi-VN")}</TableCell>

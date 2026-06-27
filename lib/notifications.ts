@@ -1,6 +1,6 @@
 import { readFromGoogleSheets, appendToGoogleSheets, syncToGoogleSheets, updateRangeValues } from "./google-sheets"
 
-export type NotificationType = "ban_hang" | "kho_hang" | "he_thong" | "canh_bao" | "hoan_tra"
+export type NotificationType = "ban_hang" | "kho_hang" | "he_thong" | "canh_bao" | "hoan_tra" | "tien_mat"
 export type NotificationStatus = "chua_doc" | "da_doc"
 
 export interface NotificationItem {
@@ -47,9 +47,9 @@ async function ensureHeader() {
   }
 }
 
-export async function getNotifications(): Promise<NotificationItem[]> {
+export async function getNotifications(force = false): Promise<NotificationItem[]> {
   await ensureHeader()
-  const { header, rows } = await readFromGoogleSheets(SHEET_NAME)
+  const { header, rows } = await readFromGoogleSheets(SHEET_NAME, undefined, { force })
   const idx = (name: string) => header.findIndex((h) => (h || "").trim().toLowerCase() === name.trim().toLowerCase())
   const iID = idx("id")
   const iTieuDe = idx("tiêu đề")

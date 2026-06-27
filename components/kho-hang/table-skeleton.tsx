@@ -5,7 +5,7 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <div className="rounded-md border">
       <Table>
-        <TableHeader className="bg-slate-50">
+        <TableHeader className="bg-muted">
           <TableRow>
             <TableHead className="w-[50px]"><Skeleton className="h-4 w-4" /></TableHead>
             <TableHead><Skeleton className="h-4 w-24" /></TableHead>

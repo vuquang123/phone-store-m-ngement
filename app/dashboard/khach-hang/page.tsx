@@ -2,6 +2,7 @@
 
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Button } from "@/components/ui/button"
+import { RefreshButton } from "@/components/ui/refresh-button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -11,6 +12,7 @@ import { useState, useEffect } from "react"
 import { Eye } from "lucide-react"
 import CustomerPurchasesDialog from "@/components/khach-hang/CustomerPurchasesDialog"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
 
 interface Customer {
   id: string
@@ -33,10 +35,13 @@ export default function KhachHangPage() {
   const pageSize = 10
   const isMobile = useIsMobile()
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (force = false) => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/khach-hang${search ? `?search=${encodeURIComponent(search)}` : ""}`);
+      const qs = new URLSearchParams();
+      if (search) qs.set("search", search);
+      if (force) qs.set("refresh", "1");
+      const response = await fetchWithTimeout(`/api/khach-hang${qs.toString() ? `?${qs}` : ""}`);
       if (!response.ok) throw new Error("Failed to fetch customers");
       const data = await response.json();
       const mapped = Array.isArray(data)
@@ -74,6 +79,7 @@ export default function KhachHangPage() {
             <h2 className="text-2xl font-bold tracking-tight">Danh sách khách hàng</h2>
             <p className="text-muted-foreground">Quản lý thông tin khách hàng của cửa hàng</p>
           </div>
+          <RefreshButton onRefresh={() => fetchCustomers(true)} loading={isLoading} label />
         </div>
 
         <Card>
@@ -111,34 +117,34 @@ export default function KhachHangPage() {
                       ? (() => { const d = new Date(customer.ngay_tao); return isNaN(d.getTime()) ? customer.ngay_tao : d.toLocaleDateString('vi-VN') })()
                       : ''
                     return (
-                      <div key={customer.so_dien_thoai} className="border rounded-xl p-3 bg-white shadow-sm">
+                      <div key={customer.so_dien_thoai} className="border rounded-xl p-3 bg-card shadow-sm">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <div className="font-semibold text-slate-900 leading-tight">{customer.ho_ten || 'Khách lẻ'}</div>
-                            <div className="text-sm text-slate-600">{customer.so_dien_thoai}</div>
+                            <div className="font-semibold text-foreground leading-tight">{customer.ho_ten || 'Khách lẻ'}</div>
+                            <div className="text-sm text-muted-foreground">{customer.so_dien_thoai}</div>
                           </div>
-                          <div className="text-right text-xs text-slate-500 min-w-[88px]">{created}</div>
+                          <div className="text-right text-xs text-muted-foreground min-w-[88px]">{created}</div>
                         </div>
                         <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                           <div>
-                            <div className="text-slate-500">Tổng mua</div>
-                            <div className="font-medium text-slate-800">{customer.tong_mua || '—'}</div>
+                            <div className="text-muted-foreground">Tổng mua</div>
+                            <div className="font-medium text-foreground">{customer.tong_mua || '—'}</div>
                           </div>
                           <div>
-                            <div className="text-slate-500">Lần mua cuối</div>
-                            <div className="font-medium text-slate-800 break-words">{customer.lan_mua_cuoi || '—'}</div>
+                            <div className="text-muted-foreground">Lần mua cuối</div>
+                            <div className="font-medium text-foreground break-words">{customer.lan_mua_cuoi || '—'}</div>
                           </div>
                         </div>
                         {customer.ghi_chu ? (
-                          <div className="mt-2 text-xs text-slate-600 line-clamp-2">{customer.ghi_chu}</div>
+                          <div className="mt-2 text-xs text-muted-foreground line-clamp-2">{customer.ghi_chu}</div>
                         ) : null}
                         <div className="mt-3 flex items-center justify-end gap-2">
                           <button
-                            className="p-1 rounded hover:bg-slate-100"
+                            className="p-1 rounded hover:bg-accent"
                             onClick={() => { setDialogPhone(customer.so_dien_thoai); setDialogOpen(true) }}
                             aria-label={`Xem chi tiết mua hàng ${customer.so_dien_thoai}`}
                           >
-                            <Eye className="h-4 w-4 text-slate-700" />
+                            <Eye className="h-4 w-4 text-foreground" />
                           </button>
                         </div>
                       </div>
@@ -173,11 +179,11 @@ export default function KhachHangPage() {
                           <TableCell>{customer.ghi_chu || ""}</TableCell>
                           <TableCell>
                             <button
-                              className="p-1 rounded hover:bg-slate-100"
+                              className="p-1 rounded hover:bg-accent"
                               onClick={() => { setDialogPhone(customer.so_dien_thoai); setDialogOpen(true) }}
                               aria-label={`Xem chi tiết mua hàng ${customer.so_dien_thoai}`}
                             >
-                              <Eye className="h-4 w-4 text-slate-700" />
+                              <Eye className="h-4 w-4 text-foreground" />
                             </button>
                           </TableCell>
                         </TableRow>

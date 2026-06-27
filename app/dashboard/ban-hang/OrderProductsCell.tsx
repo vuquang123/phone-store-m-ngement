@@ -31,16 +31,16 @@ export default function OrderProductsCell({ orderId }: Props) {
   const list = showCompact && !expanded ? products.slice(0, visibleCount) : products
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5 max-w-[220px]">
       {list.map((p, i) => (
-        <div key={p.id || p.san_pham?.imei || i} className="text-xs whitespace-nowrap">
-          <span className="font-medium">{p.san_pham?.ten_san_pham || p.san_pham?.model || 'Thiết bị'}</span>
+        <div key={p.id || p.san_pham?.imei || i} className="text-xs leading-tight">
+          <div className="font-medium break-words">{p.san_pham?.ten_san_pham || p.san_pham?.model || 'Thiết bị'}</div>
+          {p.san_pham?.mau_sac && <div className="text-muted-foreground">{p.san_pham.mau_sac}</div>}
           {(p.san_pham?.imei || p.san_pham?.serial) && (
-            <span className="ml-1 text-muted-foreground font-mono">
-              [{p.san_pham.imei || p.san_pham.serial}]
-            </span>
+            <div className="text-muted-foreground font-mono break-all">
+              {p.san_pham.imei || p.san_pham.serial}
+            </div>
           )}
-          {p.san_pham?.mau_sac && <span className="ml-2 text-slate-500">({p.san_pham.mau_sac})</span>}
         </div>
       ))}
       {showCompact && products.length > visibleCount && (

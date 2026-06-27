@@ -82,7 +82,7 @@ export function PullToRefresh({
           opacity: pullDistance / pullThreshold,
           transition: isPulling.current ? "none" : "height 0.3s ease, opacity 0.3s ease",
         }}
-        className="flex items-center justify-center overflow-hidden bg-slate-50/50 w-full"
+        className="flex items-center justify-center overflow-hidden bg-muted/50 w-full"
       >
         <div className={`transition-transform duration-300 ${pullDistance >= pullThreshold ? "rotate-180" : ""}`}>
           <RefreshCw className={`w-6 h-6 text-emerald-500 ${isRefreshing ? "animate-spin" : ""}`} />

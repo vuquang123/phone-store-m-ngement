@@ -153,7 +153,8 @@ function idxKho(header: string[]) {
 /* ========== GET: list + filters + pagination ========== */
 export async function GET(request: NextRequest) {
   try {
-    const { header, rows } = await readFromGoogleSheets(SHEET)
+    const force = new URL(request.url).searchParams.get("refresh") === "1"
+    const { header, rows } = await readFromGoogleSheets(SHEET, undefined, { force })
     const idx = idxKho(header)
     const products = rows.map((row) => ({
       id: row[idx.id],

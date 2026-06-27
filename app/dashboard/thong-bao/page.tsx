@@ -1,12 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Bell, Clock, AlertCircle, Info, ShoppingCart } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { RefreshButton } from "@/components/ui/refresh-button"
+import { Bell, AlertCircle, Info, ShoppingCart, CheckCheck } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatDistanceToNow, parseISO } from "date-fns"
 import { vi } from "date-fns/locale"
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
+import { cn } from "@/lib/utils"
 
 interface Notification {
   id: string
@@ -29,9 +33,9 @@ export default function ThongBaoPage() {
     fetchNotifications()
   }, [])
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (force = false) => {
     try {
-      const response = await fetch("/api/thong-bao")
+      const response = await fetchWithTimeout(`/api/thong-bao${force ? "?refresh=1" : ""}`)
       if (response.ok) {
         const data = await response.json()
         setNotifications(data)
@@ -76,14 +80,41 @@ export default function ThongBaoPage() {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "ban_hang":
-        return <ShoppingCart className="h-5 w-5 text-blue-500" />
+        return <ShoppingCart className="h-4 w-4 text-blue-500" />
       case "kho_hang":
-        return <Info className="h-5 w-5 text-green-500" />
+        return <Info className="h-4 w-4 text-green-500" />
       case "canh_bao":
-        return <AlertCircle className="h-5 w-5 text-red-500" />
+        return <AlertCircle className="h-4 w-4 text-red-500" />
       default:
-        return <Bell className="h-5 w-5 text-gray-500" />
+        return <Bell className="h-4 w-4 text-muted-foreground" />
     }
+  }
+
+  // Hiển thị thời gian tương đối an toàn (ISO / timestamp / chuỗi vi-VN)
+  const formatTime = (raw: any): string => {
+    let d: Date | null = null
+    if (typeof raw === "number") d = new Date(raw)
+    else if (typeof raw === "string") {
+      if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+        const p = parseISO(raw)
+        if (!isNaN(p.getTime())) d = p
+      }
+      if (!d) {
+        const num = Number(raw)
+        if (!isNaN(num) && num > 0) d = new Date(num)
+      }
+      if (!d) {
+        const p = new Date(raw)
+        if (!isNaN(p.getTime())) d = p
+      }
+    }
+    if (!d || isNaN(d.getTime())) return "--"
+    return formatDistanceToNow(d, { addSuffix: true, locale: vi })
+  }
+
+  const markAllAsRead = async () => {
+    const unread = notifications.filter((n) => n.trang_thai === "chua_doc")
+    for (const n of unread) await markAsRead(n.id)
   }
 
   const getNotificationBadge = (type: string) => {
@@ -113,94 +144,71 @@ export default function ThongBaoPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Thông báo</h1>
-          <p className="text-muted-foreground">
-            {unreadCount > 0 ? `${unreadCount} thông báo chưa đọc` : "Tất cả thông báo đã được đọc"}
+          <h1 className="text-2xl font-bold tracking-tight">Thông báo</h1>
+          <p className="text-sm text-muted-foreground">
+            {unreadCount > 0 ? `${unreadCount} chưa đọc` : "Tất cả đã đọc"}
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {unreadCount > 0 && (
+            <Button variant="ghost" size="sm" className="gap-2" onClick={markAllAsRead}>
+              <CheckCheck className="h-4 w-4" /> Đánh dấu đã đọc
+            </Button>
+          )}
+          <RefreshButton onRefresh={() => fetchNotifications(true)} loading={loading} label />
         </div>
       </div>
 
-      <div className="space-y-4">
-        {notifications.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Bell className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">Chưa có thông báo</h3>
-              <p className="text-muted-foreground text-center">
-                Các thông báo về hoạt động bán hàng và quản lý kho sẽ hiển thị tại đây
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          notifications.map((notification) => (
-            <Card
-              key={notification.id}
-              className={`cursor-pointer transition-colors ${
-                notification.trang_thai === "chua_doc" ? "border-primary bg-primary/5" : ""
-              }`}
-              onClick={() => {
-                if (notification.trang_thai === "chua_doc") {
-                  markAsRead(notification.id)
-                }
-              }}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-3">
-                    {getNotificationIcon(notification.loai)}
-                    <div>
-                      <CardTitle className="text-base">{notification.tieu_de}</CardTitle>
-                      <div className="flex items-center space-x-2 mt-1">
-                        {getNotificationBadge(notification.loai)}
-                        {notification.trang_thai === "chua_doc" && (
-                          <Badge variant="default" className="bg-blue-500">
-                            Mới
-                          </Badge>
+      <Card>
+        <CardContent className="p-0">
+          {notifications.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+              <Bell className="h-10 w-10 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Chưa có thông báo nào</p>
+            </div>
+          ) : (
+            <ul className="divide-y">
+              {notifications.map((n) => {
+                const unread = n.trang_thai === "chua_doc"
+                return (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      onClick={() => unread && markAsRead(n.id)}
+                      className={cn(
+                        "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent",
+                        unread && "bg-accent/40",
+                      )}
+                    >
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                        {getNotificationIcon(n.loai)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={cn("truncate text-sm text-foreground", unread ? "font-semibold" : "font-medium")}>
+                            {n.tieu_de}
+                          </span>
+                          {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />}
+                        </div>
+                        {n.noi_dung && (
+                          <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{n.noi_dung}</p>
                         )}
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          {getNotificationBadge(n.loai)}
+                          <span className="text-xs text-muted-foreground">{formatTime(n.created_at)}</span>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span>
-                      {(() => {
-                        const raw = notification.created_at
-                        let d: Date | null = null
-                        if (typeof raw === "number") d = new Date(raw)
-                        else if (typeof raw === "string") {
-                          // Thử ISO trước
-                          if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
-                            const parsed = parseISO(raw)
-                            if (!isNaN(parsed.getTime())) d = parsed
-                          }
-                          if (!d) {
-                            // Thử dạng timestamp số trong chuỗi
-                            const num = Number(raw)
-                            if (!isNaN(num) && num > 0) d = new Date(num)
-                          }
-                          if (!d) {
-                            // Thử parse tự do (có thể là định dạng vi-VN)
-                            const parsed = new Date(raw)
-                            if (!isNaN(parsed.getTime())) d = parsed
-                          }
-                        }
-                        if (!d || isNaN(d.getTime())) return "--"
-                        return formatDistanceToNow(d, { addSuffix: true, locale: vi })
-                      })()}
-                    </span>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">{notification.noi_dung}</p>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

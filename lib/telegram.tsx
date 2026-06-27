@@ -1,5 +1,13 @@
+// Ưu tiên IPv4 khi phân giải DNS để tránh fetch ETIMEDOUT tới api.telegram.org
+// trên server có IPv6 cấu hình lỗi (Node mặc định thử IPv6 trước -> treo ~25s).
+// File này chỉ chạy phía server nên dùng node:dns an toàn.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("node:dns").setDefaultResultOrder("ipv4first")
+} catch {}
+
 type OrderType = "online" | "offline" | "return" | "deposit" | string
-interface TelegramOptions { message_thread_id?: number }
+interface TelegramOptions { message_thread_id?: number; chat_id?: number }
 
 type StockEvent =
   | { type: "import"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
@@ -97,6 +105,14 @@ function getBotToken() {
   return token
 }
 
+// Chat riêng/DM (chat_id > 0) KHÔNG có topic => phải bỏ message_thread_id, nếu
+// không Telegram trả "message thread not found" và tin nhắn/ảnh bị mất.
+function effectiveThreadId(chatId: number, desired: number): number {
+  return chatId > 0 ? 0 : (desired || 0)
+}
+
+// Ưu tiên TELEGRAM_CHAT_ID trong .env (cấu hình của cửa hàng); chỉ rơi về số
+// hardcoded khi cả TELEGRAM_CHAT_ID lẫn các biến theo loại đơn đều không có.
 const DEFAULT_CHAT = -1002895849744
 const ORDER_TYPE_CHAT_MAP: Record<string, number> = {
   offline: parseEnvChat('TELEGRAM_CHAT_OFFLINE', DEFAULT_CHAT),
@@ -109,13 +125,14 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
   try {
     const botToken = getBotToken()
     // choose chat id from mapping, fallback to default
-    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
+    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
     // choose topic/thread id based on orderType defaults, can be overridden by options.message_thread_id
     let messageThreadId = 9 // default thread for offline
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
+    messageThreadId = effectiveThreadId(chatId, messageThreadId)
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
       return { success: false, error: "Thiếu cấu hình Telegram" }
@@ -166,13 +183,14 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
 export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = getBotToken()
-    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
+    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
     // choose thread id defaults
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
+    messageThreadId = effectiveThreadId(chatId, messageThreadId)
 
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
@@ -195,9 +213,9 @@ export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'i
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="parse_mode"${nl}${nl}` +
       `HTML${nl}` +
-      `--${boundary}${nl}` +
-      `Content-Disposition: form-data; name="message_thread_id"${nl}${nl}` +
-      `${String(messageThreadId)}${nl}` +
+      (messageThreadId
+        ? `--${boundary}${nl}Content-Disposition: form-data; name="message_thread_id"${nl}${nl}${String(messageThreadId)}${nl}`
+        : '') +
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="photo"; filename="${filename}"${nl}` +
       `Content-Type: application/octet-stream${nl}${nl}`
@@ -227,12 +245,13 @@ export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'i
 export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = getBotToken()
-    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
+    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
+    messageThreadId = effectiveThreadId(chatId, messageThreadId)
 
     const boundary = '----telegramboundary' + Date.now()
     const nl = '\r\n'
@@ -246,9 +265,9 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="parse_mode"${nl}${nl}` +
       `HTML${nl}` +
-      `--${boundary}${nl}` +
-      `Content-Disposition: form-data; name="message_thread_id"${nl}${nl}` +
-      `${String(messageThreadId)}${nl}` +
+      (messageThreadId
+        ? `--${boundary}${nl}Content-Disposition: form-data; name="message_thread_id"${nl}${nl}${String(messageThreadId)}${nl}`
+        : '') +
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="photo"; filename="${filename}"${nl}` +
       `Content-Type: application/octet-stream${nl}${nl}`
@@ -273,12 +292,13 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
 export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: string[], captions?: string[], orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = getBotToken()
-    const chatId = (orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline']
+    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
     let messageThreadId = 9
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
+    messageThreadId = effectiveThreadId(chatId, messageThreadId)
 
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
@@ -302,9 +322,9 @@ export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: strin
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="chat_id"${nl}${nl}` +
       `${String(chatId)}${nl}` +
-      `--${boundary}${nl}` +
-      `Content-Disposition: form-data; name="message_thread_id"${nl}${nl}` +
-      `${String(messageThreadId)}${nl}` +
+      (messageThreadId
+        ? `--${boundary}${nl}Content-Disposition: form-data; name="message_thread_id"${nl}${nl}${String(messageThreadId)}${nl}`
+        : '') +
       `--${boundary}${nl}` +
       `Content-Disposition: form-data; name="media"${nl}${nl}` +
       `${JSON.stringify(mediaArray)}${nl}`
@@ -393,6 +413,22 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
       return parts.length ? ` | ${parts.join(" - ")}` : ""
     })()
 
+    // Tình trạng + Pin của máy
+    const statusLine = (() => {
+      const pinRaw = p.pin ?? p["Pin (%)"] ?? p.pin_pct
+      const tinhTrang = p.tinh_trang || p.tinhTrang || p["Tình Trạng Máy"]
+      const pinStr = (() => {
+        const s = String(pinRaw ?? "").trim()
+        if (!s) return ""
+        return /^\d+$/.test(s) ? `${s}%` : s
+      })()
+      const escTT = String(tinhTrang ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      const parts: string[] = []
+      if (pinStr) parts.push(`Pin: ${pinStr}`)
+      if (escTT) parts.push(`Tình trạng: ${escTT}`)
+      return parts.length ? `\n   <i>${parts.join(" | ")}</i>` : ""
+    })()
+
     // Thêm giá niêm yết và giảm giá máy
     const giaNiemYet = p.gia_niemyet || p.gia_niem_yet
     const giaBan = p.gia_ban
@@ -404,7 +440,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
       priceLine = `\n   <i>Giá bán: ₫${giaBan.toLocaleString('vi-VN')}</i>`
     }
 
-    return `• ${head}${idLine}${priceLine}`
+    return `• ${head}${idLine}${statusLine}${priceLine}`
   })
 
   // Gói bảo hành: ưu tiên mảng codes, hoặc chuỗi có sẵn

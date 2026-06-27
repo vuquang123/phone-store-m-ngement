@@ -5,6 +5,11 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 export async function GET() {
+  // Chỉ cho phép ở môi trường non-production (công cụ chẩn đoán nội bộ)
+  if (process.env.NODE_ENV === "production") {
+    return new NextResponse(null, { status: 404 })
+  }
+
   const envPresence = {
     GOOGLE_CLIENT_EMAIL: !!process.env.GOOGLE_CLIENT_EMAIL,
     GOOGLE_SERVICE_ACCOUNT_EMAIL: !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,

@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { GhtkTrackingPanel } from "@/components/ghtk/ghtk-tracking-panel"
 
 interface OrderDetail {
   id: string
@@ -26,6 +27,7 @@ interface OrderDetail {
   trang_thai: string
   ngay_ban: string
   ghi_chu?: string
+  ma_ghtk?: string
   phu_kien_text?: string
   khach_hang?: {
     ho_ten: string
@@ -164,6 +166,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
         trang_thai: data.trang_thai || "hoan_thanh",
         ngay_ban: ngayBan,
         ghi_chu: data.ghi_chu || data["Ghi Chú"] || "",
+        ma_ghtk: data.ma_ghtk || "",
         phu_kien_text: (data.phu_kien_text || data["Phụ Kiện"] || "").toString(),
         khach_hang: data.khach_hang || (data.ten_khach_hang || data["Tên Khách Hàng"]
           ? {
@@ -247,7 +250,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
       case "huy":
         return "bg-red-100 text-red-800"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-muted text-foreground"
     }
   }
 
@@ -257,7 +260,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
     if (s.includes('chuyển khoản') || s.includes('chuyen khoan')) return 'bg-purple-100 text-purple-800'
     if (s.includes('thẻ') || s.includes('the')) return 'bg-orange-100 text-orange-800'
     if (s.includes('trả góp') || s.includes('tra gop') || s.includes('góp')) return 'bg-amber-100 text-amber-800'
-    return 'bg-gray-100 text-gray-800'
+    return 'bg-muted text-foreground'
   }
 
   // Tách các dòng thanh toán có số tiền từ chuỗi tổng hợp.
@@ -309,9 +312,44 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
     return out
   }
 
+  // Gửi yêu cầu hoàn trả (dùng chung cho nút desktop + mobile). Hiện lỗi THẬT từ API.
+  const submitReturn = async () => {
+    if (!order || !returnImei) return
+    try {
+      setReturnLoading(true)
+      const res = await fetch('/api/hoan-tra', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ma_don_hang: order.ma_don_hang,
+          khach_hang: order.khach_hang?.ho_ten,
+          so_dien_thoai: order.khach_hang?.so_dien_thoai,
+          imei: returnImei,
+          ly_do: returnReason,
+          so_tien_hoan: returnAmount ? Number(returnAmount) : undefined,
+          nguoi_xu_ly: order.nhan_vien?.ho_ten,
+          restock_inhouse: !isPartner,
+          partner_return: isPartner,
+          ghi_chu: note,
+        })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data?.error || data?.code || `Hoàn trả thất bại (HTTP ${res.status})`)
+      }
+      fetchWarranties(order.ma_don_hang)
+      onClose()
+    } catch (e: any) {
+      console.error('[RETURN][UI] error:', e)
+      alert(e?.message || 'Hoàn trả thất bại, vui lòng thử lại.')
+    } finally {
+      setReturnLoading(false)
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto bg-white">
+      <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto bg-card">
         <DialogHeader>
           <DialogTitle>Chi tiết đơn hàng</DialogTitle>
           <DialogDescription>Thông tin chi tiết về đơn hàng và sản phẩm</DialogDescription>
@@ -356,7 +394,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               <div>
                 <h3 className="text-lg font-semibold mb-2">Thông tin khách hàng</h3>
                 {order.khach_hang ? (
-                  <div className="p-3 border rounded-lg bg-white">
+                  <div className="p-3 border rounded-lg bg-card">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium">{order.khach_hang.ho_ten}</div>
@@ -364,10 +402,10 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                       </div>
                       <div className="flex gap-2">
                         {order.khach_hang.so_dien_thoai && (
-                          <a className="text-xs px-2 py-1 border rounded hover:bg-slate-50" href={`tel:${order.khach_hang.so_dien_thoai}`}>Gọi</a>
+                          <a className="text-xs px-2 py-1 border rounded hover:bg-accent" href={`tel:${order.khach_hang.so_dien_thoai}`}>Gọi</a>
                         )}
                         {order.khach_hang.so_dien_thoai && (
-                          <a className="text-xs px-2 py-1 border rounded hover:bg-slate-50" href={`sms:${order.khach_hang.so_dien_thoai}`}>SMS</a>
+                          <a className="text-xs px-2 py-1 border rounded hover:bg-accent" href={`sms:${order.khach_hang.so_dien_thoai}`}>SMS</a>
                         )}
                       </div>
                     </div>
@@ -386,6 +424,20 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                   <p className="text-muted-foreground">Khách lẻ</p>
                 )}
               </div>
+            </div>
+
+            <Separator />
+
+            {/* Vận chuyển GHTK */}
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Vận chuyển (GHTK)</h3>
+              <GhtkTrackingPanel
+                defaultCode={
+                  order.ma_ghtk ||
+                  order.ghi_chu?.match(/\[GHTK:\s*([^\]]+)\]/i)?.[1]?.trim() ||
+                  order.ma_don_hang
+                }
+              />
             </div>
 
             <Separator />
@@ -413,7 +465,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                           ? 'bg-amber-100 text-amber-700'
                           : 'bg-emerald-100 text-emerald-700'
                       return (
-                        <div key={w.ma_hd + w.imei} className="rounded-xl border p-3 bg-white">
+                        <div key={w.ma_hd + w.imei} className="rounded-xl border p-3 bg-card">
                           <div className="flex items-center justify-between">
                             <div className="font-mono text-xs">{w.ma_hd}</div>
                             <span className={`px-2 py-0.5 rounded text-xs font-medium inline-block ${badgeClass}`}>
@@ -505,7 +557,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                   {(order.chi_tiet ?? []).map((item) => (
                     <Fragment key={item.id}>
                       {item.san_pham && (
-                        <div className="rounded-xl border p-3 bg-white">
+                        <div className="rounded-xl border p-3 bg-card">
                           <div className="font-medium">
                             {item.san_pham.ten_san_pham} {item.san_pham.loai_may}
                           </div>
@@ -579,7 +631,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                 }
                 const parts = Array.from(map.values())
                 return (
-                  <div className="mt-3 rounded-md border p-3 bg-slate-50">
+                  <div className="mt-3 rounded-md border p-3 bg-muted">
                     <div className="text-sm font-medium mb-1">Phụ kiện</div>
                     <ul className="list-disc pl-5 text-sm space-y-0.5">
                       {parts.map((it, i)=>(
@@ -621,7 +673,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                     const arr = parsePaymentBreakdown(order.phuong_thuc_thanh_toan || '')
                     if (!arr.length) return null
                     return (
-                      <div className="mt-1 text-sm text-slate-700 space-y-1">
+                      <div className="mt-1 text-sm text-foreground space-y-1">
                         {arr.map((p, i) => (
                           <div key={`pay-${i}`} className="flex items-center justify-between">
                             <span className="text-muted-foreground">{p.label}:</span>
@@ -712,79 +764,14 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               </div>
 
               <div className="mt-4 hidden md:flex justify-end">
-                <Button
-                  disabled={returnLoading || !returnImei}
-                  onClick={async () => {
-                    if (!order) return
-                    try {
-                      setReturnLoading(true)
-                      const res = await fetch('/api/hoan-tra', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          ma_don_hang: order.ma_don_hang,
-                          khach_hang: order.khach_hang?.ho_ten,
-                          so_dien_thoai: order.khach_hang?.so_dien_thoai,
-                          imei: returnImei,
-                          ly_do: returnReason,
-                          so_tien_hoan: returnAmount ? Number(returnAmount) : undefined,
-                          nguoi_xu_ly: order.nhan_vien?.ho_ten,
-                          restock_inhouse: !isPartner,
-                          partner_return: isPartner,
-                          ghi_chu: note,
-                        })
-                      })
-                      if (!res.ok) throw new Error('Hoàn trả thất bại')
-                      // Có thể fetch lại bảo hành sau hoàn trả
-                      fetchWarranties(order.ma_don_hang)
-                      onClose()
-                    } catch (e) {
-                      console.error('[RETURN][UI] error:', e)
-                      alert('Hoàn trả thất bại, vui lòng thử lại.')
-                    } finally {
-                      setReturnLoading(false)
-                    }
-                  }}
-                >
+                <Button disabled={returnLoading || !returnImei} onClick={submitReturn}>
                   {returnLoading ? (<span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Đang hoàn trả...</span>) : 'Xác nhận hoàn trả'}
                 </Button>
               </div>
               {/* Sticky action bar for mobile */}
               {isMobile && (
-                <div className="md:hidden sticky bottom-0 left-0 right-0 bg-white border-t mt-2 py-3 flex justify-end">
-                  <Button
-                    disabled={returnLoading || !returnImei}
-                    onClick={async () => {
-                      if (!order) return
-                      try {
-                        setReturnLoading(true)
-                        const res = await fetch('/api/hoan-tra', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            ma_don_hang: order.ma_don_hang,
-                            khach_hang: order.khach_hang?.ho_ten,
-                            so_dien_thoai: order.khach_hang?.so_dien_thoai,
-                            imei: returnImei,
-                            ly_do: returnReason,
-                            so_tien_hoan: returnAmount ? Number(returnAmount) : undefined,
-                            nguoi_xu_ly: order.nhan_vien?.ho_ten,
-                            restock_inhouse: !isPartner,
-                            partner_return: isPartner,
-                            ghi_chu: note,
-                          })
-                        })
-                        if (!res.ok) throw new Error('Hoàn trả thất bại')
-                        fetchWarranties(order.ma_don_hang)
-                        onClose()
-                      } catch (e) {
-                        console.error('[RETURN][UI] error:', e)
-                        alert('Hoàn trả thất bại, vui lòng thử lại.')
-                      } finally {
-                        setReturnLoading(false)
-                      }
-                    }}
-                  >
+                <div className="md:hidden sticky bottom-0 left-0 right-0 bg-card border-t mt-2 py-3 flex justify-end">
+                  <Button disabled={returnLoading || !returnImei} onClick={submitReturn}>
                     {returnLoading ? (<span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Đang hoàn trả...</span>) : 'Xác nhận hoàn trả'}
                   </Button>
                 </div>

@@ -47,9 +47,9 @@ export function PartnerTable({
   
 
   return (
-    <div className="rounded-md border border-slate-200 overflow-hidden bg-white shadow-sm">
+    <div className="rounded-md border border-border overflow-hidden bg-card shadow-sm">
       <Table>
-        <TableHeader className="bg-slate-50/80">
+        <TableHeader className="bg-muted/80">
           <TableRow>
             {isEditMode && (
               <TableHead className="w-12 text-center">
@@ -59,7 +59,7 @@ export function PartnerTable({
                 />
               </TableHead>
             )}
-            <TableHead className="font-semibold text-slate-700">
+            <TableHead className="font-semibold text-foreground">
               <div className="flex items-center gap-2">
                 Sản phẩm
                 <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-100 py-0 leading-none h-5">
@@ -67,15 +67,15 @@ export function PartnerTable({
                 </Badge>
               </div>
             </TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden sm:table-cell">IMEI</TableHead>
-            <TableHead className="font-semibold text-slate-700">Đối tác & Ngày giao</TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden lg:table-cell">Tình trạng</TableHead>
+            <TableHead className="font-semibold text-foreground hidden sm:table-cell">IMEI</TableHead>
+            <TableHead className="font-semibold text-foreground">Đối tác & Ngày giao</TableHead>
+            <TableHead className="font-semibold text-foreground hidden lg:table-cell">Tình trạng</TableHead>
             {(onReturnStock || onCompleteSale) && <TableHead className="w-32 text-right">Thao tác</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.map((p, idx) => (
-            <TableRow key={`${p.id}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+            <TableRow key={`${p.id}-${idx}`} className="hover:bg-accent/50 transition-colors">
               {isEditMode && (
                 <TableCell className="text-center">
                   <Checkbox 
@@ -86,18 +86,18 @@ export function PartnerTable({
               )}
               <TableCell className="py-3">
                 <div className="flex flex-col">
-                  <span className="font-medium text-slate-900 leading-tight">{p.ten_san_pham}</span>
-                  <span className="text-xs text-slate-500 mt-0.5">{p.mau_sac} • {p.dung_luong}</span>
+                  <span className="font-medium text-foreground leading-tight">{p.ten_san_pham}</span>
+                  <span className="text-xs text-muted-foreground mt-0.5">{p.mau_sac} • {p.dung_luong}</span>
                   
                   {/* Additional info for Mobile */}
                   <div className="flex flex-col gap-1 mt-1.5 sm:hidden">
                     {p.imei && (
-                      <span className="text-[10px] font-mono text-slate-500 bg-slate-50 self-start px-1 rounded">
+                      <span className="text-[10px] font-mono text-muted-foreground bg-muted self-start px-1 rounded">
                         {p.imei}
                       </span>
                     )}
                     {p.tinh_trang && (
-                      <p className="text-[10px] text-slate-500 italic bg-purple-50/30 p-1 rounded border border-purple-100/50">
+                      <p className="text-[10px] text-muted-foreground italic bg-purple-50/30 p-1 rounded border border-purple-100/50">
                         {p.tinh_trang}
                       </p>
                     )}
@@ -106,14 +106,14 @@ export function PartnerTable({
                   {/* Condition for tablets (where lg is still hidden) */}
                   <div className="hidden sm:block lg:hidden mt-1">
                     {p.tinh_trang && (
-                      <p className="text-[10px] text-slate-500 italic truncate max-w-[200px]">
+                      <p className="text-[10px] text-muted-foreground italic truncate max-w-[200px]">
                         {p.tinh_trang}
                       </p>
                     )}
                   </div>
                 </div>
               </TableCell>
-              <TableCell className="text-sm font-mono text-slate-600 hidden sm:table-cell">{p.imei || "—"}</TableCell>
+              <TableCell className="text-sm font-mono text-muted-foreground hidden sm:table-cell">{p.imei || "—"}</TableCell>
               <TableCell>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-1.5 text-sm font-medium text-purple-700">
@@ -121,13 +121,13 @@ export function PartnerTable({
                     {extractPartnerInfo(p.ghi_chu)}
                   </div>
                   {p.ghi_chu?.includes(" - ") && (
-                    <span className="text-[10px] text-slate-500 ml-5">
+                    <span className="text-[10px] text-muted-foreground ml-5">
                       {p.ghi_chu.split(" - ")[1].replace("]", "")}
                     </span>
                   )}
                 </div>
               </TableCell>
-              <TableCell className="hidden lg:table-cell text-sm text-slate-600">
+              <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                 <Badge variant="outline" className="text-[10px]">{p.tinh_trang || "—"}</Badge>
               </TableCell>
               {(onReturnStock || onCompleteSale) && (
@@ -138,7 +138,7 @@ export function PartnerTable({
                         size="sm" 
                         variant="outline"
                         title="Hoàn kho"
-                        className="h-8 w-8 p-0 text-slate-600 hover:text-orange-600 hover:bg-orange-50 border-slate-200" 
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-orange-600 hover:bg-orange-50 border-border" 
                         onClick={() => onReturnStock(p)}
                         disabled={isReturning}
                       >
@@ -163,7 +163,7 @@ export function PartnerTable({
           ))}
           {products.length === 0 && (
             <TableRow>
-              <TableCell colSpan={10} className="h-32 text-center text-slate-500">
+              <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
                 Không có sản phẩm nào đang giao đối tác.
               </TableCell>
             </TableRow>

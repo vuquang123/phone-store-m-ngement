@@ -65,7 +65,8 @@ export async function GET(request: NextRequest) {
     const limit = Math.max(1, Math.min(1000, parseInt(searchParams.get("limit") || "1000")))
 
     // Đọc USERS
-    const { header, rows } = await readFromGoogleSheets(SHEET)
+    const force = searchParams.get("refresh") === "1"
+    const { header, rows } = await readFromGoogleSheets(SHEET, undefined, { force })
     const C = getCols(header)
     if (C.email === -1 || C.name === -1 || C.role === -1 || C.status === -1) {
       return NextResponse.json({ error: "USERS thiếu các cột bắt buộc" }, { status: 500 })

@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { useInventoryActions } from "@/hooks/use-inventory-actions"
 import { useAuthMe } from "@/hooks/use-auth-me"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 
 interface SendCNCDialogProps {
@@ -75,45 +74,41 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white max-w-md">
+      <DialogContent className="bg-card max-w-md w-[90%]">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-blue-700">Gửi sản phẩm đi CNC</DialogTitle>
+          <DialogTitle>Gửi sản phẩm đi CNC</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label className="text-slate-500 text-xs">Sản phẩm đã chọn ({selectedProducts.length})</Label>
-            <ScrollArea className="h-[180px] w-full rounded-md border border-slate-100 bg-slate-50/50 p-2">
-              <div className="space-y-2">
-                {selectedProducts.map((p, i) => (
-                  <div key={p.id || i} className="bg-white p-2 rounded border border-slate-100 shadow-sm text-xs">
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-semibold text-slate-800">{p.ten_san_pham}</span>
-                      <Badge variant="outline" className="text-[10px] py-0 h-4 border-slate-200 text-slate-500 font-normal">
-                        {p.tinh_trang || "N/A"}
-                      </Badge>
-                    </div>
-                    <div className="flex gap-2 text-slate-500">
-                      <span>{p.mau_sac}</span>
-                      <span>•</span>
-                      <span>{p.dung_luong}</span>
-                    </div>
-                    <div className="mt-1 font-mono text-blue-600 font-medium">
-                      IMEI: {p.imei}
-                    </div>
+            <Label className="text-muted-foreground text-xs">Sản phẩm đã chọn ({selectedProducts.length})</Label>
+            <div className="max-h-[220px] space-y-2 overflow-y-auto rounded-md border bg-muted/40 p-2">
+              {selectedProducts.map((p, i) => (
+                <div key={p.id || i} className="rounded-md border bg-card p-2.5 text-xs shadow-sm">
+                  <div className="mb-1 flex items-start justify-between gap-2">
+                    <span className="font-semibold text-foreground">{p.ten_san_pham}</span>
+                    <Badge variant="secondary" className="h-5 shrink-0 py-0 text-[10px] font-normal">
+                      {p.tinh_trang || "N/A"}
+                    </Badge>
                   </div>
-                ))}
-              </div>
-            </ScrollArea>
+                  <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
+                    <span>{p.mau_sac}</span>
+                    {p.dung_luong && <span>•</span>}
+                    <span>{p.dung_luong}</span>
+                  </div>
+                  <div className="mt-1 font-mono text-muted-foreground">IMEI: {p.imei}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-2">
             <Label>Kiểu Dạng Sim</Label>
             <Select value={doSim} onValueChange={setDoSim}>
-              <SelectTrigger className="bg-white">
+              <SelectTrigger className="bg-card">
                 <SelectValue placeholder="Chọn kiểu dạng sim..." />
               </SelectTrigger>
-              <SelectContent className="bg-white">
+              <SelectContent className="bg-card">
                 <SelectItem value="Không rõ">Để trống</SelectItem>
                 <SelectItem value="Nguyên bản">Nguyên bản</SelectItem>
                 <SelectItem value="Sim ghép">Sim ghép</SelectItem>
@@ -130,10 +125,10 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
             {!isAddingNewAddress ? (
               <div className="flex gap-2">
                 <Select value={cncAddress} onValueChange={setCncAddress}>
-                  <SelectTrigger className="bg-white">
+                  <SelectTrigger className="bg-card">
                     <SelectValue placeholder="Chọn địa chỉ..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-white">
+                  <SelectContent className="bg-card">
                     {addresses.map(addr => (
                       <SelectItem key={addr.value} value={addr.value}>{addr.label}</SelectItem>
                     ))}
@@ -164,7 +159,7 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isSendingCNC}>Hủy</Button>
-          <Button onClick={handleSend} disabled={isSendingCNC} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={handleSend} disabled={isSendingCNC}>
             {isSendingCNC ? "Đang xử lý..." : "Xác nhận gửi CNC"}
           </Button>
         </DialogFooter>

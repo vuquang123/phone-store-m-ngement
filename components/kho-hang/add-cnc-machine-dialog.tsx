@@ -108,19 +108,19 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white rounded-xl shadow-xl p-6 min-w-[350px] max-w-[600px] border border-slate-200">
+      <DialogContent className="bg-card rounded-xl shadow-xl p-6 min-w-[350px] max-w-[600px] border border-border">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-blue-700 mb-2">Thêm máy CNC ngoài kho</DialogTitle>
-          <p className="text-slate-500 text-sm mb-4">Nhập thông tin máy CNC ngoài kho để quản lý và theo dõi trạng thái.</p>
+          <p className="text-muted-foreground text-sm mb-4">Nhập thông tin máy CNC ngoài kho để quản lý và theo dõi trạng thái.</p>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Tên Sản Phẩm</Label>
+            <Label className="font-medium text-foreground">Tên Sản Phẩm</Label>
             <Select value={form.ten_san_pham} onValueChange={v => setForm(f => ({ ...f, ten_san_pham: v }))}>
-              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-slate-800 font-medium">
+              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
                 <SelectValue placeholder="Chọn sản phẩm" />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-slate-200 shadow-lg text-slate-800">
+              <SelectContent className="bg-card border border-border shadow-lg text-foreground">
                 {productNames.map(name => (
                   <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
@@ -128,24 +128,24 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">IMEI</Label>
+            <Label className="font-medium text-foreground">IMEI</Label>
             <Input name="imei" value={form.imei} onChange={handleChange} required placeholder="Nhập IMEI" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Màu Sắc</Label>
+            <Label className="font-medium text-foreground">Màu Sắc</Label>
             <Input name="mau_sac" value={form.mau_sac} onChange={handleChange} placeholder="Nhập màu sắc" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Tình trạng</Label>
+            <Label className="font-medium text-foreground">Tình trạng</Label>
             <Input name="tinh_trang" value={form.tinh_trang} onChange={handleChange} placeholder="Nhập tình trạng" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Kiểu Dạng Sim</Label>
+            <Label className="font-medium text-foreground">Kiểu Dạng Sim</Label>
             <Select value={form.do_sim} onValueChange={v => setForm(f => ({ ...f, do_sim: v }))}>
-              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-slate-800 font-medium">
+              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
                 <SelectValue placeholder="Chọn kiểu dạng sim..." />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-slate-200 shadow-lg text-slate-800">
+              <SelectContent className="bg-card border border-border shadow-lg text-foreground">
                 <SelectItem value="Không rõ">Để trống</SelectItem>
                 <SelectItem value="Nguyên bản">Nguyên bản</SelectItem>
                 <SelectItem value="Sim ghép">Sim ghép</SelectItem>
@@ -157,12 +157,12 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Nguồn hàng</Label>
+            <Label className="font-medium text-foreground">Nguồn hàng</Label>
             <Select value={form.nguon} onValueChange={v => setForm(f => ({ ...f, nguon: v }))}>
-              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-slate-800 font-medium">
+              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
                 <SelectValue placeholder="Chọn nguồn" />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-slate-200 shadow-lg text-slate-800">
+              <SelectContent className="bg-card border border-border shadow-lg text-foreground">
                 <SelectItem value="Khách ngoài">Khách ngoài</SelectItem>
                 <SelectItem value="Kho trong">Kho trong</SelectItem>
                 <SelectItem value="Kho ngoài">Kho ngoài</SelectItem>
@@ -173,7 +173,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
             <Input name="loai_may" value={form.loai_may} readOnly />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Địa chỉ CNC</Label>
+            <Label className="font-medium text-foreground">Địa chỉ CNC</Label>
             <Select value={form.dia_chi_cnc} onValueChange={val => {
               if (val === "__add__") {
                 setIsAddingCNCAddress(true)
@@ -181,10 +181,10 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
                 setForm(f => ({ ...f, dia_chi_cnc: val }))
               }
             }}>
-              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-slate-800 font-medium">
+              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
                 <SelectValue placeholder="Chọn địa chỉ CNC" />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-slate-200 shadow-lg text-slate-800">
+              <SelectContent className="bg-card border border-border shadow-lg text-foreground">
                 {/* Địa chỉ mặc định và các địa chỉ đã thêm */}
                 {typeof window !== 'undefined' && window.cncAddresses && window.cncAddresses.map((a: any) => (
                   <SelectItem key={a.value} value={a.value}>{a.label || a.value}</SelectItem>
@@ -222,11 +222,11 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
             )}
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Khách hàng</Label>
+            <Label className="font-medium text-foreground">Khách hàng</Label>
             <Input name="khach_hang" value={form.khach_hang} onChange={handleChange} placeholder="Nhập tên khách hàng" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-slate-700">Số điện thoại khách hàng</Label>
+            <Label className="font-medium text-foreground">Số điện thoại khách hàng</Label>
             <Input name="so_dien_thoai" value={form.so_dien_thoai} onChange={handleChange} placeholder="Nhập số điện thoại" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
         </div>

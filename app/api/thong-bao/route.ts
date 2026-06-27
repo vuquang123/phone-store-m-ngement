@@ -3,9 +3,10 @@ import { addNotification, getNotifications } from "@/lib/notifications"
 
 export const dynamic = "force-dynamic"
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const items = await getNotifications()
+    const force = new URL(req.url).searchParams.get("refresh") === "1"
+    const items = await getNotifications(force)
     return NextResponse.json(items)
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Lỗi tải thông báo" }, { status: 500 })

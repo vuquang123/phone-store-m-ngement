@@ -20,7 +20,15 @@ dayjs.extend(customParseFormat)
 import { useIsMobile } from "@/hooks/use-mobile"
 import ImagePicker from '@/components/tele/ImagePicker'
 
-import { CartItem, WarrantyPackageUI, Customer } from "@/lib/types/ban-hang"
+import { CartItem, WarrantyPackageUI, Customer, SortKey } from "@/lib/types/ban-hang"
+import { computeDynamicDiscount } from "@/lib/ban-hang/discount"
+import { isWarrantyEligible, computeCartSubtotal, computeWarrantyTotal } from "@/lib/ban-hang/totals"
+import { useCart } from "@/hooks/ban-hang/use-cart"
+import { useDiscount } from "@/hooks/ban-hang/use-discount"
+import { CustomerCard } from "@/components/ban-hang/customer-card"
+import { MobileCheckoutBar } from "@/components/ban-hang/mobile-checkout-bar"
+import { PaymentColumn } from "@/components/ban-hang/payment-column"
+import { DepositOrdersTab } from "@/components/ban-hang/deposit-orders-tab"
 import { CartItemList } from "@/components/ban-hang/cart-item-list"
 import { SearchArea } from "@/components/ban-hang/search-area"
 
@@ -135,9 +143,21 @@ export default function BanHangPage() {
   const [khoHangProducts, setKhoHangProducts] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<any[]>([])
-  const [cart, setCart] = useState<CartItem[]>([])
+  // Giỏ hàng + chọn bảo hành tách sang hook useCart (giữ nguyên hành vi load/persist/mutators)
+  const {
+    cart, setCart,
+    addToCart, addPartnerItemToCart, updateQuantity, removeFromCart,
+    warrantyPackages, warrantyPkgLoading,
+    selectedWarranties, setSelectedWarranties, handleSelectWarranty,
+  } = useCart({ toast, setSearchQuery, setActiveTab })
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [giamGia, setGiamGia] = useState(0)
+  // Giảm giá tách sang hook useDiscount (giữ nguyên hành vi)
+  const {
+    giamGia, setGiamGia,
+    giamGiaInput, setGiamGiaInput,
+    discountParseMsg, setDiscountParseMsg,
+    handleDiscountInput, commitDiscount, applyQuickDiscount, handleDiscountPreset,
+  } = useDiscount()
   // Thanh toán: hỗ trợ nhiều phương thức + trả góp
   const [cashEnabled, setCashEnabled] = useState(false)
   const [cashAmount, setCashAmount] = useState(0)
@@ -149,15 +169,23 @@ export default function BanHangPage() {
   const [installmentType, setInstallmentType] = useState<'' | 'Góp iCloud' | 'Thẻ tín dụng' | 'Mira'>('')
   const [installmentDown, setInstallmentDown] = useState(0)
   const [installmentLoan, setInstallmentLoan] = useState(0)
-  const [loaiDon, setLoaiDon] = useState("")
+  const [loaiDon, setLoaiDon] = useState("Đơn off")
   const [hinhThucVanChuyen, setHinhThucVanChuyen] = useState("")
   const [diaChiNhan, setDiaChiNhan] = useState("")
   const [ghiChu, setGhiChu] = useState("")
+  const [maGhtk, setMaGhtk] = useState("")
+
+  // Hình thức vận chuyển: GHTK kèm luôn mã đơn -> "GHTK - 1990038382" để lưu thẳng vào sheet.
+  const buildShipMethod = () => {
+    if (loaiDon !== "Đơn onl") return ""
+    const code = maGhtk.trim()
+    if (hinhThucVanChuyen === "GHTK" && code) return `GHTK - ${code}`
+    return hinhThucVanChuyen
+  }
   const [copiedImei, setCopiedImei] = useState<string | null>(null)
   const [justAddedKey, setJustAddedKey] = useState<string | null>(null)
   // Discount input string (5.2)
-  const [giamGiaInput, setGiamGiaInput] = useState("")
-  const [discountParseMsg, setDiscountParseMsg] = useState<string>("")
+  // giamGiaInput/discountParseMsg chuyển sang hook useDiscount
   const [isLoading, setIsLoading] = useState(false)
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
   const [isCustomerSelectOpen, setIsCustomerSelectOpen] = useState(false)
@@ -172,7 +200,6 @@ export default function BanHangPage() {
   // Cache phụ kiện để tránh gọi API lặp khi query ngắn
   const [accessoryProducts, setAccessoryProducts] = useState<any[]>([])
   // Desktop search table UX enhancements
-  type SortKey = 'san_pham' | 'imei_loai' | 'nguon' | 'trang_thai' | 'gia'
   const [sortKey, setSortKey] = useState<SortKey>('san_pham')
   const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc')
   const [selectedIndex, setSelectedIndex] = useState<number>(-1)
@@ -216,103 +243,16 @@ export default function BanHangPage() {
   const [receiptBase64, setReceiptBase64] = useState<string | null>(null)
   const [receiptBlob, setReceiptBlob] = useState<Blob | null>(null)
   const [receiptBlobs, setReceiptBlobs] = useState<Blob[] | null>(null)
-  /* ===== Warranty state ===== */
-  const [warrantyPackages, setWarrantyPackages] = useState<WarrantyPackageUI[]>([])
-  const [warrantyPkgLoading, setWarrantyPkgLoading] = useState(false)
-  const [selectedWarranties, setSelectedWarranties] = useState<Record<string,string|null>>({}) // deviceId (IMEI/Serial) -> packageCode
+  /* ===== Warranty state (packages/loading/selectedWarranties chuyển sang useCart) ===== */
   const [openWarrantyInfo, setOpenWarrantyInfo] = useState<string|null>(null)
   // Inline edit price (3.1)
   const [editingPriceId, setEditingPriceId] = useState<string|null>(null)
   const editPriceRef = useRef<HTMLInputElement|null>(null)
   // Abort previous search requests when user keeps typing
   const searchAbortRef = useRef<AbortController | null>(null)
-  const isCartLoaded = useRef(false)
-  const isWarrantyLoaded = useRef(false)
+  // load/persist giỏ hàng + chọn bảo hành + load gói BH đã chuyển sang useCart
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('cart_draft_v1')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed)) setCart(parsed)
-      }
-    } catch {}
-    isCartLoaded.current = true
-
-    try {
-      const sel = localStorage.getItem('cart_warranty_sel_v1')
-      if (sel) {
-        const parsedSel = JSON.parse(sel)
-        if (parsedSel && typeof parsedSel === 'object') setSelectedWarranties(parsedSel)
-      }
-    } catch {}
-    isWarrantyLoaded.current = true
-
-    const loadWarrantyPkgs = async () => {
-      try {
-        setWarrantyPkgLoading(true)
-        const res = await fetch('/api/warranties/packages')
-        if (!res.ok) throw new Error('Fetch warranty packages failed')
-        const data = await res.json()
-        setWarrantyPackages(Array.isArray(data.data) ? data.data : [])
-      } catch (e) {
-        console.warn('[WARRANTY] Load packages fail', e)
-        setWarrantyPackages([])
-      } finally {
-        setWarrantyPkgLoading(false)
-      }
-    }
-    loadWarrantyPkgs()
-  }, [])
-
-  function handleSelectWarranty(deviceId: string, pkgCode: string | null) {
-    setSelectedWarranties(prev => ({ ...prev, [deviceId]: pkgCode }))
-  }
-  // Persist cart & selections (9.3)
-  useEffect(()=>{ 
-    if (!isCartLoaded.current) return
-    try { localStorage.setItem('cart_draft_v1', JSON.stringify(cart)) } catch{} 
-  }, [cart])
-
-  useEffect(()=>{ 
-    if (!isWarrantyLoaded.current) return
-    try { localStorage.setItem('cart_warranty_sel_v1', JSON.stringify(selectedWarranties)) } catch{} 
-  }, [selectedWarranties])
-
-  // ===== Discount parser (5.2) =====
-  function parseDiscount(raw: string, base: number): number {
-    const s = raw.trim().toLowerCase()
-    if (!s) return 0
-    if (/^\d+(\.\d+)?%$/.test(s)) {
-      const pct = parseFloat(s.replace('%',''))
-      return Math.min(Math.round(base * pct / 100), base)
-    }
-    if (/^\d+(\.\d+)?k$/.test(s)) {
-      return Math.min(Math.round(parseFloat(s.replace('k','')) * 1000), base)
-    }
-    if (/^\d+(\.\d+)?m$/.test(s)) {
-      return Math.min(Math.round(parseFloat(s.replace('m','')) * 1_000_000), base)
-    }
-    const num = parseInt(s.replace(/[^\d]/g,''),10)
-    if (!Number.isFinite(num)) return 0
-    return Math.min(num, base)
-  }
-
-  function handleDiscountInput(v: string){
-    setGiamGiaInput(v)
-    setDiscountParseMsg('')
-  }
-  function commitDiscount(){
-    const parsed = parseDiscount(giamGiaInput, discountBase)
-    setGiamGia(parsed)
-    setGiamGiaInput(parsed ? `${parsed.toLocaleString('vi-VN')}đ` : "")
-  }
-  function applyQuickDiscount(tag: string){
-    const parsed = parseDiscount(tag, discountBase)
-    setGiamGia(parsed)
-    setGiamGiaInput(parsed ? `${parsed.toLocaleString('vi-VN')}đ` : '')
-    setDiscountParseMsg('')
-  }
+  // Discount parser handlers chuyển sang hook useDiscount
 
   // === SEARCH SẢN PHẨM (dựa trên cache + server search khi query >= 2) ===
   useEffect(() => {
@@ -485,205 +425,18 @@ export default function BanHangPage() {
     return () => { alive = false }
   }, [reloadFlag])
 
-  // === CART ===
-  const addToCart = (product: any) => {
-    const prevCart = cart
-    let nextCart = prevCart
-    let didChange = false
-    if (product.type === "accessory") {
-      const accessoryId = product.id || `${product.ten_san_pham}_${product.loai_may || ""}`
-      const existingItem = prevCart.find((item) => item.type === "accessory" && item.id === accessoryId)
-      let giaNhap = 0
-      if (typeof product.gia_nhap === "number") giaNhap = product.gia_nhap
-      else if (typeof product["Giá Nhập"] === "number") giaNhap = product["Giá Nhập"]
-      else if (typeof product.gia_nhap === "string") giaNhap = parseInt(product.gia_nhap.replace(/[^\d]/g, "")) || 0
-      else if (typeof product["Giá Nhập"] === "string") giaNhap = parseInt(product["Giá Nhập"].replace(/[^\d]/g, "")) || 0
-      if (existingItem) {
-        const maxQty = product.so_luong_ton || 1
-        if (existingItem.so_luong < maxQty) {
-          nextCart = prevCart.map((item) => item.id === accessoryId ? { ...item, so_luong: item.so_luong + 1 } : item)
-          didChange = true
-        }
-      } else {
-        nextCart = [
-          ...prevCart,
-          {
-            id: accessoryId,
-            type: "accessory",
-            ten_san_pham: product.ten_san_pham,
-            gia_niemyet: Number(product.gia_ban) || 0,
-            gia_ban: Number(product.gia_ban) || 0,
-            gia_nhap: giaNhap,
-            so_luong: 1,
-            max_quantity: product.so_luong_ton || 1,
-            imei: product.imei || "",
-            trang_thai: product.trang_thai || "",
-            // preserve accessory descriptors for cart display
-            loai_phu_kien: product.loai_phu_kien || product.loai || "",
-            mau_sac: product.mau_sac || product.mau || ""
-          }
-        ]
-        didChange = true
-      }
-    } else {
-      const exists = prevCart.find((item) => item.id === product.id && item.type === "product")
-      if (!exists) {
-        const isPartner = String(product.nguon || product.source || '').toLowerCase().includes('kho ngoài')
-        nextCart = [
-          ...prevCart,
-          {
-            ...product,
-            type: "product",
-            so_luong: 1,
-            max_quantity: 1,
-            // Track initial IMEI state for partner items to skip extra confirmation if it already existed
-            imei_initial: product.imei || '',
-            imei_confirmed: isPartner && product.imei ? true : (product as any).imei_confirmed,
-            "Tên Sản Phẩm": product.ten_san_pham,
-            "Loại Máy": product.loai_may,
-            "Dung Lượng": product.dung_luong,
-            "IMEI": product.imei,
-            "Màu Sắc": product.mau_sac,
-            "Pin (%)": product.pin,
-            "Tình Trạng Máy": product.tinh_trang,
-            gia_niemyet: Number(product.gia_ban) || 0,
-            gia_ban: (Number(product.gia_ban) || 0) - (Number(product.giam_gia) || 0)
-          }
-        ]
-        didChange = true
-      }
-    }
-    if (didChange) {
-      setCart(nextCart)
-      try {
-        toast({
-          title: "Đã thêm vào giỏ",
-          description: product.ten_san_pham || product.imei || product.serial || "Sản phẩm",
-          action: (
-            <button
-              onClick={() => setCart(prevCart)}
-              className="inline-flex h-8 items-center justify-center rounded-md border px-3 text-sm font-medium hover:bg-secondary"
-            >
-              Hoàn tác
-            </button>
-          ) as any,
-        })
-      } catch {}
-    }
-    setSearchQuery("")
-  }
-
-  // Thêm máy kho ngoài vào giỏ từ dialog
-  function addPartnerItemToCart(p: any) {
-    const id = p.imei || p.id
-    const exists = cart.find((it) => it.type === 'product' && (it.imei === p.imei || it.id === id))
-    if (exists) return
-    const item: CartItem = {
-      id,
-      type: 'product',
-      ten_san_pham: p.model || p.ten_san_pham || '',
-      gia_niemyet: typeof p.gia_goi_y_ban === 'number' && p.gia_goi_y_ban > 0 ? p.gia_goi_y_ban : 0,
-      gia_ban: typeof p.gia_goi_y_ban === 'number' && p.gia_goi_y_ban > 0 ? p.gia_goi_y_ban : 0,
-      gia_nhap: typeof p.gia_chuyen === 'number' ? p.gia_chuyen : 0,
-      so_luong: 1,
-      max_quantity: 1,
-      imei: p.imei || '',
-      imei_initial: p.imei || '',
-      imei_confirmed: (p.imei ? true : false) as any,
-      trang_thai: 'Còn hàng',
-      loai_may: p.loai_may || '',
-      dung_luong: p.bo_nho || p.dung_luong || '',
-      mau_sac: p.mau || '',
-      pin: p.pin_pct || p.pin || '',
-      tinh_trang: p.tinh_trang || '',
-      // Metadata cho API ban-hang xử lý xóa dòng kho ngoài
-      source: 'Kho ngoài',
-      nguon: 'Kho ngoài',
-      partner_sheet: p.sheet,
-      partner_row_index: p.row_index,
-      ten_doi_tac: p.ten_doi_tac || '',
-      sdt_doi_tac: p.sdt_doi_tac || ''
-    }
-    setCart(prev => [...prev, item])
-    setActiveTab('ban-hang')
-  }
-
-  const updateQuantity = (id: string, type: string, newQty: number) => {
-    if (newQty <= 0) {
-      removeFromCart(id, type)
-      return
-    }
-    setCart(cart.map((item) =>
-      item.id === id && item.type === type
-        ? { ...item, so_luong: Math.min(newQty, item.max_quantity || 1) }
-        : item
-    ))
-  }
-
-  const removeFromCart = (id: string, type: string) => {
-    setCart(cart.filter((item) => !(item.id === id && item.type === type)))
-  }
+  // === CART === addToCart/addPartnerItemToCart/updateQuantity/removeFromCart chuyển sang useCart
 
   // === CHECKOUT ===
-  const isWarrantyEligible = (item: CartItem): boolean => {
-    if (item.type !== 'product') return false
-    const isPartner = String(item.nguon || item.source || '').toLowerCase().includes('kho ngoài')
-    const isIpad = String(item.ten_san_pham || '').toLowerCase().includes('ipad') || String(item.loai_may || '').toLowerCase().includes('ipad')
-    if (isIpad) {
-      const hasId = !!(item.imei || item.serial)
-      if (!hasId) return false
-      if (isPartner && item.imei && !(item as any).imei_confirmed && !(item as any).imei_initial) return false
-      return true
-    }
-    if (!isPartner) return !!item.imei
-    return !!(item.imei && (((item as any).imei_confirmed) || ((item as any).imei_initial)))
-  }
-  const tongTien = cart.reduce((sum, item) => sum + item.gia_ban * item.so_luong, 0)
+  // isWarrantyEligible/computeCartSubtotal/computeWarrantyTotal tách sang lib/ban-hang/totals.ts
+  const tongTien = computeCartSubtotal(cart)
   const thanhToan = tongTien - giamGia // (chưa cộng phí bảo hành)
-  const warrantyTotal = cart.reduce((sum, i) => {
-    if (!isWarrantyEligible(i)) return sum
-    const key = (i.imei || i.serial || i.id) as string
-    if (!key) return sum
-    const code = selectedWarranties[key]
-    if (!code) return sum
-    const pkg = warrantyPackages.find(p => p.code === code)
-    return sum + (pkg?.price || 0)
-  }, 0)
+  const warrantyTotal = computeWarrantyTotal(cart, selectedWarranties, warrantyPackages)
   // Cơ sở tính giảm giá: tổng tiền hàng + phí bảo hành trước giảm
   const discountBase = Math.max(tongTien + warrantyTotal, 0)
   
-  // Tính toán Giảm giá động
-  let computedGiamGia = 0;
-  let computedDiscountMsg = '';
-  if (giamGiaInput) {
-    const s = giamGiaInput.trim().toLowerCase();
-    if (s.endsWith('%')) {
-      const pct = parseFloat(s.replace('%', ''));
-      if (!isNaN(pct) && pct > 0 && pct <= 100) {
-        computedGiamGia = discountBase * (pct / 100);
-        computedDiscountMsg = `Giảm ${pct}% (-₫${computedGiamGia.toLocaleString('vi-VN')})`;
-      } else {
-        computedDiscountMsg = 'Phần trăm không hợp lệ';
-      }
-    } else if (s.endsWith('k') || s.endsWith('tr')) {
-      let multiplier = 1000;
-      if (s.endsWith('tr')) multiplier = 1000000;
-      const numStr = s.replace(/k|tr/g, '');
-      const num = parseFloat(numStr);
-      if (!isNaN(num) && num > 0) {
-        computedGiamGia = num * multiplier;
-        computedDiscountMsg = `Giảm ₫${computedGiamGia.toLocaleString('vi-VN')}`;
-      } else {
-        computedDiscountMsg = 'Số tiền giảm không hợp lệ';
-      }
-    } else {
-      const num = parseFloat(s.replace(/[^\d]/g, ''));
-      if (!isNaN(num) && num > 0) {
-         computedGiamGia = num;
-         computedDiscountMsg = `Giảm ₫${computedGiamGia.toLocaleString('vi-VN')}`;
-      }
-    }
-  }
+  // Tính toán Giảm giá động (logic tách sang lib/ban-hang/discount.ts, giữ nguyên hành vi)
+  const { amount: computedGiamGia, msg: computedDiscountMsg } = computeDynamicDiscount(giamGiaInput, discountBase);
 
   const giamGiaToUse = computedGiamGia > 0 ? computedGiamGia : giamGia;
   
@@ -691,14 +444,7 @@ export default function BanHangPage() {
   const expectedCollect = loaiThanhToan === 'Đặt cọc' ? Math.max(Number(soTienCoc)||0, 0) : finalThanhToan
 
   
-  // Handlers cho input Giảm giá
-  const handleDiscountPreset = (preset: string) => {
-    if (preset === 'Reset') {
-      setGiamGiaInput(''); setGiamGia(0); setDiscountParseMsg('');
-    } else {
-      setGiamGiaInput(preset);
-    }
-  };
+  // handleDiscountPreset chuyển sang hook useDiscount
   // Tổng thanh toán ngay (không bao gồm phần góp): Tiền mặt + Chuyển khoản + Thẻ
   const immediateSum = (cashEnabled ? (cashAmount||0) : 0)
     + (transferEnabled ? (transferAmount||0) : 0)
@@ -968,7 +714,7 @@ export default function BanHangPage() {
             nguoi_ban: employeeId,
             loai_don: loaiDon,
             loai_don_ban: loaiDon,
-            hinh_thuc_van_chuyen: loaiDon === "Đơn onl" ? hinhThucVanChuyen : "",
+            hinh_thuc_van_chuyen: buildShipMethod(),
             dia_chi_nhan: loaiDon === "Đơn onl" ? diaChiNhan : "",
             "Địa Chỉ Nhận": loaiDon === "Đơn onl" ? diaChiNhan : "",
             ngay_dat_coc: new Date().toLocaleDateString("vi-VN"),
@@ -1000,7 +746,12 @@ export default function BanHangPage() {
           }
           setCart([])
           setGiamGia(0)
+          setGiamGiaInput("")
           setGhiChu("")
+          setMaGhtk("")
+          setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false)
+          setCashAmount(0); setTransferAmount(0); setCardAmount(0)
+          setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0)
           setCurrentDepositOrderId(dc.id_don_hang || dc.id || null)
           try { localStorage.removeItem('cart_draft_v1'); localStorage.removeItem('cart_warranty_sel_v1') } catch{}
           toast({ title: 'Đặt cọc thành công', description: `Mã: ${dc.id_don_hang || dc.id || ''}` })
@@ -1067,7 +818,7 @@ export default function BanHangPage() {
           "Hình Thức Thanh Toán": paymentSummary,
           "Người Bán": employeeId,
           "Loại Đơn": loaiDon,
-          "Hình Thức Vận Chuyển": loaiDon === "Đơn onl" ? hinhThucVanChuyen : "",
+          "Hình Thức Vận Chuyển": buildShipMethod(),
           "Lãi": "",
           "Ghi Chú": ghiChu,
           "Giảm Giá": giamGiaToUse,
@@ -1150,7 +901,7 @@ export default function BanHangPage() {
               dia_chi_nhan: loaiDon === 'Đơn onl' ? diaChiNhan : '',
               address: loaiDon === 'Đơn onl' ? diaChiNhan : '',
               shippingAddress: loaiDon === 'Đơn onl' ? diaChiNhan : '',
-              hinh_thuc_van_chuyen: loaiDon === 'Đơn onl' ? hinhThucVanChuyen : '',
+              hinh_thuc_van_chuyen: buildShipMethod(),
               shipping_method: loaiDon === 'Đơn onl' ? hinhThucVanChuyen : '',
               phuong_thuc_thanh_toan: paymentSummary,
               paymentMethod: paymentSummary,
@@ -1172,6 +923,8 @@ export default function BanHangPage() {
                   mau_sac: i.mau_sac || (i as any)["Màu Sắc"] || '',
                   imei: i.imei || '',
                   serial: i.serial || '',
+                  pin: (i as any).pin ?? (i as any)["Pin (%)"] ?? '',
+                  tinh_trang: (i as any).tinh_trang || (i as any)["Tình Trạng Máy"] || '',
                   gia_niemyet: i.gia_niemyet,
                   gia_ban: i.gia_ban,
                   so_luong: i.so_luong,
@@ -1226,10 +979,13 @@ export default function BanHangPage() {
           setCart([]);
           setSelectedCustomer(null);
           setGiamGia(0);
-          setGhiChu("");
+          setGhiChu("")
+          setMaGhtk("");
           setDiaChiNhan("");
+          setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false);
           setCashAmount(0); setTransferAmount(0); setCardAmount(0);
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0);
+          setGiamGiaInput("");
           try {
             if (currentDepositOrderId) {
               await fetch('/api/dat-coc', {
@@ -1334,7 +1090,7 @@ export default function BanHangPage() {
     <ProtectedRoute>
       <div className="space-y-6 pb-28 md:pb-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="sticky top-0 z-10 bg-white shadow-sm">
+          <TabsList className="z-30 bg-card shadow-sm">
             <TabsTrigger
               value="ban-hang"
               className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500"
@@ -1356,7 +1112,7 @@ export default function BanHangPage() {
 
           <TabsContent value="ban-hang">
             {isMobile && (
-              <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b px-4 py-2 flex gap-2">
+              <div className="sticky top-0 z-30 bg-card border-b px-4 py-2 flex gap-2">
                 <Button size="sm" variant={mobileView==='san-pham'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('san-pham')}>Sản phẩm</Button>
                 <Button size="sm" variant={mobileView==='gio-hang'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('gio-hang')}>Giỏ hàng ({cart.length})</Button>
                 <Button size="sm" variant={mobileView==='thanh-toan'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('thanh-toan')}>Thanh toán</Button>
@@ -1397,7 +1153,7 @@ export default function BanHangPage() {
                 />
 
                 {(!isMobile || mobileView === 'gio-hang') && (
-                  <Card className="min-h-[220px] h-full w-full flex flex-col lg:min-h-[360px]">
+                  <Card className="min-h-[120px] h-full w-full flex flex-col lg:min-h-[360px]">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <ShoppingCart className="h-5 w-5" />
@@ -1408,7 +1164,7 @@ export default function BanHangPage() {
                       {cart.length === 0 ? (
                         <div className="flex-1 flex flex-col items-center justify-center gap-1 text-muted-foreground text-sm">
                           <span>Giỏ hàng đang trống</span>
-                          <span className="text-xs text-slate-500">Chọn sản phẩm và bấm "Thêm" để đưa vào giỏ</span>
+                          <span className="text-xs text-muted-foreground">Chọn sản phẩm và bấm &quot;Thêm&quot; để đưa vào giỏ</span>
                         </div>
                       ) : (
                         <CartItemList
@@ -1431,401 +1187,66 @@ export default function BanHangPage() {
               {(!isMobile || mobileView === 'thanh-toan') && (
                 <div className="space-y-6 lg:max-w-[520px]">
                   {/* Khách hàng */}
-                  <Card>
-                    <CardHeader><CardTitle>Khách hàng</CardTitle></CardHeader>
-                    <CardContent className="space-y-4">
-                      {customerResults.length > 0 && (
-                        <div className="border rounded bg-white max-h-56 overflow-y-auto">
-                          {customerResults.map((kh: Customer & { isDeposit?: boolean }) => (
-                            <div
-                              key={kh.id}
-                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 ${kh.isDeposit ? "text-orange-600 font-semibold" : ""}`}
-                              onClick={() => { setSelectedCustomer(kh); setCustomerSearch(""); setCustomerResults([]); }}
-                            >
-                              <span>{kh.ho_ten} ({kh.so_dien_thoai})</span>
-                              {kh.isDeposit && <span title="Khách đang đặt cọc" className="ml-1">🔒</span>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {selectedCustomer ? (
-                        <div className="p-3 border rounded-lg bg-white flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{selectedCustomer.ho_ten}</p>
-                            <p className="text-sm text-muted-foreground">{selectedCustomer.so_dien_thoai}</p>
-                          </div>
-                          <Button variant="ghost" size="sm" onClick={() => setSelectedCustomer(null)}>Xóa</Button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <Button variant="outline" className="flex-1 bg-white" onClick={() => setIsCustomerSelectOpen(true)}>
-                            <User className="mr-2 h-4 w-4" /> Chọn khách hàng
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                  <CustomerCard
+                    customerResults={customerResults}
+                    selectedCustomer={selectedCustomer}
+                    setSelectedCustomer={setSelectedCustomer}
+                    setCustomerSearch={setCustomerSearch}
+                    setCustomerResults={setCustomerResults}
+                    setIsCustomerSelectOpen={setIsCustomerSelectOpen}
+                  />
 
                   {/* Thanh toán */}
-                  <Card>
-                    <CardHeader><CardTitle>Thanh toán</CardTitle></CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Phương thức thanh toán</label>
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                              <label className="flex items-center gap-2 cursor-pointer w-28">
-                                <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={cashEnabled} onChange={(e) => { setCashEnabled(e.target.checked); if (!e.target.checked) setCashAmount(0); }} />
-                                <span className="text-sm">Tiền mặt</span>
-                              </label>
-                              {cashEnabled && <Input className="flex-1" placeholder="₫0" value={cashAmount ? cashAmount.toLocaleString('vi-VN') : ''} onChange={(e) => setCashAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />}
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <label className="flex items-center gap-2 cursor-pointer w-28">
-                                <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={transferEnabled} onChange={(e) => { setTransferEnabled(e.target.checked); if (!e.target.checked) setTransferAmount(0); }} />
-                                <span className="text-sm">Chuyển khoản</span>
-                              </label>
-                              {transferEnabled && <Input className="flex-1" placeholder="₫0" value={transferAmount ? transferAmount.toLocaleString('vi-VN') : ''} onChange={(e) => setTransferAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />}
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <label className="flex items-center gap-2 cursor-pointer w-28">
-                                <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={cardEnabled} onChange={(e) => { setCardEnabled(e.target.checked); if (!e.target.checked) setCardAmount(0); }} />
-                                <span className="text-sm">Thẻ</span>
-                              </label>
-                              {cardEnabled && <Input className="flex-1" placeholder="₫0" value={cardAmount ? cardAmount.toLocaleString('vi-VN') : ''} onChange={(e) => setCardAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />}
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-3">
-                                <label className="flex items-center gap-2 cursor-pointer w-28">
-                                  <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={installmentEnabled} onChange={(e) => { setInstallmentEnabled(e.target.checked); if (!e.target.checked) { setInstallmentDown(0); setInstallmentLoan(0); setInstallmentType(''); } }} />
-                                  <span className="text-sm">Trả góp</span>
-                                </label>
-                                {installmentEnabled && (
-                                  <Select value={installmentType} onValueChange={(val: any) => setInstallmentType(val)}>
-                                    <SelectTrigger className="flex-1"><SelectValue placeholder="Chọn đối tác..." /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="Góp iCloud">Góp iCloud</SelectItem>
-                                      <SelectItem value="Thẻ tín dụng">Thẻ tín dụng</SelectItem>
-                                      <SelectItem value="Mira">Mira</SelectItem>
-                                      <SelectItem value="HDSaison">HDSaison</SelectItem>
-                                      <SelectItem value="HomeCredit">HomeCredit</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              </div>
-                              {installmentEnabled && (
-                                <div className="flex items-center gap-3 pl-7">
-                                  <div className="flex-1 space-y-1">
-                                    <label className="text-xs text-muted-foreground">Trả trước (Khách đưa)</label>
-                                    <Input placeholder="₫0" value={installmentDown ? installmentDown.toLocaleString('vi-VN') : ''} onChange={(e) => setInstallmentDown(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />
-                                  </div>
-                                  <div className="flex-1 space-y-1">
-                                    <label className="text-xs text-muted-foreground">Góp (Khoản vay)</label>
-                                    <Input placeholder="₫0" value={installmentLoan ? installmentLoan.toLocaleString('vi-VN') : ''} onChange={(e) => setInstallmentLoan(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <p className="text-xs text-muted-foreground pt-1">
-                            Tổng đã nhập: ₫{sumPayments.toLocaleString('vi-VN')} • Cần thu: ₫{expectedCollect.toLocaleString('vi-VN')}
-                          </p>
-                        </div>
-                        
-                        <Separator />
-
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium">Giảm giá</label>
-                            <div className="flex items-center gap-1">
-                              {['50k', '100k', '200k', '5%', '10%'].map(pres => (
-                                <button key={pres} type="button" onClick={() => handleDiscountPreset(pres)} className="px-2 py-1 text-[11px] border rounded hover:bg-slate-100">{pres}</button>
-                              ))}
-                              <button type="button" onClick={() => handleDiscountPreset('Reset')} className="px-2 py-1 text-[11px] border rounded hover:bg-slate-100">Reset</button>
-                            </div>
-                          </div>
-                          <Input
-                            placeholder="Ví dụ: 100k hoặc 10%"
-                            value={giamGiaInput}
-                            onChange={(e) => { setGiamGiaInput(e.target.value); if(!e.target.value.trim()){ setGiamGia(0); setDiscountParseMsg(''); } }}
-                          />
-                          {(computedDiscountMsg || discountParseMsg) && <p className="text-xs text-blue-600 font-medium">{computedDiscountMsg || discountParseMsg}</p>}
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Ghi chú</label>
-                          <Input
-                            placeholder="Ghi chú đơn hàng..."
-                            value={ghiChu}
-                            onChange={(e) => setGhiChu(e.target.value)}
-                          />
-                        </div>
-
-                        <Separator />
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Tiền hàng:</span>
-                            <span>₫{tongTien.toLocaleString()}</span>
-                          </div>
-                          {warrantyTotal > 0 && (
-                            <div className="flex justify-between text-sm text-blue-700">
-                              <span>Bảo hành:</span>
-                              <span>+₫{warrantyTotal.toLocaleString()}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between text-sm">
-                            <span>Giảm giá:</span>
-                            <span>-₫{giamGiaToUse.toLocaleString()}</span>
-                          </div>
-                          {currentDepositOrderId && depositAmountAlreadyPaid > 0 && (
-                            <div className="flex justify-between text-sm text-emerald-600 font-medium">
-                              <span>Sẵn có (Tiền cọc):</span>
-                              <span>-₫{depositAmountAlreadyPaid.toLocaleString()}</span>
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-between font-bold text-lg mt-2">
-                            <span>Thanh toán:</span>
-                            <span>₫{finalThanhToan.toLocaleString()}</span>
-                          </div>
-                        </div>
-
-                        <Separator />
-                        
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-3">
-                            <Select value={loaiDon} onValueChange={setLoaiDon}>
-                              <SelectTrigger className="flex-1"><SelectValue placeholder="Loại đơn" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Đơn onl">Đơn onl</SelectItem>
-                                <SelectItem value="Đơn off">Đơn off</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            
-                            {loaiDon === 'Đơn onl' && (
-                              <Select value={hinhThucVanChuyen} onValueChange={setHinhThucVanChuyen}>
-                                <SelectTrigger className="flex-1"><SelectValue placeholder="Hình thức vận chuyển" /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="GHTK">GHTK</SelectItem>
-                                  <SelectItem value="Book Grab">Book Grab</SelectItem>
-                                  <SelectItem value="Gửi Xe">Gửi Xe</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </div>
-
-                          {loaiDon === 'Đơn onl' && (
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium">Địa chỉ nhận</label>
-                              <Input placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố" value={diaChiNhan} onChange={(e) => setDiaChiNhan(e.target.value)} />
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Loại thanh toán</label>
-                          <Select value={loaiThanhToan} onValueChange={setLoaiThanhToan}>
-                            <SelectTrigger><SelectValue placeholder="Chọn loại thanh toán..." /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Thanh toán đủ">Thanh toán đủ</SelectItem>
-                              <SelectItem value="Đặt cọc">Đặt cọc</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          {loaiThanhToan === 'Đặt cọc' && (
-                            <div className="pt-2 space-y-3 p-3 border rounded bg-orange-50/50">
-                              <div className="space-y-1">
-                                <label className="text-xs font-semibold text-orange-800">Khách đặt cọc trước (₫)</label>
-                                <Input type="number" placeholder="Ví dụ: 500000" value={soTienCoc || ''} onChange={(e) => setSoTienCoc(Number(e.target.value))} className="border-orange-200" />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-xs font-semibold text-orange-800">Hẹn ngày trả đủ</label>
-                                <Input type="date" value={ngayHenTraDu} onChange={(e) => setNgayHenTraDu(e.target.value)} className="border-orange-200" />
-                              </div>
-                              <div className="pt-1 text-sm font-medium text-orange-800 flex justify-between">
-                                <span>Còn lại phải thu:</span>
-                                <span>₫{Math.max(0, finalThanhToan - (soTienCoc||0)).toLocaleString()}</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {loaiThanhToan !== 'Đặt cọc' && (
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Đính kèm ảnh (hóa đơn / biên nhận)</label>
-                            <ImagePicker onSelectBlobs={setReceiptBlobs} />
-                            {receiptBlobs && receiptBlobs.length > 0 && <p className="text-xs text-muted-foreground mt-1">Gửi {receiptBlobs.length} ảnh kèm thông báo</p>}
-                          </div>
-                        )}
-
-                        <Button className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg mt-4" disabled={isLoading || cart.length === 0} onClick={handleCheckout}>
-                          {isLoading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang xử lý</> : "Thanh toán"}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <PaymentColumn
+                    cashEnabled={cashEnabled} setCashEnabled={setCashEnabled}
+                    cashAmount={cashAmount} setCashAmount={setCashAmount}
+                    transferEnabled={transferEnabled} setTransferEnabled={setTransferEnabled}
+                    transferAmount={transferAmount} setTransferAmount={setTransferAmount}
+                    cardEnabled={cardEnabled} setCardEnabled={setCardEnabled}
+                    cardAmount={cardAmount} setCardAmount={setCardAmount}
+                    installmentEnabled={installmentEnabled} setInstallmentEnabled={setInstallmentEnabled}
+                    installmentType={installmentType} setInstallmentType={setInstallmentType}
+                    installmentDown={installmentDown} setInstallmentDown={setInstallmentDown}
+                    installmentLoan={installmentLoan} setInstallmentLoan={setInstallmentLoan}
+                    sumPayments={sumPayments} expectedCollect={expectedCollect}
+                    handleDiscountPreset={handleDiscountPreset}
+                    giamGiaInput={giamGiaInput} setGiamGiaInput={setGiamGiaInput}
+                    setGiamGia={setGiamGia} setDiscountParseMsg={setDiscountParseMsg}
+                    computedDiscountMsg={computedDiscountMsg} discountParseMsg={discountParseMsg}
+                    ghiChu={ghiChu} setGhiChu={setGhiChu}
+                    tongTien={tongTien} warrantyTotal={warrantyTotal} giamGiaToUse={giamGiaToUse}
+                    currentDepositOrderId={currentDepositOrderId} depositAmountAlreadyPaid={depositAmountAlreadyPaid}
+                    finalThanhToan={finalThanhToan}
+                    loaiDon={loaiDon} setLoaiDon={setLoaiDon}
+                    hinhThucVanChuyen={hinhThucVanChuyen} setHinhThucVanChuyen={setHinhThucVanChuyen}
+                    maGhtk={maGhtk} setMaGhtk={setMaGhtk}
+                    diaChiNhan={diaChiNhan} setDiaChiNhan={setDiaChiNhan}
+                    loaiThanhToan={loaiThanhToan} setLoaiThanhToan={setLoaiThanhToan}
+                    soTienCoc={soTienCoc} setSoTienCoc={setSoTienCoc}
+                    ngayHenTraDu={ngayHenTraDu} setNgayHenTraDu={setNgayHenTraDu}
+                    receiptBlobs={receiptBlobs} setReceiptBlobs={setReceiptBlobs}
+                    isLoading={isLoading} cartCount={cart.length} handleCheckout={handleCheckout}
+                  />
                 </div>
               )}
             </div>
           </TabsContent>
 
           <TabsContent value="don-dat-coc">
-            <Card>
-              <CardHeader className="space-y-4">
-                <div>
-                  <CardTitle>Đơn đặt cọc</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Chỉ hiển thị đơn đặt cọc</p>
-                </div>
-                <div className="relative w-full">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Tìm mã đơn, tên KH, SDT..." value={depositSearch} onChange={(e) => setDepositSearch(e.target.value)} className="pl-9 w-full" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                {(() => {
-                   const filtered = depositOrdersState.filter(o => {
-                      const status = (o["Trạng Thái"] || o["trang_thai"] || o["Trạng thái"] || o["status"] || "").toString().trim().toLowerCase();
-                      if (status !== "đặt cọc") return false;
-                      const m = o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"] || "";
-                      const k = o["Tên Khách Hàng"] || o["ten_khach_hang"] || "";
-                      return String(m).toLowerCase().includes(depositSearch.toLowerCase()) || String(k).toLowerCase().includes(depositSearch.toLowerCase());
-                   });
-                   if (depositLoading) return <div className="p-8 text-center text-slate-500">Đang tải...</div>;
-                   if (filtered.length === 0) return <div className="p-8 text-center text-slate-500">Không tìm thấy đơn nào.</div>;
-                   return (
-                     <div className="overflow-x-auto">
-                       <Table>
-                         <TableHeader>
-                           <TableRow className="bg-slate-50">
-                             <TableHead>
-                               <div className="flex items-center gap-2">
-                                 Mã Đơn Hàng
-                                 <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-100 py-0 leading-none h-5">
-                                   {filtered.length}
-                                 </Badge>
-                               </div>
-                             </TableHead>
-                             <TableHead>Khách</TableHead>
-                             <TableHead>Sản phẩm</TableHead>
-                             <TableHead>IMEI</TableHead>
-                             <TableHead>Trạng thái máy</TableHead>
-                             <TableHead>Tổng đã cọc</TableHead>
-                             <TableHead>Tổng còn lại</TableHead>
-                             <TableHead>Ngày cọc</TableHead>
-                             <TableHead>Hạn TT</TableHead>
-                             <TableHead>Thao tác</TableHead>
-                           </TableRow>
-                         </TableHeader>
-                         <TableBody>
-                           {filtered.map((order, i) => {
-                             const maDon = order["Mã Đơn Hàng"] || order["ID Đơn Hàng"] || order["ma_don_hang"] || "-";
-                             const tenKhach = order["Tên Khách Hàng"] || order["ten_khach_hang"] || "-";
-                             const sdtKhach = order["Số Điện Thoại"] || order["so_dien_thoai"] || "";
-                             const sanPhamBase = order["Tên Sản Phẩm"] || order["ten_san_pham"] || "-";
-                             const mauSac = order["Màu Sắc"] || order["mau_sac"] || "";
-                             const sanPham = mauSac ? `${sanPhamBase} (${mauSac})` : sanPhamBase;
-                             const imei = order["IMEI"] || order["imei"] || "-";
-                             const trangThaiMay = order["Tình Trạng Máy"] || order["tinh_trang_may"] || "-";
-                             
-                             let tongDaCoc = order["Số Tiền Cọc"] || order["so_tien_coc"] || 0;
-                             if (typeof tongDaCoc === 'string') tongDaCoc = Number(tongDaCoc.replace(/[^\d]/g, '')) || 0;
-                             
-                             let tongConLai = order["Số Tiền Còn Lại"] || order["Còn Lại"] || order["so_tien_con_lai"] || 0;
-                             if (typeof tongConLai === 'string') tongConLai = Number(tongConLai.replace(/[^\d]/g, '')) || 0;
-                             
-                             const ngayCocRaw = order["Ngày Đặt Cọc"] || order["Ngày Cọc"] || order["Ngày Xuất"] || order["ngay_xuat"];
-                             let ngayCoc = "-";
-                             if (ngayCocRaw) {
-                               const d = dayjs(ngayCocRaw, ["DD/MM/YYYY", "D/M/YYYY", "YYYY-MM-DD"]);
-                               ngayCoc = d.isValid() ? d.format("DD/MM/YYYY") : ngayCocRaw;
-                             }
-                             
-                             const hanRaw = order["Hạn Thanh Toán"] || order["han_thanh_toan"];
-                             let han = "-";
-                             if (hanRaw) {
-                               const d = dayjs(hanRaw, ["DD/MM/YYYY", "D/M/YYYY", "YYYY-MM-DD"]);
-                               han = d.isValid() ? d.format("DD/MM/YYYY") : hanRaw;
-                             }
-
-                             return (
-                               <TableRow key={i}>
-                                 <TableCell className="font-medium whitespace-nowrap">{maDon}</TableCell>
-                                 <TableCell>
-                                    <div className="font-medium">{tenKhach}</div>
-                                    <div className="text-xs text-muted-foreground">{sdtKhach}</div>
-                                 </TableCell>
-                                 <TableCell className="min-w-[200px]">{sanPham}</TableCell>
-                                 <TableCell className="whitespace-nowrap">{imei}</TableCell>
-                                 <TableCell>
-                                    <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs whitespace-nowrap">{trangThaiMay}</span>
-                                 </TableCell>
-                                 <TableCell className="text-blue-600 font-semibold whitespace-nowrap align-middle">
-                                    <span>₫{tongDaCoc.toLocaleString('vi-VN')}</span>
-                                 </TableCell>
-                                 <TableCell className="text-emerald-600 font-semibold whitespace-nowrap align-middle">
-                                    <span className="border-b border-emerald-600/30 pb-0.5">₫{tongConLai.toLocaleString('vi-VN')}</span>
-                                 </TableCell>
-                                 <TableCell className="whitespace-nowrap">{ngayCoc}</TableCell>
-                                 <TableCell className="whitespace-nowrap">{han}</TableCell>
-                                 <TableCell>
-                                   <div className="flex items-center gap-2">
-                                     <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white whitespace-nowrap h-8 px-3" onClick={() => {
-                                        const allRows = depositOrdersState.filter(o => (o["Mã Đơn Hàng"] || o["ID Đơn Hàng"] || o["ma_don_hang"]) === maDon);
-                                        const products: CartItem[] = allRows.map((o: any) => ({
-                                          id: o["IMEI"] || o["Serial"] || o["ID Máy"] || o["Tên Sản Phẩm"] || o["ten_san_pham"] || o["imei"] || o["serial"] || o["id"],
-                                          type: "product",
-                                          ten_san_pham: o["Tên Sản Phẩm"] || o["ten_san_pham"] || "",
-                                          gia_ban: typeof o["Giá Bán"] === "string" ? parseInt(o["Giá Bán"].replace(/[^\d]/g, "")) || 0 : o["Giá Bán"] || 0,
-                                          gia_nhap: typeof o["Giá Nhập"] === "string" ? parseInt(o["Giá Nhập"].replace(/[^\d]/g, "")) || 0 : o["Giá Nhập"] || 0,
-                                          so_luong: 1,
-                                          max_quantity: 1,
-                                          imei: o["IMEI"] || "",
-                                          serial: o["Serial"] || "",
-                                          trang_thai: o["Tình Trạng Máy"] || o["tinh_trang_may"] || "",
-                                          loai_may: o["Loại Máy"] || o["loai_may"] || "",
-                                          dung_luong: o["Dung Lượng"] || o["dung_luong"] || "",
-                                          mau_sac: o["Màu Sắc"] || o["mau_sac"] || "",
-                                          pin: o["Pin (%)"] || o["pin"] || "",
-                                          tinh_trang: o["Tình Trạng Máy"] || o["tinh_trang_may"] || ""
-                                        }));
-                                        setCart(products);
-                                        setSelectedCustomer({
-                                          id: sdtKhach,
-                                          ho_ten: tenKhach,
-                                          so_dien_thoai: sdtKhach
-                                        });
-                                         // Tính tổng tiền đã cọc từ tất cả các dòng của đơn này
-                                         const totalPaid = allRows.reduce((sum, o: any) => {
-                                           let val = o["Số Tiền Cọc"] || o["so_tien_coc"] || 0;
-                                           if (typeof val === 'string') val = Number(String(val).replace(/[^\d]/g, '')) || 0;
-                                           return sum + (Number(val) || 0);
-                                         }, 0);
-
-                                         setCurrentDepositOrderId(maDon || null);
-                                         setDepositAmountAlreadyPaid(totalPaid || 0);
-                                         setLoaiThanhToan("Thanh toán đủ");
-                                         toast({ title: 'Đã tải đơn đặt cọc', description: `Đã cọc: ₫${(totalPaid || 0).toLocaleString('vi-VN')}. Vui lòng thanh toán số còn lại.` });
-
-                                        setActiveTab("ban-hang");
-                                     }}>Thanh toán tiếp</Button>
-                                     <Button size="sm" variant="destructive" className="bg-red-500 hover:bg-red-600 whitespace-nowrap h-8 px-3" onClick={async () => {
-                                        if (!confirm(`Bạn có chắc muốn hủy đơn đặt cọc ${maDon}?`)) return;
-                                        handleCancelDeposit(maDon);
-                                     }}>Hủy đặt cọc</Button>
-                                   </div>
-                                 </TableCell>
-                               </TableRow>
-                             );
-                           })}
-                         </TableBody>
-                       </Table>
-                     </div>
-                   );
-                })()}
-              </CardContent>
-            </Card>
+            <DepositOrdersTab
+              depositOrdersState={depositOrdersState}
+              depositSearch={depositSearch}
+              setDepositSearch={setDepositSearch}
+              depositLoading={depositLoading}
+              setCart={setCart}
+              setSelectedCustomer={setSelectedCustomer}
+              setCurrentDepositOrderId={setCurrentDepositOrderId}
+              setDepositAmountAlreadyPaid={setDepositAmountAlreadyPaid}
+              setLoaiThanhToan={setLoaiThanhToan}
+              toast={toast}
+              setActiveTab={setActiveTab}
+              handleCancelDeposit={handleCancelDeposit}
+            />
           </TabsContent>
         </Tabs>
       </div>
@@ -1851,41 +1272,14 @@ export default function BanHangPage() {
       />
       {/* Bỏ PartnerSelectDialog: đã gộp vào search */}
       {/* Sticky mobile checkout bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 px-3 py-[10px]" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)' }}>
-        <div className="max-w-screen-md mx-auto flex items-center justify-between gap-3">
-          <div className="text-sm">
-            <div className="text-slate-500">Thanh toán</div>
-            <div className="text-xl font-bold">₫{finalThanhToan.toLocaleString()}</div>
-          </div>
-          {mobileView === 'san-pham' && (
-            <Button
-              className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-              onClick={() => setMobileView('gio-hang')}
-              disabled={cart.length === 0}
-            >
-              {`Giỏ hàng (${cart.length})`}
-            </Button>
-          )}
-          {mobileView === 'gio-hang' && (
-            <Button
-              className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-              onClick={() => setMobileView('thanh-toan')}
-              disabled={cart.length === 0}
-            >
-              Thanh toán
-            </Button>
-          )}
-          {mobileView === 'thanh-toan' && (
-            <Button
-              className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-              onClick={handleCheckout}
-              disabled={isLoading || cart.length === 0}
-            >
-              {isLoading ? "Đang xử lý..." : "Thanh toán"}
-            </Button>
-          )}
-        </div>
-      </div>
+      <MobileCheckoutBar
+        finalThanhToan={finalThanhToan}
+        mobileView={mobileView}
+        setMobileView={setMobileView}
+        cartCount={cart.length}
+        handleCheckout={handleCheckout}
+        isLoading={isLoading}
+      />
     </ProtectedRoute>
   )
 }

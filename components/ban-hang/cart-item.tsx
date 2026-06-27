@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { CheckCircle, Plus, Minus, Trash2, Pencil, Check, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { getLoaiMayLabel } from "@/lib/utils/inventory-helpers"
 
 interface CartItemRowProps {
   item: CartItem
@@ -44,9 +45,16 @@ export function CartItemRow({
   const deviceId = (item.imei || item.serial || item.id) as string
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-[1.4fr_1fr_0.9fr_0.9fr_auto] gap-2 items-start sm:items-center border rounded-lg p-3 sm:p-2.5 bg-white shadow-sm">
+    <div className="grid grid-cols-1 sm:grid-cols-[1.4fr_1fr_0.9fr_0.9fr_auto] gap-2 items-start sm:items-center border rounded-lg p-3 sm:p-2.5 bg-card shadow-sm">
       <div className="min-w-0">
         <p className="font-medium truncate" title={item.ten_san_pham}>{item.ten_san_pham}</p>
+        {item.type === 'product' && (item.dung_luong || item.mau_sac || item.loai_may) && (
+          <p className="text-[11px] text-muted-foreground">
+            {[item.dung_luong, item.mau_sac, item.loai_may ? getLoaiMayLabel(item.loai_may) : '']
+              .filter(Boolean)
+              .join(' • ')}
+          </p>
+        )}
         {(item.imei || item.serial) && (
           <p className="text-[11px] text-muted-foreground font-mono">{item.imei ? 'IMEI' : 'Serial'}: {item.imei || item.serial}</p>
         )}
@@ -71,12 +79,12 @@ export function CartItemRow({
           <div className="mt-1 sm:hidden text-[11px] text-muted-foreground space-y-1">
             {item.loai_phu_kien && (
               <div>
-                Loại: <span className="text-slate-700">{item.loai_phu_kien}</span>
+                Loại: <span className="text-foreground">{item.loai_phu_kien}</span>
               </div>
             )}
             {item.mau_sac && (
               <div>
-                Màu: <span className="text-slate-700">{item.mau_sac}</span>
+                Màu: <span className="text-foreground">{item.mau_sac}</span>
               </div>
             )}
           </div>
@@ -106,7 +114,7 @@ export function CartItemRow({
             />
             <button
               type="button"
-              className={`inline-flex items-center gap-1 text-[11px] ${item.imei ? 'text-slate-700' : 'text-slate-400 cursor-not-allowed'}`}
+              className={`inline-flex items-center gap-1 text-[11px] ${item.imei ? 'text-foreground' : 'text-muted-foreground cursor-not-allowed'}`}
               disabled={!!item.imei_loading}
               onClick={async () => {
                 if (!item.imei) return
@@ -150,7 +158,7 @@ export function CartItemRow({
               {item.imei_loading ? (
                 <CheckCircle className="h-4 w-4 animate-spin text-blue-500" />
               ) : (
-                <CheckCircle className={`h-4 w-4 ${item.imei_confirmed ? 'text-green-600' : 'text-slate-400'}`} />
+                <CheckCircle className={`h-4 w-4 ${item.imei_confirmed ? 'text-green-600' : 'text-muted-foreground'}`} />
               )}
             </button>
           </div>
@@ -161,7 +169,7 @@ export function CartItemRow({
         {isWarrantyEligible(item) && (
           <>
             <select
-              className="text-[11px] border rounded px-1 py-0.5 bg-white w-full max-w-[150px]"
+              className="text-[11px] border rounded px-1 py-0.5 bg-card w-full max-w-[150px]"
               value={selectedWarranties[deviceId] || ''}
               onChange={e => handleSelectWarranty(deviceId, e.target.value || null)}
             >
@@ -180,7 +188,7 @@ export function CartItemRow({
               >Chi tiết</button>
             )}
             {openWarrantyInfo === deviceId && selectedWarranties[deviceId] && (
-              <div className="mt-1 p-2 rounded border bg-slate-50 text-[10px] space-y-0.5 max-w-[150px]">
+              <div className="mt-1 p-2 rounded border bg-muted text-[10px] space-y-0.5 max-w-[150px]">
                  {(() => {
                    const sel = selectedWarranties[deviceId]
                    const pkg = warrantyPackages.find(p => p.code === sel)
@@ -201,8 +209,8 @@ export function CartItemRow({
         )}
         {item.type === 'accessory' && (
           <div className="hidden sm:block text-[10px] text-muted-foreground space-y-0.5">
-            {item.loai_phu_kien && <div>Loại: <span className="text-slate-700">{item.loai_phu_kien}</span></div>}
-            {item.mau_sac && <div>Màu: <span className="text-slate-700">{item.mau_sac}</span></div>}
+            {item.loai_phu_kien && <div>Loại: <span className="text-foreground">{item.loai_phu_kien}</span></div>}
+            {item.mau_sac && <div>Màu: <span className="text-foreground">{item.mau_sac}</span></div>}
           </div>
         )}
       </div>
@@ -229,7 +237,7 @@ export function CartItemRow({
             </Button>
           </>
         ) : (
-          <Badge variant="secondary" className="bg-slate-50">x1</Badge>
+          <Badge variant="secondary" className="bg-muted">x1</Badge>
         )}
       </div>
 
@@ -263,7 +271,7 @@ export function CartItemRow({
               <Check className="h-3.5 w-3.5" />
             </button>
             <button 
-              className="text-slate-400 hover:text-slate-500"
+              className="text-muted-foreground hover:text-muted-foreground"
               onClick={() => {
                 setTempPrice(String(item.gia_ban))
                 setIsEditingPrice(false)
@@ -276,7 +284,7 @@ export function CartItemRow({
           <div className="flex items-center gap-1 justify-end group">
             <p className="font-semibold text-sm">₫{(item.gia_ban * (item.so_luong || 1)).toLocaleString()}</p>
             <button 
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500"
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-blue-500"
               onClick={() => {
                 setTempPrice(String(item.gia_ban))
                 setIsEditingPrice(true)
@@ -297,7 +305,7 @@ export function CartItemRow({
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8 text-slate-400 hover:text-red-500 sm:ml-auto"
+        className="h-8 w-8 text-muted-foreground hover:text-red-500 sm:ml-auto"
         onClick={() => removeFromCart(item.id, item.type)}
       >
         <Trash2 className="h-4 w-4" />

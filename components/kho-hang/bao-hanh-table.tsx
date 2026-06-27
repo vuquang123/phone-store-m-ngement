@@ -41,9 +41,9 @@ export function BaoHanhTable({
   onViewInfo
 }: BaoHanhTableProps) {
   return (
-    <div className="rounded-md border border-slate-200 overflow-hidden bg-white shadow-sm">
+    <div className="rounded-md border border-border overflow-hidden bg-card shadow-sm">
       <Table>
-        <TableHeader className="bg-slate-50/80">
+        <TableHeader className="bg-muted/80">
           <TableRow>
             {isEditMode && (
               <TableHead className="w-12 text-center">
@@ -53,7 +53,7 @@ export function BaoHanhTable({
                 />
               </TableHead>
             )}
-            <TableHead className="font-semibold text-slate-700">
+            <TableHead className="font-semibold text-foreground">
               <div className="flex items-center gap-2">
                 Sản phẩm
                 <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-100 py-0 leading-none h-5">
@@ -61,18 +61,18 @@ export function BaoHanhTable({
                 </Badge>
               </div>
             </TableHead>
-            <TableHead className="font-semibold text-slate-700">IMEI</TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden md:table-cell">Lỗi</TableHead>
-            <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
-            <TableHead className="font-semibold text-slate-700 hidden lg:table-cell">Ngày gửi</TableHead>
-            <TableHead className="font-semibold text-slate-700 text-center">Info</TableHead>
+            <TableHead className="font-semibold text-foreground">IMEI</TableHead>
+            <TableHead className="font-semibold text-foreground hidden md:table-cell">Lỗi</TableHead>
+            <TableHead className="font-semibold text-foreground">Trạng thái</TableHead>
+            <TableHead className="font-semibold text-foreground hidden lg:table-cell">Ngày gửi</TableHead>
+            <TableHead className="font-semibold text-foreground text-center">Info</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.map((p, idx) => {
             const id = `${p["IMEI"] || p.imei || "bh"}-${idx}`
             return (
-              <TableRow key={id} className="hover:bg-slate-50/50 transition-colors">
+              <TableRow key={id} className="hover:bg-accent/50 transition-colors">
                 {isEditMode && (
                   <TableCell className="text-center">
                     <Checkbox 
@@ -83,18 +83,18 @@ export function BaoHanhTable({
                 )}
                 <TableCell>
                   <div className="flex flex-col">
-                    <span className="font-medium text-slate-900">{p["Tên Sản Phẩm"] || p.ten_san_pham}</span>
-                    <span className="text-xs text-slate-500">{p["Màu Sắc"] || p.mau_sac} • {p["Loại Máy"] || p.loai_may}</span>
+                    <span className="font-medium text-foreground">{p["Tên Sản Phẩm"] || p.ten_san_pham}</span>
+                    <span className="text-xs text-muted-foreground">{p["Màu Sắc"] || p.mau_sac} • {p["Loại Máy"] || p.loai_may}</span>
                   </div>
                 </TableCell>
-                <TableCell className="text-sm font-mono text-slate-600">{p["IMEI"] || p.imei}</TableCell>
+                <TableCell className="text-sm font-mono text-muted-foreground">{p["IMEI"] || p.imei}</TableCell>
                 <TableCell className="hidden md:table-cell text-sm text-red-600 truncate max-w-[200px]">{p["Lỗi"] || p.loi}</TableCell>
                 <TableCell>
                   <Badge className={`${getTrangThaiColor(p["Trạng Thái"] || p.trang_thai)} border-none text-[11px]`}>
                     {p["Trạng Thái"] || p.trang_thai}
                   </Badge>
                 </TableCell>
-                <TableCell className="hidden lg:table-cell text-sm text-slate-500">{p["Ngày gửi"] || p.ngay_gui}</TableCell>
+                <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">{p["Ngày gửi"] || p.ngay_gui}</TableCell>
                 <TableCell className="text-center">
                   <Button 
                     variant="ghost" 
@@ -110,7 +110,7 @@ export function BaoHanhTable({
           })}
           {products.length === 0 && (
             <TableRow>
-              <TableCell colSpan={10} className="h-32 text-center text-slate-500">
+              <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
                 Không có sản phẩm nào đang bảo hành.
               </TableCell>
             </TableRow>

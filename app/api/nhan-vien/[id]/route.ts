@@ -54,7 +54,7 @@ function getCols(header: string[]) {
 }
 
 /* =================== PUT: cập nhật thông tin nhân viên =================== */
-export async function PUT(request: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
   // Hỗ trợ cả kiểu params đồng bộ và Promise<{id:string}> (Next.js validator)
     const params = 'params' in ctx && typeof (ctx as any).params?.then === 'function'
@@ -143,7 +143,7 @@ export async function PUT(request: NextRequest, ctx: { params: { id: string } } 
 }
 
 /* =================== DELETE: vô hiệu hóa theo chủ trương =================== */
-export async function DELETE(_request: NextRequest, _ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
+export async function DELETE(_request: NextRequest, _ctx: { params: Promise<{ id: string }> }) {
   // Theo chủ trương: quản lý tạo/xóa trực tiếp trong Google Sheets; API xóa bị vô hiệu hóa.
   return NextResponse.json(
     { error: "Xóa tài khoản được thực hiện trực tiếp trên Google Sheets. API này đã bị vô hiệu hóa." },

@@ -4,76 +4,81 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Theme tokens chuẩn shadcn (base: neutral) — TẤT CẢ là HSL triplet để khớp
+   hsl(var(--x)) trong tailwind.config.ts (Tailwind v3) + hỗ trợ opacity modifier. */
 :root {
-  /* Updated color tokens to match design brief for phone store management */
-  --background: 0 0% 100%; /* White background */
-  --foreground: 222.2 84% 4.9%; /* Slate-600 equivalent for text */
-  --card: oklch(0.97 0 0); /* Light gray for cards */
-  --card-foreground: oklch(0.35 0 0);
+  --background: 0 0% 100%;
+  --foreground: 0 0% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 3.9%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
-  --primary: oklch(0.45 0.15 162); /* Emerald-600 #059669 */
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.55 0.12 162); /* Emerald-500 #10b981 */
-  --secondary-foreground: oklch(1 0 0);
-  --muted: oklch(0.98 0.01 180); /* Very light cyan */
-  --muted-foreground: oklch(0.35 0 0);
-  --accent: oklch(0.55 0.12 162); /* Emerald-500 accent */
-  --accent-foreground: oklch(1 0 0);
-  --destructive: oklch(0.55 0.22 15); /* Red for errors */
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.85 0 0); /* Light gray borders */
-  --input: oklch(0.97 0 0);
-  --ring: oklch(0.45 0.15 162); /* Emerald focus ring */
-  --chart-1: oklch(0.55 0.12 162);
-  --chart-2: oklch(0.45 0.15 162);
-  --chart-3: oklch(0.35 0 0);
-  --chart-4: oklch(0.98 0.01 180);
-  --chart-5: oklch(0.85 0 0);
+  --popover-foreground: 0 0% 3.9%;
+  --primary: 0 0% 9%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 0 0% 96.1%;
+  --secondary-foreground: 0 0% 9%;
+  --muted: 0 0% 96.1%;
+  --muted-foreground: 0 0% 45.1%;
+  --accent: 0 0% 96.1%;
+  --accent-foreground: 0 0% 9%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 89.8%;
+  --input: 0 0% 89.8%;
+  --ring: 0 0% 3.9%;
+  --chart-1: 12 76% 61%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 197 37% 24%;
+  --chart-4: 43 74% 66%;
+  --chart-5: 27 87% 67%;
   --radius: 0.5rem;
-  --sidebar: oklch(0.97 0 0);
-  --sidebar-foreground: oklch(0.35 0 0);
-  --sidebar-primary: oklch(0.45 0.15 162);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.55 0.12 162);
-  --sidebar-accent-foreground: oklch(1 0 0);
-  --sidebar-border: oklch(0.85 0 0);
-  --sidebar-ring: oklch(0.45 0.15 162);
+  /* Sidebar: config đọc --sidebar-background; giữ --sidebar làm alias */
+  --sidebar: 0 0% 98%;
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 240 5.3% 26.1%;
+  --sidebar-primary: 240 5.9% 10%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 240 4.8% 95.9%;
+  --sidebar-accent-foreground: 240 5.9% 10%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: 217.2 91.2% 59.8%;
 }
 
 .dark {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 210 40% 98%;
-  --primary: oklch(0.55 0.12 162);
-  --primary-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.55 0.12 162);
-  --accent-foreground: oklch(0.145 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.55 0.12 162);
-  --chart-1: oklch(0.55 0.12 162);
-  --chart-2: oklch(0.45 0.15 162);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.55 0.12 162);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.55 0.12 162);
+  /* Dark phân tầng (kiểu shadcn): nền KHÔNG đen tuyền, card/input nhô lên dần */
+  --background: 0 0% 9%;            /* nền + sidebar + content (≈#171717) */
+  --foreground: 0 0% 98%;
+  --card: 0 0% 13%;                 /* card nhô lên (≈#212121) */
+  --card-foreground: 0 0% 98%;
+  --popover: 0 0% 13%;             /* dropdown/menu/select */
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 0 0% 9%;
+  --secondary: 0 0% 18%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 0 0% 18%;
+  --muted-foreground: 0 0% 64%;
+  --accent: 0 0% 22%;             /* hover/active control */
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 45%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 20%;
+  --input: 0 0% 26%;              /* viền + nền field (qua /40) */
+  --ring: 0 0% 50%;
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+  --sidebar: 0 0% 9%;
+  --sidebar-background: 0 0% 9%;
+  --sidebar-foreground: 0 0% 96%;
+  --sidebar-primary: 224.3 76.3% 48%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 18%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 0 0% 18%;
+  --sidebar-ring: 217.2 91.2% 59.8%;
 }
 
 @theme inline {
