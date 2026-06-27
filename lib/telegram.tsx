@@ -1,10 +1,7 @@
 // Ưu tiên IPv4 khi phân giải DNS để tránh fetch ETIMEDOUT tới api.telegram.org
 // trên server có IPv6 cấu hình lỗi (Node mặc định thử IPv6 trước -> treo ~25s).
-// File này chỉ chạy phía server nên dùng node:dns an toàn.
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require("node:dns").setDefaultResultOrder("ipv4first")
-} catch {}
+import dns from "node:dns"
+try { dns.setDefaultResultOrder("ipv4first") } catch {}
 
 type OrderType = "online" | "offline" | "return" | "deposit" | string
 interface TelegramOptions { message_thread_id?: number; chat_id?: number }
