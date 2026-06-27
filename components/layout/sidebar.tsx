@@ -34,6 +34,7 @@ import {
 } from "lucide-react"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
+import { NavPendingReporter } from "./nav-loading"
 
 type Role = "quan_ly" | "nhan_vien"
 
@@ -214,6 +215,7 @@ export function AppSidebar() {
                     <Link href={item.href}>
                       <item.icon />
                       <span>{item.title}</span>
+                      <NavPendingReporter />
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
