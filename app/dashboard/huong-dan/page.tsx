@@ -178,7 +178,7 @@ export default function HuongDanPage() {
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <ul className="space-y-1">
             <li>1. Chọn <b>Ca</b> (1/2/3).</li>
-            <li>2. Đếm và nhập số máy cho <b>KHO NGOÀI</b> và <b>KHO TRONG</b>: Website, Thực tế, 17/16/15 Series, Ipad, Khác. (Dòng "Tổng theo dòng máy" giúp bạn tự đối chiếu.)</li>
+            <li>2. Đếm và nhập số máy cho <b>KHO NGOÀI</b> và <b>KHO TRONG</b>: Website, Thực tế, 17/16/15 Series, Ipad, Khác. (Dòng &quot;Tổng theo dòng máy&quot; giúp bạn tự đối chiếu.)</li>
             <li>3. Chọn <b>Trạng thái</b>: Khớp hoặc Không khớp (nếu không khớp → ghi <b>Lý do</b>).</li>
             <li>4. Đính kèm ảnh (tối đa 6) nếu cần minh chứng.</li>
             <li>5. Bấm <b>Gửi check-in</b> → báo cáo tự gửi vào nhóm Telegram và lưu lịch sử ngay trên trang.</li>
@@ -359,7 +359,7 @@ export default function HuongDanPage() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <ul className="space-y-1">
-              <li>• 🔔 ở header: 5 thông báo mới nhất, bấm "Xem tất cả" để mở trang đầy đủ.</li>
+              <li>• 🔔 ở header: 5 thông báo mới nhất, bấm &quot;Xem tất cả&quot; để mở trang đầy đủ.</li>
               <li>• Bao gồm: đơn mới, hoàn trả, biến động kho, quỹ tiền mặt.</li>
               <li>• Bấm vào thông báo để đánh dấu đã đọc.</li>
             </ul>
