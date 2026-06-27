@@ -133,9 +133,10 @@ export async function POST(request: NextRequest) {
     try {
       token = await signSession(user)
     } catch (e: any) {
-      console.error("[LOGIN] Ký phiên thất bại:", e?.message)
+      const detail = e?.message || "unknown"
+      console.error("[LOGIN] Ký phiên thất bại:", detail)
       return NextResponse.json(
-        { success: false, message: "Lỗi cấu hình máy chủ: thiếu AUTH_SECRET" },
+        { success: false, message: `Lỗi server: ${detail}` },
         { status: 500 },
       )
     }
