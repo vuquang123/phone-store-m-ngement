@@ -1,7 +1,7 @@
 
 // app/api/ban-hang/route.ts
 import { type NextRequest, NextResponse } from "next/server"
-import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
+import { sendTelegramMessage, sendTelegramMessageWithButtons, formatOrderMessage } from "@/lib/telegram"
 import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
@@ -1072,7 +1072,20 @@ export async function POST(request: NextRequest) {
   ;(orderInfo as any).order_type = orderType
   // Only send Telegram notification here if FE didn't already send it (skipTelegram flag)
   if (!body || !body.skipTelegram) {
-    await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderType)
+    const text = formatOrderMessage(orderInfo, "new")
+    // Đơn ONLINE + có mã GHTK -> đính nút "Đã gửi hàng" (callback_data ngắn: "ship:<maGHTK>")
+    const vcStr = String((orderInfo as any).hinh_thuc_van_chuyen || "")
+    const ghtkMatch = orderType === "online" ? vcStr.match(/GHTK\s*[-–]?\s*(\d+)/i) : null
+    if (ghtkMatch) {
+      const maGHTK = ghtkMatch[1]
+      await sendTelegramMessageWithButtons(
+        text,
+        [[{ text: "📦 Đã gửi hàng", callback_data: `ship:${maGHTK}` }]],
+        "online",
+      )
+    } else {
+      await sendTelegramMessage(text, orderType)
+    }
   }
     } catch (err) {
       console.error("Lỗi gửi thông báo Telegram:", err)
