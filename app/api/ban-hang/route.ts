@@ -814,8 +814,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ===== PHA B — COMMIT qua journal (fail bất kỳ bước -> rollback theo thứ tự ngược) =====
-    // Nhóm atomic: B1 ghi đơn + B3 xóa kho + B4 trừ phụ kiện (tài nguyên tồn kho money-critical).
-    // B2 (xóa dòng đối tác) giữ best-effort: không chụp được dòng để hoàn lại an toàn.
+    // Thứ tự: B1 ghi đơn -> B4 trừ phụ kiện -> B3 XOÁ KHO (CUỐI CÙNG). Xoá máy đặt cuối để
+    // máy chỉ bị xoá sau khi đơn đã ghi xong; nếu fail thì rollback chỉ gỡ đơn/phụ kiện,
+    // máy KHÔNG bị mất. B2 (xóa dòng đối tác) best-effort, không chụp dòng để undo an toàn.
     const journal = new Journal()
     let removedKhoRows: any[][] = [] // snapshot dòng kho đã xóa -> undo: append lại
     const accessoryUndo: { range: string; oldQty: number }[] = [] // snapshot Số Lượng cũ -> undo
@@ -863,7 +864,37 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // B3: Xoá máy nội bộ khỏi Kho_Hang (chụp dòng bị xoá để undo: append lại)
+      // (B3 "xoá máy" ĐÃ CHUYỂN XUỐNG SAU B4 — xoá kho là bước CUỐI, xem bên dưới.)
+
+      // B4: Trừ số lượng phụ kiện (chụp Số Lượng cũ để undo)
+      if (normalizedAccessories.length > 0) {
+        await journal.run({
+          name: "decrement-accessories",
+          do: async () => {
+            const { header, rows } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
+            const idx = { id: colIndex(header, "ID"), soLuong: colIndex(header, "Số Lượng") }
+            for (const pk of normalizedAccessories) {
+              const foundIdx = rows.findIndex((r) => r[idx.id] === pk.id)
+              if (foundIdx !== -1 && idx.soLuong !== -1) {
+                const current = Number(rows[foundIdx][idx.soLuong] || 0)
+                const sold = pk.so_luong !== undefined ? Number(pk.so_luong) : 1
+                const newQty = Math.max(current - sold, 0)
+                const rowNumber = foundIdx + 2 // Google Sheets row (1-based, header là dòng 1)
+                const range = `Phu_Kien!${toColumnLetter(idx.soLuong + 1)}${rowNumber}`
+                accessoryUndo.push({ range, oldQty: current })
+                await updateRangeValues(range, [[newQty]])
+              }
+            }
+          },
+          undo: async () => {
+            for (const u of accessoryUndo) await updateRangeValues(u.range, [[u.oldQty]])
+          },
+        })
+      }
+
+      // B3 (BƯỚC CUỐI): Xoá máy nội bộ khỏi Kho_Hang — CHỈ sau khi đơn (B1) + phụ kiện (B4)
+      // đã ghi xong. Nhờ đặt cuối, KHÔNG còn bước nào sau nó để fail -> không bao giờ rơi vào
+      // cảnh "máy đã xoá nhưng đơn bị rollback" (nguyên nhân mất máy trước đây).
       await journal.run({
         name: "remove-kho",
         do: async () => {
@@ -900,36 +931,23 @@ export async function POST(request: NextRequest) {
             await syncToGoogleSheets(SHEETS.KHO_HANG, newRows)
           }
         },
+        // undo BỀN HƠN: thử append lại tối đa 3 lần (Sheets 429/timeout). Nếu vẫn fail -> ném
+        // để rollback() đánh dấu needsManualFix (cảnh báo) thay vì âm thầm mất máy.
         undo: async () => {
-          if (removedKhoRows.length > 0) await appendMultipleToGoogleSheets(SHEETS.KHO_HANG, removedKhoRows)
+          if (removedKhoRows.length === 0) return
+          let lastErr: any
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              await appendMultipleToGoogleSheets(SHEETS.KHO_HANG, removedKhoRows)
+              return
+            } catch (e) {
+              lastErr = e
+              await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
+            }
+          }
+          throw lastErr
         },
       })
-
-      // B4: Trừ số lượng phụ kiện (chụp Số Lượng cũ để undo)
-      if (normalizedAccessories.length > 0) {
-        await journal.run({
-          name: "decrement-accessories",
-          do: async () => {
-            const { header, rows } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
-            const idx = { id: colIndex(header, "ID"), soLuong: colIndex(header, "Số Lượng") }
-            for (const pk of normalizedAccessories) {
-              const foundIdx = rows.findIndex((r) => r[idx.id] === pk.id)
-              if (foundIdx !== -1 && idx.soLuong !== -1) {
-                const current = Number(rows[foundIdx][idx.soLuong] || 0)
-                const sold = pk.so_luong !== undefined ? Number(pk.so_luong) : 1
-                const newQty = Math.max(current - sold, 0)
-                const rowNumber = foundIdx + 2 // Google Sheets row (1-based, header là dòng 1)
-                const range = `Phu_Kien!${toColumnLetter(idx.soLuong + 1)}${rowNumber}`
-                accessoryUndo.push({ range, oldQty: current })
-                await updateRangeValues(range, [[newQty]])
-              }
-            }
-          },
-          undo: async () => {
-            for (const u of accessoryUndo) await updateRangeValues(u.range, [[u.oldQty]])
-          },
-        })
-      }
     } catch (commitErr: any) {
       console.error("[COMMIT] Lỗi giữa chừng, đang rollback:", commitErr?.message || commitErr)
       const report = await journal.rollback()
