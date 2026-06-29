@@ -1,23 +1,11 @@
 
 // app/api/ban-hang/route.ts
 import { type NextRequest, NextResponse } from "next/server"
-import { sendTelegramMessage, sendTelegramMessageWithButtons, formatOrderMessage } from "@/lib/telegram"
+import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
 import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
-import { Journal } from "@/lib/tx/journal"
-import { peekIdempotentDone, beginIdempotent, completeIdempotent, failIdempotent } from "@/lib/tx/idempotency"
-import { recordCashTransaction } from "@/lib/cash"
-import { getServerUser } from "@/lib/auth"
-
-// Luồng bán hàng gọi RẤT NHIỀU Google Sheets API tuần tự (có throttle 250ms) -> dễ vượt
-// timeout mặc định của Vercel (Hobby ~10s) khiến hàm bị kill GIỮA CHỪNG: đơn đã ghi nhưng
-// chưa xoá máy / chưa trả response -> client báo lỗi, user bấm lại -> MACHINE_NOT_AVAILABLE.
-// Nâng trần thời gian chạy để saga kịp hoàn tất trong 1 request.
-export const maxDuration = 60
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
 
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
@@ -246,51 +234,12 @@ export async function GET(request: NextRequest) {
     const limitRaw = Number(searchParams.get("limit") || 10)
     const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 100) : 10
-    const force = searchParams.get("refresh") === "1"
 
-    const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force })
+    const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
     const idx = idxBanHang(header)
     const idxLoaiDon = header.indexOf("Loại Đơn")
     const idxTrangThai = colIndex(header, "Trạng Thái", "trang_thai")
-    const idxGhiChu = colIndex(header, "Ghi chú", "Ghi Chú")
-    const idxVanChuyen = colIndex(header, "Hình Thức Vận Chuyển")
-
-    // Tra USERS để hiển thị ĐÚNG tên + vai trò người bán (cột "Người Bán" có thể là
-    // ID/email/tên — đôi khi bị URL-encode "D%C5%A9ng"). Resolve về { id, name, role }.
-    const normName = (s: any) =>
-      String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").trim().toLowerCase()
-    const usersById = new Map<string, any>()
-    const usersByEmail = new Map<string, any>()
-    const usersByName = new Map<string, any>()
-    try {
-      const { header: UH, rows: UR } = await readFromGoogleSheets("USERS", undefined, { force })
-      const uId = colIndex(UH, "ID Nhân Viên")
-      const uEmail = colIndex(UH, "Email")
-      const uName = colIndex(UH, "Tên", "Ten", "Name")
-      const uRole = colIndex(UH, "Vai Trò", "Vai Tro", "Role")
-      for (const r of UR) {
-        const rec = {
-          id: uId !== -1 ? String(r[uId] || "") : "",
-          name: uName !== -1 ? String(r[uName] || "") : "",
-          role: uRole !== -1 ? String(r[uRole] || "").trim().toLowerCase() : "",
-          email: uEmail !== -1 ? String(r[uEmail] || "") : "",
-        }
-        if (rec.id) usersById.set(rec.id, rec)
-        if (rec.email) usersByEmail.set(rec.email.toLowerCase(), rec)
-        if (rec.name) usersByName.set(normName(rec.name), rec)
-      }
-    } catch (e) {
-      console.warn("[BAN-HANG GET] đọc USERS để resolve người bán lỗi (bỏ qua):", e)
-    }
-    const resolveSeller = (raw: any) => {
-      let v = String(raw || "")
-      if (!v) return undefined
-      try { if (/%[0-9A-Fa-f]{2}/.test(v)) v = decodeURIComponent(v) } catch {}
-      const u = usersById.get(v) || usersByEmail.get(v.toLowerCase()) || usersByName.get(normName(v))
-      if (u) return { id: u.id || v, name: u.name || v, role: u.role || "" }
-      return { id: v, name: v, role: "" }
-    }
-
+    
     // Group rows by order ID
     const groupedOrdersMap = new Map<string, any[]>()
     
@@ -322,20 +271,9 @@ export async function GET(request: NextRequest) {
         hinh_thuc_thanh_toan: row[idx.hinhThucTT],
         gia_nhap: row[idx.giaNhap],
         lai: row[idx.lai],
-        nhan_vien: resolveSeller(row[idx.nguoiBan]),
+        nhan_vien: row[idx.nguoiBan] ? { id: row[idx.nguoiBan] } : undefined,
         loai_don: idxLoaiDon !== -1 ? row[idxLoaiDon] : "",
         trang_thai: idxTrangThai !== -1 ? row[idxTrangThai] : "hoan_thanh",
-        hinh_thuc_van_chuyen: idxVanChuyen !== -1 ? row[idxVanChuyen] : "",
-        // Mã GHTK lưu trong cột "Hình Thức Vận Chuyển" dạng "GHTK - 1990038382"
-        // (fallback: định dạng cũ "[GHTK: ...]" trong Ghi chú).
-        ma_ghtk: (() => {
-          const vc = idxVanChuyen !== -1 ? String(row[idxVanChuyen] || "") : ""
-          const m1 = vc.match(/GHTK\s*[-–]\s*(\S+)/i)
-          if (m1) return m1[1].trim()
-          const gc = idxGhiChu !== -1 ? String(row[idxGhiChu] || "") : ""
-          const m2 = gc.match(/\[GHTK:\s*([^\]]+)\]/i)
-          return m2 ? m2[1].trim() : ""
-        })(),
       })
     })
 
@@ -358,35 +296,11 @@ export async function GET(request: NextRequest) {
     // Reverse to get newest first (new rows are appended naturally)
     orderSummaries.reverse()
 
-    // ?ghtk=1 -> chỉ lấy đơn có mã GHTK (cho tab Đơn online)
-    const onlyGhtk = searchParams.get("ghtk") === "1"
-    let filteredSummaries = onlyGhtk
-      ? orderSummaries.filter((o: any) => o.ma_ghtk && String(o.ma_ghtk).trim())
-      : orderSummaries
-
-    // ?search= -> tìm trên TOÀN BỘ đơn (mã đơn / tên KH / SĐT / IMEI), không chỉ trang hiện tại
-    const searchQ = (searchParams.get("search") || "").trim().toLowerCase()
-    if (searchQ) {
-      const searchDigits = searchQ.replace(/\D/g, "")
-      filteredSummaries = filteredSummaries.filter((o: any) => {
-        const ma = String(o.ma_don_hang || o.id || "").toLowerCase()
-        const ten = String(o.ten_khach_hang || "").toLowerCase()
-        const sdt = String(o.so_dien_thoai || "").replace(/\D/g, "")
-        const imeiHit = Array.isArray(o.imeis) && o.imeis.some((i: any) => String(i || "").toLowerCase().includes(searchQ))
-        return (
-          ma.includes(searchQ) ||
-          ten.includes(searchQ) ||
-          (searchDigits.length >= 3 && sdt.includes(searchDigits)) ||
-          imeiHit
-        )
-      })
-    }
-
-    const total = filteredSummaries.length
+    const total = orderSummaries.length
     const totalPages = Math.max(1, Math.ceil(total / limit))
     const start = (page - 1) * limit
     const end = start + limit
-    const paginatedOrders = filteredSummaries.slice(start, end)
+    const paginatedOrders = orderSummaries.slice(start, end)
 
     return NextResponse.json({
       data: paginatedOrders,
@@ -405,7 +319,6 @@ export async function GET(request: NextRequest) {
 
 /* =================== POST: Xuất hàng 1 máy =================== */
 export async function POST(request: NextRequest) {
-  let clientRequestId = "" // hoist để outer catch giải phóng khóa idempotency
   try {
   const body = await request.json()
   // Phân tách nếu FE gửi cấu trúc tối ưu: coreTotal, warrantySelections, warrantyTotal, finalThanhToan
@@ -417,17 +330,6 @@ export async function POST(request: NextRequest) {
     // Extract phone early for reuse (customer update + warranty contracts)
     const rawPhone = body.customerPhone || body.so_dien_thoai || body.sdt || body["Số Điện Thoại"] || (body.khach_hang && (body.khach_hang.so_dien_thoai || body.khach_hang.sdt))
     const customerPhoneEarly = rawPhone ? normalizePhone(String(rawPhone)) : ""
-
-    // ===== A0 — Idempotency: replay sớm nếu đơn đã xử lý xong (TRƯỚC khi validate,
-    // để retry hợp lệ không bị validate "máy đã bán" chặn nhầm) =====
-    clientRequestId = String(
-      body.clientRequestId || body.idempotencyKey || request.headers.get("x-idempotency-key") || "",
-    )
-    const __nowTx = Date.now()
-    {
-      const replay = peekIdempotentDone(clientRequestId, __nowTx)
-      if (replay) return NextResponse.json(replay.result, { status: 201 })
-    }
     // Tính tổng giá nhập
     let tongGiaNhap = 0
 
@@ -581,64 +483,6 @@ export async function POST(request: NextRequest) {
       }
       return { ...may, trang_thai_may: trangThaiMay }
     })
-
-    // ===== PHA A — VALIDATE (chỉ ĐỌC, fail-an-toàn TRƯỚC mọi bước ghi) =====
-    // Chặn bán máy đã bán (natural idempotency: retry -> máy đã rời kho -> 409) và bán quá tồn phụ kiện.
-    const isPartnerMay = (may: any) =>
-      String(may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "")
-        .toLowerCase().includes("kho ngoài") ||
-      String(may.source || "").toLowerCase().includes("partner") ||
-      String(may.nguon || may.source || "").toLowerCase().includes("đối tác")
-    try {
-      const { header: kH, rows: kR } = await readFromGoogleSheets(SHEETS.KHO_HANG)
-      const kIdxId = colIndex(kH, "ID Máy")
-      const kIdxImei = colIndex(kH, "IMEI")
-      const kIdxSerial = colIndex(kH, "Serial")
-      const machinePresent = (pid: string) => kR.some((r) => {
-        const imei = String(r[kIdxImei] || "").trim().toLowerCase()
-        const serial = String(r[kIdxSerial] || "").trim().toLowerCase()
-        const idMay = String(r[kIdxId] || "").trim().toLowerCase()
-        const imeiLast5 = imei.length >= 5 ? imei.slice(-5) : ""
-        const serialLast5 = serial.length >= 5 ? serial.slice(-5) : ""
-        return (imei && pid === imei) || (serial && pid === serial) || (idMay && pid === idMay) ||
-               (imeiLast5 && pid === imeiLast5) || (serialLast5 && pid === serialLast5)
-      })
-      for (const may of mayList) {
-        if (isPartnerMay(may)) continue // máy đối tác không nằm trong Kho_Hang
-        const pid = String(may.imei || may.serial || may.id || may.id_may || "").trim().toLowerCase()
-        if (!pid) continue // dòng chỉ phụ kiện
-        if (!machinePresent(pid)) {
-          return NextResponse.json(
-            { ok: false, code: "MACHINE_NOT_AVAILABLE", error: `Máy không còn trong kho (có thể đã bán): ${may.imei || may.serial || may.id_may || pid}` },
-            { status: 409 },
-          )
-        }
-      }
-    } catch (e) {
-      console.warn("[VALIDATE] Đọc Kho_Hang để kiểm tra tồn máy thất bại (bỏ qua chặn cứng):", e)
-    }
-    if (normalizedAccessories.length > 0) {
-      try {
-        const { header: pH, rows: pR } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
-        const pIdxId = colIndex(pH, "ID")
-        const pIdxQty = colIndex(pH, "Số Lượng")
-        for (const pk of normalizedAccessories) {
-          const fi = pR.findIndex((r) => r[pIdxId] === pk.id)
-          if (fi !== -1 && pIdxQty !== -1) {
-            const cur = Number(pR[fi][pIdxQty] || 0)
-            const sold = pk.so_luong !== undefined ? Number(pk.so_luong) : 1
-            if (cur < sold) {
-              return NextResponse.json(
-                { ok: false, code: "ACCESSORY_INSUFFICIENT", error: `Phụ kiện không đủ số lượng: ${pk.ten_phu_kien || pk.id} (còn ${cur}, cần ${sold})` },
-                { status: 409 },
-              )
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("[VALIDATE] Đọc Phu_Kien để kiểm tra tồn phụ kiện thất bại (bỏ qua chặn cứng):", e)
-      }
-    }
 
     let allResults = []
     let errorFlag = false
@@ -812,43 +656,16 @@ export async function POST(request: NextRequest) {
       newRowsToAppend.push(newRow)
     }
 
-    // ===== A0b — Khóa in_flight ngay trước commit (chống double-submit đồng thời) =====
-    {
-      const lock = beginIdempotent(clientRequestId, __nowTx)
-      if (lock.state === "done") return NextResponse.json(lock.result, { status: 201 })
-      if (lock.state === "in_flight") {
-        return NextResponse.json({ ok: false, error: "Đơn đang được xử lý, vui lòng đợi" }, { status: 409 })
+    // Ghi nhiều dòng vào Google Sheets
+    if (newRowsToAppend.length > 0) {
+      const result = await appendMultipleToGoogleSheets(SHEETS.BAN_HANG, newRowsToAppend)
+      if (!result.success) {
+        errorFlag = true
       }
     }
 
-    // ===== PHA B — COMMIT qua journal (fail bất kỳ bước -> rollback theo thứ tự ngược) =====
-    // Thứ tự: B1 ghi đơn -> B4 trừ phụ kiện -> B3 XOÁ KHO (CUỐI CÙNG). Xoá máy đặt cuối để
-    // máy chỉ bị xoá sau khi đơn đã ghi xong; nếu fail thì rollback chỉ gỡ đơn/phụ kiện,
-    // máy KHÔNG bị mất. B2 (xóa dòng đối tác) best-effort, không chụp dòng để undo an toàn.
-    const journal = new Journal()
-    let removedKhoRows: any[][] = [] // snapshot dòng kho đã xóa -> undo: append lại
-    const accessoryUndo: { range: string; oldQty: number }[] = [] // snapshot Số Lượng cũ -> undo
-    try {
-      // B1: Ghi đơn vào Ban_Hang
-      await journal.run({
-        name: "append-ban-hang",
-        do: async () => {
-          if (newRowsToAppend.length > 0) {
-            const result = await appendMultipleToGoogleSheets(SHEETS.BAN_HANG, newRowsToAppend)
-            if (!result.success) throw new Error("Ghi Ban_Hang thất bại")
-          }
-        },
-        undo: async () => {
-          const { header: h, rows: rws } = await readFromGoogleSheets(SHEETS.BAN_HANG)
-          const ci = h.indexOf("ID Đơn Hàng")
-          if (ci !== -1 && idDonHang) {
-            const kept = rws.filter((r) => String(r[ci] || "") !== idDonHang)
-            if (kept.length !== rws.length) await syncToGoogleSheets(SHEETS.BAN_HANG, kept)
-          }
-        },
-      })
-
-      // B2 (best-effort, NGOÀI journal): xoá dòng kho đối tác (giữ nguyên hành vi cũ)
+    // Sau khi ghi đơn thành công: nếu là máy đối tác thì xoá khỏi sheet đối tác
+    if (!errorFlag) {
       for (let i = 0; i < mayList.length; i++) {
         const may = mayList[i]
         try {
@@ -871,108 +688,74 @@ export async function POST(request: NextRequest) {
           console.warn("[Partner] Không thể xoá dòng đối tác sau khi bán:", e)
         }
       }
+    }
 
-      // (B3 "xoá máy" ĐÃ CHUYỂN XUỐNG SAU B4 — xoá kho là bước CUỐI, xem bên dưới.)
+    // Xoá các sản phẩm nội bộ đã bán khỏi Kho_Hang
+    if (mayList.length > 0) {
+      try {
+        const { header, rows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
+        const idxIdMay = colIndex(header, "ID Máy")
+        const idxIMEI = colIndex(header, "IMEI")
+        const idxSerial = colIndex(header, "Serial")
 
-      // B4: Trừ số lượng phụ kiện (chụp Số Lượng cũ để undo)
-      if (normalizedAccessories.length > 0) {
-        await journal.run({
-          name: "decrement-accessories",
-          do: async () => {
-            const { header, rows } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
-            const idx = { id: colIndex(header, "ID"), soLuong: colIndex(header, "Số Lượng") }
-            for (const pk of normalizedAccessories) {
-              const foundIdx = rows.findIndex((r) => r[idx.id] === pk.id)
-              if (foundIdx !== -1 && idx.soLuong !== -1) {
-                const current = Number(rows[foundIdx][idx.soLuong] || 0)
-                const sold = pk.so_luong !== undefined ? Number(pk.so_luong) : 1
-                const newQty = Math.max(current - sold, 0)
-                const rowNumber = foundIdx + 2 // Google Sheets row (1-based, header là dòng 1)
-                const range = `Phu_Kien!${toColumnLetter(idx.soLuong + 1)}${rowNumber}`
-                accessoryUndo.push({ range, oldQty: current })
-                await updateRangeValues(range, [[newQty]])
-              }
-            }
-          },
-          undo: async () => {
-            for (const u of accessoryUndo) await updateRangeValues(u.range, [[u.oldQty]])
-          },
-        })
-      }
-
-      // B3 (BƯỚC CUỐI): Xoá máy nội bộ khỏi Kho_Hang — CHỈ sau khi đơn (B1) + phụ kiện (B4)
-      // đã ghi xong. Nhờ đặt cuối, KHÔNG còn bước nào sau nó để fail -> không bao giờ rơi vào
-      // cảnh "máy đã xoá nhưng đơn bị rollback" (nguyên nhân mất máy trước đây).
-      await journal.run({
-        name: "remove-kho",
-        do: async () => {
-          if (mayList.length === 0) return
-          const { header, rows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
-          const idxIdMay = colIndex(header, "ID Máy")
-          const idxIMEI = colIndex(header, "IMEI")
-          const idxSerial = colIndex(header, "Serial")
-          if (idxIdMay === -1) return
+        if (idxIdMay !== -1) {
+          // Chuẩn hóa danh sách IDs/IMEIs/Serials cần xóa từ mayList
           const idsToDelete = mayList
             .map((m: any) => String(m.imei || m.serial || m.id || m.id_may || "").trim().toLowerCase())
             .filter(Boolean)
-          if (idsToDelete.length === 0) return
-          const originalLength = rows.length
-          const matched: any[][] = []
-          const newRows = rows.filter((r) => {
-            const imei = String(r[idxIMEI] || "").trim().toLowerCase()
-            const serial = String(r[idxSerial] || "").trim().toLowerCase()
-            const idMay = String(r[idxIdMay] || "").trim().toLowerCase()
-            const imeiLast5 = imei.length >= 5 ? imei.slice(-5) : ""
-            const serialLast5 = serial.length >= 5 ? serial.slice(-5) : ""
-            const isMatch = idsToDelete.some((pid: string) =>
-              (imei && pid === imei) ||
-              (serial && pid === serial) ||
-              (idMay && pid === idMay) ||
-              (imeiLast5 && pid === imeiLast5) ||
-              (serialLast5 && pid === serialLast5)
-            )
-            if (isMatch) matched.push(r)
-            return !isMatch
-          })
-          if (newRows.length < originalLength) {
-            removedKhoRows = matched
-            await syncToGoogleSheets(SHEETS.KHO_HANG, newRows)
-          }
-        },
-        // undo BỀN HƠN: thử append lại tối đa 3 lần (Sheets 429/timeout). Nếu vẫn fail -> ném
-        // để rollback() đánh dấu needsManualFix (cảnh báo) thay vì âm thầm mất máy.
-        undo: async () => {
-          if (removedKhoRows.length === 0) return
-          let lastErr: any
-          for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-              await appendMultipleToGoogleSheets(SHEETS.KHO_HANG, removedKhoRows)
-              return
-            } catch (e) {
-              lastErr = e
-              await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
+
+          if (idsToDelete.length > 0) {
+            const originalLength = rows.length
+            const newRows = rows.filter((r) => {
+              const imei = String(r[idxIMEI] || "").trim().toLowerCase()
+              const serial = String(r[idxSerial] || "").trim().toLowerCase()
+              const idMay = String(r[idxIdMay] || "").trim().toLowerCase()
+              
+              const imeiLast5 = imei.length >= 5 ? imei.slice(-5) : ""
+              const serialLast5 = serial.length >= 5 ? serial.slice(-5) : ""
+
+              const isMatch = idsToDelete.some((pid: string) => 
+                (imei && pid === imei) || 
+                (serial && pid === serial) || 
+                (idMay && pid === idMay) ||
+                (imeiLast5 && pid === imeiLast5) ||
+                (serialLast5 && pid === serialLast5)
+              )
+              return !isMatch
+            })
+
+            if (newRows.length < originalLength) {
+              await syncToGoogleSheets(SHEETS.KHO_HANG, newRows)
             }
           }
-          throw lastErr
-        },
-      })
-    } catch (commitErr: any) {
-      console.error("[COMMIT] Lỗi giữa chừng, đang rollback:", commitErr?.message || commitErr)
-      const report = await journal.rollback()
-      failIdempotent(clientRequestId)
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Lỗi tạo đơn, đã hoàn tác các bước đã ghi",
-          needsManualFix: report.some((r) => !r.ok),
-          rollback: report,
-          completed: journal.completedSteps(),
-        },
-        { status: 500 },
-      )
+        }
+      } catch (e) {
+        console.warn("[Kho_Hang] Lỗi khi xoá sản phẩm nội bộ:", e)
+      }
     }
-    // ✦ COMMIT POINT ✦ — đơn đã chốt. Từ đây trở đi là best-effort, KHÔNG rollback.
-    // (Các hàm ghi của lib/google-sheets đã tự invalidate cache sau khi ghi.)
+
+    if (errorFlag) {
+      return NextResponse.json({ error: "Lỗi ghi Google Sheets" }, { status: 500 })
+    }
+
+    // Giảm số lượng phụ kiện trong kho
+    if (normalizedAccessories.length > 0) {
+      const { header, rows } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
+      const idx = {
+        id: colIndex(header, "ID"),
+        soLuong: colIndex(header, "Số Lượng")
+      }
+      for (const pk of normalizedAccessories) {
+        const foundIdx = rows.findIndex((r) => r[idx.id] === pk.id)
+        if (foundIdx !== -1 && idx.soLuong !== -1) {
+          let current = Number(rows[foundIdx][idx.soLuong] || 0)
+          let sold = pk.so_luong !== undefined ? Number(pk.so_luong) : 1
+          let newQty = Math.max(current - sold, 0)
+          const rowNumber = foundIdx + 2 // Google Sheets row index (1-based, header is row 1)
+          await updateRangeValues(`Phu_Kien!${toColumnLetter(idx.soLuong + 1)}${rowNumber}`, [[newQty]])
+        }
+      }
+    }
 
     /* =================== Cập nhật Khach_Hang (Tổng mua & Lần mua cuối) =================== */
     try {
@@ -1048,8 +831,6 @@ export async function POST(request: NextRequest) {
           dung_luong: may.dung_luong || may["Dung Lượng"] || '',
           mau_sac: may.mau_sac || may["Màu Sắc"] || '',
           imei: may.imei || may["IMEI"] || '',
-          pin: may.pin ?? may["Pin (%)"] ?? '',
-          tinh_trang: may.tinh_trang || may["Tình Trạng Máy"] || '',
           nguon: isPartner ? "Kho ngoài" : "Kho trong",
         })
       }
@@ -1098,49 +879,10 @@ export async function POST(request: NextRequest) {
   ;(orderInfo as any).order_type = orderType
   // Only send Telegram notification here if FE didn't already send it (skipTelegram flag)
   if (!body || !body.skipTelegram) {
-    const text = formatOrderMessage(orderInfo, "new")
-    // Đơn ONLINE + có mã GHTK -> đính nút "Đã gửi hàng" (callback_data ngắn: "ship:<maGHTK>")
-    const vcStr = String((orderInfo as any).hinh_thuc_van_chuyen || "")
-    const ghtkMatch = orderType === "online" ? vcStr.match(/GHTK\s*[-–]?\s*(\d+)/i) : null
-    if (ghtkMatch) {
-      const maGHTK = ghtkMatch[1]
-      await sendTelegramMessageWithButtons(
-        text,
-        [[{ text: "📦 Đã gửi hàng", callback_data: `ship:${maGHTK}` }]],
-        "online",
-      )
-    } else {
-      await sendTelegramMessage(text, orderType)
-    }
+    await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderType)
   }
     } catch (err) {
       console.error("Lỗi gửi thông báo Telegram:", err)
-    }
-
-    // ===== Cộng TIỀN MẶT vào QUỸ khi đơn có thanh toán tiền mặt (best-effort) =====
-    // VD: khách trả 10tr (5tr CK + 5tr tiền mặt) -> +5tr vào quỹ. Nguồn: khách offline/online.
-    try {
-      const payments = Array.isArray(body.payments) ? body.payments : []
-      const cashAmount = payments.reduce((s: number, p: any) => {
-        const m = String(p?.method || p?.label || "").toLowerCase()
-        const isCash = m.includes("tiền mặt") || m.includes("tien mat") || m.includes("cash")
-        return isCash ? s + (Number(p?.amount) || 0) : s
-      }, 0)
-      if (cashAmount > 0) {
-        const seller = getServerUser(request)
-        const rawLoaiDon = String(body.loai_don || body["Loại Đơn"] || "")
-        const isOnline = /onl|online/i.test(rawLoaiDon)
-        await recordCashTransaction({
-          loai: "thu",
-          so_tien: cashAmount,
-          nguon: isOnline ? "khach_online" : "khach_offline",
-          ma_tham_chieu: idDonHang,
-          ly_do: "Khách thanh toán",
-          nhan_vien: seller?.name || seller?.email || body.employeeName || body.employeeId || "",
-        })
-      }
-    } catch (err) {
-      console.warn("[CASH] Cộng quỹ tiền mặt từ đơn bán lỗi (bỏ qua):", err)
     }
 
     /* =================== WARRANTY (Optional) =================== */
@@ -1263,7 +1005,7 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.warn("[NOTIFY] Không thể ghi thông báo đơn hàng mới:", e)
     }
-    const __responsePayload = {
+    return NextResponse.json({
       ok: true,
       created: true,
       id_don_hang: idDonHang,
@@ -1273,14 +1015,9 @@ export async function POST(request: NextRequest) {
       coreTotalServer,
       warrantyTotalServer: warrantyTotalFee,
       finalTotalServer
-    }
-    // Lưu kết quả để retry cùng clientRequestId được replay (idempotent), không tạo trùng.
-    completeIdempotent(clientRequestId, __responsePayload, __nowTx)
-    return NextResponse.json(__responsePayload, { status: 201 })
+    }, { status: 201 })
   } catch (error) {
     console.error("Ban_Hang POST error:", error)
-    // Giải phóng khóa để cho phép thử lại (đơn có thể đã/chưa commit — natural key sẽ chặn trùng nếu đã commit).
-    failIdempotent(clientRequestId)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
