@@ -111,11 +111,15 @@ function effectiveThreadId(chatId: number, desired: number): number {
 // Ưu tiên TELEGRAM_CHAT_ID trong .env (cấu hình của cửa hàng); chỉ rơi về số
 // hardcoded khi cả TELEGRAM_CHAT_ID lẫn các biến theo loại đơn đều không có.
 const DEFAULT_CHAT = -1002895849744
+// Topic (message_thread_id) cho nhóm Ghi chú bàn giao ca. Cho phép override qua env.
+const NOTE_THREAD = Number(process.env.TELEGRAM_THREAD_NOTE) || 37551
 const ORDER_TYPE_CHAT_MAP: Record<string, number> = {
   offline: parseEnvChat('TELEGRAM_CHAT_OFFLINE', DEFAULT_CHAT),
   online: parseEnvChat('TELEGRAM_CHAT_ONLINE', DEFAULT_CHAT),
   return: parseEnvChat('TELEGRAM_CHAT_RETURN', DEFAULT_CHAT),
   deposit: parseEnvChat('TELEGRAM_CHAT_DEPOSIT', DEFAULT_CHAT),
+  // Ghi chú bàn giao ca — mặc định cùng group, có thể trỏ group riêng qua TELEGRAM_CHAT_NOTE.
+  note: parseEnvChat('TELEGRAM_CHAT_NOTE', DEFAULT_CHAT),
 }
 
 export async function sendTelegramMessage(message: string, orderType?: OrderType, options?: TelegramOptions) {
@@ -128,6 +132,7 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
+    if (orderType === "note") messageThreadId = NOTE_THREAD
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
     messageThreadId = effectiveThreadId(chatId, messageThreadId)
     if (!botToken || !chatId) {
@@ -176,6 +181,138 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
   }
 }
 
+// ============================================================
+// Inline keyboard (nút bấm) + callback helpers — cho đơn online GHTK.
+// KHÔNG đổi chữ ký sendTelegramMessage cũ; đây là các hàm MỚI.
+// ============================================================
+type InlineButton = { text: string; callback_data: string }
+
+// Chọn chat_id + thread theo orderType, giống logic sendTelegramMessage.
+function resolveChatAndThread(orderType?: OrderType, options?: TelegramOptions) {
+  const chatId = (options?.chat_id && Number.isFinite(options.chat_id))
+    ? options.chat_id
+    : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
+  let messageThreadId = 9
+  if (orderType === "online") messageThreadId = 7
+  if (orderType === "return") messageThreadId = 5334
+  if (orderType === "deposit") messageThreadId = 9
+  if (orderType === "note") messageThreadId = NOTE_THREAD
+  if (options?.message_thread_id) messageThreadId = options.message_thread_id
+  messageThreadId = effectiveThreadId(chatId, messageThreadId)
+  return { chatId, messageThreadId }
+}
+
+/**
+ * Gửi tin nhắn KÈM nút inline. Trả về { success, message_id?, chat_id? } để có thể edit về sau.
+ * Có fallback gửi lại không kèm thread (giống sendTelegramMessage) khi topic lỗi.
+ */
+export async function sendTelegramMessageWithButtons(
+  text: string,
+  buttons: InlineButton[][],
+  orderType?: OrderType,
+  options?: { message_thread_id?: number; chat_id?: number },
+) {
+  try {
+    const botToken = getBotToken()
+    const { chatId, messageThreadId } = resolveChatAndThread(orderType, options)
+    if (!botToken || !chatId) {
+      console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc chat_id")
+      return { success: false, error: "Thiếu cấu hình Telegram" }
+    }
+    const sendOnce = async (withThread: boolean) => {
+      const payload: any = {
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: buttons },
+      }
+      if (withThread && messageThreadId) payload.message_thread_id = messageThreadId
+      const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const json = await response.json()
+      return { json }
+    }
+    const first = await sendOnce(true)
+    if (first?.json?.ok) {
+      return { success: true, message_id: first.json.result?.message_id as number, chat_id: chatId }
+    }
+    if (messageThreadId) {
+      console.warn("[TG] sendMessageWithButtons fail with topic, retry without thread", first)
+      const second = await sendOnce(false)
+      if (second?.json?.ok) {
+        return { success: true, message_id: second.json.result?.message_id as number, chat_id: chatId }
+      }
+      console.error("Lỗi gửi Telegram (buttons, retry)", second)
+      return { success: false, error: second?.json?.description || "Unknown Telegram error" }
+    }
+    console.error("Lỗi gửi Telegram (buttons)", first)
+    return { success: false, error: first?.json?.description || "Unknown Telegram error" }
+  } catch (error) {
+    console.error("Lỗi gửi Telegram (buttons):", error)
+    return { success: false, error }
+  }
+}
+
+/** Tắt vòng xoay trên nút khi user bấm. LUÔN gọi cho mỗi callback. */
+export async function answerCallbackQuery(callbackQueryId: string, text?: string) {
+  try {
+    const botToken = getBotToken()
+    if (!botToken) return { success: false }
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: callbackQueryId, text: text || "", show_alert: false }),
+    })
+    const json = await res.json()
+    return { success: !!json?.ok }
+  } catch (error) {
+    console.error("answerCallbackQuery error:", error)
+    return { success: false, error }
+  }
+}
+
+/** Sửa nội dung tin nhắn (HTML). Truyền buttons=[] để GỠ nút (tránh bấm lại). */
+export async function editMessageText(chatId: number, messageId: number, text: string, buttons?: InlineButton[][]) {
+  try {
+    const botToken = getBotToken()
+    if (!botToken) return { success: false }
+    const payload: any = { chat_id: chatId, message_id: messageId, text, parse_mode: "HTML" }
+    if (buttons) payload.reply_markup = { inline_keyboard: buttons }
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/editMessageText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+    const json = await res.json()
+    if (!json?.ok) console.error("editMessageText fail:", json)
+    return { success: !!json?.ok, json }
+  } catch (error) {
+    console.error("editMessageText error:", error)
+    return { success: false, error }
+  }
+}
+
+/** Chỉ đổi/bỏ nút (không sửa text). buttons=[] để gỡ hết nút. */
+export async function editMessageReplyMarkup(chatId: number, messageId: number, buttons?: InlineButton[][]) {
+  try {
+    const botToken = getBotToken()
+    if (!botToken) return { success: false }
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/editMessageReplyMarkup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: buttons || [] } }),
+    })
+    const json = await res.json()
+    return { success: !!json?.ok, json }
+  } catch (error) {
+    console.error("editMessageReplyMarkup error:", error)
+    return { success: false, error }
+  }
+}
+
 // Send photo from base64 string. Builds a multipart/form-data body and uploads directly to Telegram.
 export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
@@ -186,6 +323,7 @@ export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'i
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
+    if (orderType === "note") messageThreadId = NOTE_THREAD
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
     messageThreadId = effectiveThreadId(chatId, messageThreadId)
 
@@ -247,6 +385,7 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
+    if (orderType === "note") messageThreadId = NOTE_THREAD
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
     messageThreadId = effectiveThreadId(chatId, messageThreadId)
 
@@ -294,6 +433,7 @@ export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: strin
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
+    if (orderType === "note") messageThreadId = NOTE_THREAD
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
     messageThreadId = effectiveThreadId(chatId, messageThreadId)
 

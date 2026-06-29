@@ -31,6 +31,7 @@ import {
   Receipt,
   Wallet,
   Truck,
+  StickyNote,
 } from "lucide-react"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
@@ -64,6 +65,7 @@ const getNavigation = () => [
     title: "Quản lý",
     items: [
       { title: "Nhân viên", href: "/dashboard/nhan-vien", icon: UserCheck, roles: ["quan_ly"] as Role[] },
+      { title: "Ghi chú", href: "/dashboard/ghi-chu", icon: StickyNote, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Thông báo", href: "/dashboard/thong-bao", icon: Bell, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Cài đặt", href: "/dashboard/cai-dat", icon: Settings, roles: ["quan_ly"] as Role[] },
       { title: "Hướng dẫn", href: "/dashboard/huong-dan", icon: BookOpen, roles: ["quan_ly", "nhan_vien"] as Role[] },
