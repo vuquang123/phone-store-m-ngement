@@ -11,6 +11,14 @@ import { peekIdempotentDone, beginIdempotent, completeIdempotent, failIdempotent
 import { recordCashTransaction } from "@/lib/cash"
 import { getServerUser } from "@/lib/auth"
 
+// Luồng bán hàng gọi RẤT NHIỀU Google Sheets API tuần tự (có throttle 250ms) -> dễ vượt
+// timeout mặc định của Vercel (Hobby ~10s) khiến hàm bị kill GIỮA CHỪNG: đơn đã ghi nhưng
+// chưa xoá máy / chưa trả response -> client báo lỗi, user bấm lại -> MACHINE_NOT_AVAILABLE.
+// Nâng trần thời gian chạy để saga kịp hoàn tất trong 1 request.
+export const maxDuration = 60
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
   KHO_HANG: "Kho_Hang",
