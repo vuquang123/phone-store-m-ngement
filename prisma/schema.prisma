@@ -1,0 +1,452 @@
+// prisma/schema.prisma
+// Lược đồ Postgres (Supabase) cho hệ thống quản lý cửa hàng điện thoại.
+// Nguồn gốc: migrate 1:1 từ Google Sheets. Tên cột tiếng Anh snake_case (@@map/@map),
+// giữ ý nghĩa cũ để dễ đối chiếu. Tiền = Int (đồng VND). Ngày = timestamptz.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  // Prisma 7: url/directUrl khai báo trong prisma.config.ts (không còn đặt trong schema).
+  // - DATABASE_URL: POOLED (Supavisor 6543, transaction mode) cho runtime serverless.
+  // - DIRECT_URL:   DIRECT (5432) chỉ dùng cho prisma migrate.
+  provider = "postgresql"
+}
+
+// ============================================================ USERS / AUTH
+model AppUser {
+  id           String    @id @default(cuid())
+  employeeCode String    @unique @map("employee_code") // "ID Nhân Viên" (NV001)
+  email        String    @unique
+  ten          String?
+  vaiTro       String?   @map("vai_tro") // quan_ly / nhan_vien
+  ngayTao      DateTime? @map("ngay_tao") @db.Timestamptz(3)
+  trangThai    String?   @map("trang_thai") // hoat_dong / khoa
+  lastLogin    DateTime? @map("last_login") @db.Timestamptz(3)
+  matKhau      String    @map("mat_khau") // bcrypt hash
+  soDienThoai  String?   @map("so_dien_thoai")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("users")
+}
+
+// ============================================================ KHÁCH HÀNG
+model Customer {
+  id          String    @id @default(cuid())
+  soDienThoai String    @unique @map("so_dien_thoai") // khóa tự nhiên
+  ten         String?
+  tongMua     Int       @default(0) @map("tong_mua") // VND luỹ kế
+  lanMuaCuoi  DateTime? @map("lan_mua_cuoi") @db.Timestamptz(3)
+  ngayTao     DateTime? @map("ngay_tao") @db.Timestamptz(3)
+  ghiChu      String?   @map("ghi_chu")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  orders   Order[]
+  deposits Deposit[]
+  returns  Return[]
+
+  @@map("customers")
+}
+
+// ============================================================ KHO HÀNG (mỗi máy 1 dòng)
+model Product {
+  id           String    @id @default(cuid())
+  idMay        String?   @unique @map("id_may") // WH1MJ
+  ngayNhap     DateTime? @map("ngay_nhap") @db.Timestamptz(3)
+  tenSanPham   String    @map("ten_san_pham")
+  loaiMay      String?   @map("loai_may")
+  dungLuong    String?   @map("dung_luong")
+  pinPhanTram  Int?      @map("pin_phan_tram")
+  mauSac       String?   @map("mau_sac")
+  imei         String?   @unique
+  serial       String?   @unique
+  tinhTrangMay String?   @map("tinh_trang_may")
+  dangSim      String?   @map("dang_sim")
+  giaNhap      Int       @default(0) @map("gia_nhap")
+  giaBan       Int       @default(0) @map("gia_ban")
+  giamGia      Int       @default(0) @map("giam_gia")
+  giaSi        Int       @default(0) @map("gia_si")
+  ghiChu       String?   @map("ghi_chu")
+  trangThai    String?   @map("trang_thai") // Còn hàng / Đã bán / Đang CNC...
+  trangThaiKho String?   @map("trang_thai_kho") // Kho trong / Kho ngoài
+  linkAnh      String?   @map("link_anh")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  orderItems OrderItem[]
+
+  @@index([trangThai])
+  @@map("products")
+}
+
+// ============================================================ HÀNG ĐỐI TÁC (ký gửi)
+model PartnerProduct {
+  id           String    @id @default(cuid())
+  idMay        String?   @map("id_may")
+  ngayNhap     DateTime? @map("ngay_nhap") @db.Timestamptz(3)
+  nguonHang    String?   @map("nguon_hang")
+  tenSanPham   String?   @map("ten_san_pham")
+  loaiMay      String?   @map("loai_may")
+  dungLuong    String?   @map("dung_luong")
+  pinPhanTram  Int?      @map("pin_phan_tram")
+  mauSac       String?   @map("mau_sac")
+  imei         String?
+  serial       String?
+  tinhTrangMay String?   @map("tinh_trang_may")
+  giaNhap      Int       @default(0) @map("gia_nhap")
+  giaBan       Int       @default(0) @map("gia_ban")
+  ghiChu       String?   @map("ghi_chu")
+  trangThai    String?   @map("trang_thai")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("partner_products")
+}
+
+// ============================================================ ĐƠN BÁN HÀNG
+model Order {
+  id                String    @id @default(cuid())
+  maDonHang         String    @unique @map("ma_don_hang") // DH00001
+  ngayXuat          DateTime? @map("ngay_xuat") @db.Timestamptz(3)
+  customerId        String?   @map("customer_id")
+  tenKhachHang      String?   @map("ten_khach_hang") // snapshot
+  soDienThoai       String?   @map("so_dien_thoai")
+  tongThu           Int       @default(0) @map("tong_thu")
+  loaiDon           String?   @map("loai_don") // Đơn off / Đơn onl
+  hinhThucVanChuyen String?   @map("hinh_thuc_van_chuyen") // "GHTK - 1990038382"
+  trangThai         String?   @map("trang_thai")
+  diaChiNhan        String?   @map("dia_chi_nhan")
+  nguoiBanCode      String?   @map("nguoi_ban_code") // NV003
+  ghiChu            String?   @map("ghi_chu")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  customer          Customer?          @relation(fields: [customerId], references: [id])
+  items             OrderItem[]
+  payments          OrderPayment[]
+  warrantyContracts WarrantyContract[]
+  returns           Return[]
+
+  @@index([ngayXuat])
+  @@index([loaiDon])
+  @@index([nguoiBanCode])
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String  @id @default(cuid())
+  orderId      String  @map("order_id")
+  productId    String? @map("product_id")
+  tenSanPham   String? @map("ten_san_pham")
+  loaiMay      String? @map("loai_may")
+  dungLuong    String? @map("dung_luong")
+  pinRaw       String? @map("pin_raw") // "95%, 298L" — giữ nguyên chuỗi
+  mauSac       String? @map("mau_sac")
+  imei         String? // KHÔNG unique: máy có thể bán lại
+  serial       String?
+  tinhTrangMay String? @map("tinh_trang_may")
+  dangSim      String? @map("dang_sim")
+  phuKien      String? @map("phu_kien")
+  phiBaoHanh   Int     @default(0) @map("phi_bao_hanh")
+  goiBaoHanh   String? @map("goi_bao_hanh")
+  giaBan       Int     @default(0) @map("gia_ban")
+  giaNhap      Int     @default(0) @map("gia_nhap")
+  lai          Int     @default(0)
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([imei])
+  @@map("order_items")
+}
+
+model OrderPayment {
+  id      String @id @default(cuid())
+  orderId String @map("order_id")
+  method  String // Tiền mặt / Chuyển khoản
+  amount  Int
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([method])
+  @@map("order_payments")
+}
+
+// ============================================================ ĐẶT CỌC
+model Deposit {
+  id                String    @id @default(cuid())
+  maDonHang         String    @unique @map("ma_don_hang") // DC...
+  ngayDatCoc        DateTime? @map("ngay_dat_coc") @db.Timestamptz(3)
+  customerId        String?   @map("customer_id")
+  tenKhachHang      String?   @map("ten_khach_hang")
+  soDienThoai       String?   @map("so_dien_thoai")
+  tenSanPham        String?   @map("ten_san_pham")
+  loaiMay           String?   @map("loai_may")
+  dungLuong         String?   @map("dung_luong")
+  pinRaw            String?   @map("pin_raw")
+  mauSac            String?   @map("mau_sac")
+  imei              String?
+  serial            String?
+  tinhTrangMay      String?   @map("tinh_trang_may")
+  phuKien           String?   @map("phu_kien")
+  giaBan            Int       @default(0) @map("gia_ban")
+  giaNhap           Int       @default(0) @map("gia_nhap")
+  soTienCoc         Int       @default(0) @map("so_tien_coc")
+  soTienConLai      Int       @default(0) @map("so_tien_con_lai")
+  hanThanhToan      DateTime? @map("han_thanh_toan") @db.Timestamptz(3)
+  hinhThucThanhToan String?   @map("hinh_thuc_thanh_toan")
+  nguoiBanCode      String?   @map("nguoi_ban_code")
+  loaiDon           String?   @map("loai_don")
+  trangThaiMay      String?   @map("trang_thai_may")
+  trangThai         String?   @map("trang_thai")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  customer Customer? @relation(fields: [customerId], references: [id])
+
+  @@map("deposits")
+}
+
+// ============================================================ BẢO HÀNH (gói + hợp đồng)
+model WarrantyPackage {
+  id              String  @id @default(cuid())
+  maGoi           String  @unique @map("ma_goi") // BASIC
+  tenGoi          String? @map("ten_goi")
+  gia             Int     @default(0)
+  ngayDoi11       Int?    @map("ngay_doi_1_1")
+  thangBhPhanCung Int?    @map("thang_bh_phan_cung")
+  thangBhCncDoSim Int?    @map("thang_bh_cnc_do_sim")
+  hoTroTronDoi    Boolean @default(false) @map("ho_tro_tron_doi")
+  kichHoat        Boolean @default(true) @map("kich_hoat")
+  ghiChu          String? @map("ghi_chu")
+
+  contracts WarrantyContract[]
+
+  @@map("warranty_packages")
+}
+
+model WarrantyContract {
+  id             String    @id @default(cuid())
+  maHd           String    @unique @map("ma_hd")
+  maDon          String?   @map("ma_don") // -> Order.maDonHang
+  imei           String?
+  serial         String?
+  sdtKhach       String?   @map("sdt_khach")
+  maGoi          String?   @map("ma_goi")
+  ngayMua        DateTime? @map("ngay_mua") @db.Timestamptz(3)
+  ngayBatDau     DateTime? @map("ngay_bat_dau") @db.Timestamptz(3)
+  han11          DateTime? @map("han_1_1") @db.Timestamptz(3)
+  hanPhanCung    DateTime? @map("han_phan_cung") @db.Timestamptz(3)
+  hanCncDoSim    DateTime? @map("han_cnc_do_sim") @db.Timestamptz(3)
+  hanTong        DateTime? @map("han_tong") @db.Timestamptz(3)
+  hoTroTronDoi   Boolean   @default(false) @map("ho_tro_tron_doi")
+  trangThai      String?   @map("trang_thai")
+  nhanVien       String?   @map("nhan_vien")
+  thongTinLoiIch String?   @map("thong_tin_loi_ich") // JSON text
+  ghiChu         String?   @map("ghi_chu")
+
+  order   Order?           @relation(fields: [maDon], references: [maDonHang])
+  package WarrantyPackage? @relation(fields: [maGoi], references: [maGoi])
+
+  @@index([imei])
+  @@index([sdtKhach])
+  @@map("warranty_contracts")
+}
+
+// ============================================================ CNC (gia công)
+model CncJob {
+  id           String    @id @default(cuid())
+  tenSanPham   String?   @map("ten_san_pham")
+  mauSac       String?   @map("mau_sac")
+  imei         String?
+  nguon        String?
+  tinhTrang    String?   @map("tinh_trang")
+  dangSim      String?   @map("dang_sim")
+  loaiMay      String?   @map("loai_may")
+  trangThai    String?   @map("trang_thai")
+  diaChiCnc    String?   @map("dia_chi_cnc")
+  ngayGui      DateTime? @map("ngay_gui") @db.Timestamptz(3)
+  ngayNhanLai  DateTime? @map("ngay_nhan_lai") @db.Timestamptz(3)
+  tenKhachHang String?   @map("ten_khach_hang")
+  soDienThoai  String?   @map("so_dien_thoai")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([imei])
+  @@index([trangThai])
+  @@map("cnc_jobs")
+}
+
+// ============================================================ BẢO HÀNH (sửa/gửi máy)
+model WarrantyRepair {
+  id            String    @id @default(cuid())
+  tenSanPham    String?   @map("ten_san_pham")
+  mauSac        String?   @map("mau_sac")
+  loaiMay       String?   @map("loai_may")
+  imei          String?
+  nguon         String?
+  tinhTrang     String?   @map("tinh_trang")
+  loi           String?
+  trangThai     String?   @map("trang_thai")
+  diaChiBaoHanh String?   @map("dia_chi_bao_hanh")
+  ngayGui       DateTime? @map("ngay_gui") @db.Timestamptz(3)
+  ngayNhanLai   DateTime? @map("ngay_nhan_lai") @db.Timestamptz(3)
+  tenKhachHang  String?   @map("ten_khach_hang")
+  soDienThoai   String?   @map("so_dien_thoai")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([imei])
+  @@index([trangThai])
+  @@map("warranty_repairs")
+}
+
+// ============================================================ PHỤ KIỆN
+model Accessory {
+  id          String    @id @default(cuid())
+  maPk        String    @unique @map("ma_pk") // PK1
+  tenSanPham  String?   @map("ten_san_pham")
+  loai        String?
+  soLuong     Int       @default(0) @map("so_luong")
+  giaNhap     Int       @default(0) @map("gia_nhap")
+  giaBan      Int       @default(0) @map("gia_ban")
+  ghiChu      String?   @map("ghi_chu")
+  capNhatCuoi DateTime? @map("cap_nhat_cuoi") @db.Timestamptz(3)
+
+  @@map("accessories")
+}
+
+// ============================================================ HOÀN TRẢ
+model Return {
+  id          String    @id @default(cuid())
+  maHoanTra   String    @unique @map("ma_hoan_tra") // RT00001
+  ngayYeuCau  DateTime? @map("ngay_yeu_cau") @db.Timestamptz(3)
+  khachHang   String?   @map("khach_hang")
+  soDienThoai String?   @map("so_dien_thoai")
+  sanPham     String?   @map("san_pham")
+  imei        String?
+  serial      String?
+  lyDo        String?   @map("ly_do")
+  trangThai   String?   @map("trang_thai")
+  nguoiXuLy   String?   @map("nguoi_xu_ly")
+  ngayXuLy    DateTime? @map("ngay_xu_ly") @db.Timestamptz(3)
+  ghiChu      String?   @map("ghi_chu")
+  orderId     String?   @map("order_id")
+  customerId  String?   @map("customer_id")
+
+  order    Order?    @relation(fields: [orderId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([imei])
+  @@map("returns")
+}
+
+// ============================================================ THÔNG BÁO
+model Notification {
+  id          String   @id // UUID có sẵn từ sheet
+  tieuDe      String?  @map("tieu_de")
+  noiDung     String?  @map("noi_dung")
+  loai        String?
+  trangThai   String?  @map("trang_thai")
+  nguoiGuiId  String?  @map("nguoi_gui_id")
+  nguoiNhanId String?  @map("nguoi_nhan_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  @@index([trangThai])
+  @@map("notifications")
+}
+
+// ============================================================ LỊCH SỬ TRẠNG THÁI MÁY
+model ProductHistory {
+  id           String    @id @default(cuid())
+  idMayLast5   String?   @map("id_may_last5") // 5 số cuối IMEI (khóa lỏng)
+  tenSanPham   String?   @map("ten_san_pham")
+  trangThaiCu  String?   @map("trang_thai_cu")
+  trangThaiMoi String?   @map("trang_thai_moi")
+  thoiGian     DateTime? @map("thoi_gian") @db.Timestamptz(3)
+  nguoiThayDoi String?   @map("nguoi_thay_doi")
+
+  @@index([idMayLast5])
+  @@map("product_history")
+}
+
+// ============================================================ QUỸ TIỀN MẶT
+model CashEntry {
+  id          String   @id // UUID có sẵn từ sheet
+  loai        String // thu / chi
+  soTien      Int      @map("so_tien")
+  soDuSau     Int      @map("so_du_sau")
+  nguon       String?
+  maThamChieu String?  @map("ma_tham_chieu")
+  lyDo        String?  @map("ly_do")
+  nhanVien    String?  @map("nhan_vien")
+  ghiChu      String?  @map("ghi_chu")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([loai])
+  @@map("cash_entries")
+}
+
+// ============================================================ CHECK-IN ĐẦU CA
+model CheckIn {
+  id         String    @id // UUID có sẵn
+  thoiGian   DateTime? @map("thoi_gian") @db.Timestamptz(3)
+  nhanVien   String?   @map("nhan_vien")
+  ca         String?
+  trangThai  String?   @map("trang_thai")
+  lyDo       String?   @map("ly_do")
+  knWebsite  Int       @default(0) @map("kn_website")
+  knThucTe   Int       @default(0) @map("kn_thuc_te")
+  kn17       Int       @default(0) @map("kn_17")
+  kn16       Int       @default(0) @map("kn_16")
+  kn15       Int       @default(0) @map("kn_15")
+  knIpad     Int       @default(0) @map("kn_ipad")
+  knKhac     Int       @default(0) @map("kn_khac")
+  ktWebsite  Int       @default(0) @map("kt_website")
+  ktThucTe   Int       @default(0) @map("kt_thuc_te")
+  kt17       Int       @default(0) @map("kt_17")
+  kt16       Int       @default(0) @map("kt_16")
+  kt15       Int       @default(0) @map("kt_15")
+  ktIpad     Int       @default(0) @map("kt_ipad")
+  ktKhac     Int       @default(0) @map("kt_khac")
+  tongWeb    Int       @default(0) @map("tong_web")
+  tongThucTe Int       @default(0) @map("tong_thuc_te")
+  soAnh      Int       @default(0) @map("so_anh")
+
+  @@index([nhanVien])
+  @@map("check_ins")
+}
+
+// ============================================================ CHECK-OUT CUỐI CA
+model CheckOut {
+  id             String   @id // UUID có sẵn
+  ca             String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  nhanVien       String?  @map("nhan_vien")
+  trangThai      String?  @map("trang_thai")
+  lyDo           String?  @map("ly_do")
+  soAnh          Int      @default(0) @map("so_anh")
+  ngoaiWebsite   Int      @default(0) @map("ngoai_website")
+  ngoaiThucTe    Int      @default(0) @map("ngoai_thuc_te")
+  ngoai17        Int      @default(0) @map("ngoai_17")
+  ngoai16        Int      @default(0) @map("ngoai_16")
+  ngoai15        Int      @default(0) @map("ngoai_15")
+  ngoaiIpad      Int      @default(0) @map("ngoai_ipad")
+  ngoaiKhac      Int      @default(0) @map("ngoai_khac")
+  trongWebsite   Int      @default(0) @map("trong_website")
+  trongThucTe    Int      @default(0) @map("trong_thuc_te")
+  trong17        Int      @default(0) @map("trong_17")
+  trong16        Int      @default(0) @map("trong_16")
+  trong15        Int      @default(0) @map("trong_15")
+  trongIpad      Int      @default(0) @map("trong_ipad")
+  trongKhac      Int      @default(0) @map("trong_khac")
+  banRa          Int      @default(0) @map("ban_ra")
+  banRaOff       Int      @default(0) @map("ban_ra_off")
+  banRaOnl       Int      @default(0) @map("ban_ra_onl")
+  thuVao         Int      @default(0) @map("thu_vao")
+  tienMatBanGiao Int      @default(0) @map("tien_mat_ban_giao")
+  ghiChuCaSau    String?  @map("ghi_chu_ca_sau")
+
+  @@index([nhanVien])
+  @@map("check_outs")
+}

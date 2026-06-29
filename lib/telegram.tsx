@@ -114,11 +114,15 @@ function effectiveThreadId(chatId: number, desired: number): number {
 // Ưu tiên TELEGRAM_CHAT_ID trong .env (cấu hình của cửa hàng); chỉ rơi về số
 // hardcoded khi cả TELEGRAM_CHAT_ID lẫn các biến theo loại đơn đều không có.
 const DEFAULT_CHAT = -1002895849744
+// Topic (message_thread_id) cho nhóm Ghi chú bàn giao ca. Cho phép override qua env.
+const NOTE_THREAD = Number(process.env.TELEGRAM_THREAD_NOTE) || 37551
 const ORDER_TYPE_CHAT_MAP: Record<string, number> = {
   offline: parseEnvChat('TELEGRAM_CHAT_OFFLINE', DEFAULT_CHAT),
   online: parseEnvChat('TELEGRAM_CHAT_ONLINE', DEFAULT_CHAT),
   return: parseEnvChat('TELEGRAM_CHAT_RETURN', DEFAULT_CHAT),
   deposit: parseEnvChat('TELEGRAM_CHAT_DEPOSIT', DEFAULT_CHAT),
+  // Ghi chú bàn giao ca — mặc định cùng group, có thể trỏ group riêng qua TELEGRAM_CHAT_NOTE.
+  note: parseEnvChat('TELEGRAM_CHAT_NOTE', DEFAULT_CHAT),
 }
 
 export async function sendTelegramMessage(message: string, orderType?: OrderType, options?: TelegramOptions) {
@@ -131,6 +135,7 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
+    if (orderType === "note") messageThreadId = NOTE_THREAD
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
     messageThreadId = effectiveThreadId(chatId, messageThreadId)
     if (!botToken || !chatId) {
@@ -189,6 +194,7 @@ export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'i
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
+    if (orderType === "note") messageThreadId = NOTE_THREAD
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
     messageThreadId = effectiveThreadId(chatId, messageThreadId)
 
@@ -250,6 +256,7 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
+    if (orderType === "note") messageThreadId = NOTE_THREAD
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
     messageThreadId = effectiveThreadId(chatId, messageThreadId)
 
@@ -297,6 +304,7 @@ export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: strin
     if (orderType === "online") messageThreadId = 7
     if (orderType === "return") messageThreadId = 5334
     if (orderType === "deposit") messageThreadId = 9
+    if (orderType === "note") messageThreadId = NOTE_THREAD
     if (options?.message_thread_id) messageThreadId = options.message_thread_id
     messageThreadId = effectiveThreadId(chatId, messageThreadId)
 

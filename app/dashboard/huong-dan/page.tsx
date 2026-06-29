@@ -25,6 +25,8 @@ import {
   Hammer,
   CircleUserRound,
   ListChecks,
+  StickyNote,
+  CheckCircle2,
 } from "lucide-react"
 
 type Role = "quan_ly" | "nhan_vien" | undefined
@@ -94,6 +96,10 @@ export default function HuongDanPage() {
                 d: "Bấm avatar (góc trên phải) → Check-in đầu ca → đếm số máy 2 kho, đối chiếu web, đính ảnh, Gửi.",
               },
               {
+                t: "Xem Ghi chú bàn giao ca",
+                d: "Mở tab Ghi chú → đọc bảng \"Chưa xử lý\" để biết việc ca trước để lại; làm xong việc nào bấm Hoàn thành việc đó.",
+              },
+              {
                 t: "Bán hàng trong ca",
                 d: "Vào Bán hàng (POS): tìm máy → thêm vào giỏ → chọn khách → chọn phương thức thanh toán → Thanh toán.",
               },
@@ -103,7 +109,7 @@ export default function HuongDanPage() {
               },
               {
                 t: "Báo cáo cuối ca (Check-out)",
-                d: "Bấm avatar → Báo cáo cuối ca → chốt lại số máy + tài chính (bán ra, thu vào, tiền mặt bàn giao), Gửi.",
+                d: "Bấm avatar → Báo cáo cuối ca → chốt lại số máy + tài chính (bán ra, thu vào, tiền mặt bàn giao), Gửi. Còn việc dang dở → tạo Ghi chú bàn giao cho ca sau.",
               },
             ].map((s, i) => (
               <li key={i} className="flex gap-3">
@@ -138,6 +144,7 @@ export default function HuongDanPage() {
               <ul className="space-y-1 text-sm text-muted-foreground">
                 <li>• <b>Kho hàng</b> · <b>Bán hàng</b> · <b>Đơn hàng</b> · <b>Khách hàng</b></li>
                 <li>• <b>Hoàn trả</b> · <b>Quỹ tiền mặt</b> · <b>Đơn online</b></li>
+                <li>• <b>Ghi chú</b> (bàn giao ca) · <b>Thông báo</b></li>
                 <li>• (Quản lý) Dashboard · Nhân viên · Cài đặt</li>
               </ul>
               <p className="mt-2 text-xs text-muted-foreground">
@@ -383,6 +390,59 @@ export default function HuongDanPage() {
             <li>• Thêm khối <b>Tài chính & đơn hàng</b>: số đơn bán ra (Off/Onl), thu vào, <b>tiền mặt bàn giao</b>, ghi chú cho ca sau.</li>
             <li>• Đính ảnh (nếu cần) → <b>Gửi báo cáo</b> → vào nhóm Telegram + lưu lịch sử.</li>
           </ul>
+        </CardContent>
+      </Card>
+
+      {/* ============== GHI CHÚ BÀN GIAO CA ============== */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <StickyNote className="h-5 w-5 text-amber-600" />
+            Ghi chú bàn giao ca
+          </CardTitle>
+          <CardDescription>Ca trước ghi việc cần làm — ca sau xem & đánh dấu hoàn thành</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm text-muted-foreground">
+          <div>
+            <h4 className="mb-1 font-medium text-foreground">Dùng để làm gì?</h4>
+            <p>
+              Nơi lưu các <b>việc còn dang dở / cần lưu ý</b> giữa các ca (vd: máy chờ CNC về, khách hẹn
+              quay lại, đơn cần đối soát…). Ca sau mở tab này là biết ngay phải xử lý gì, không sót việc.
+            </p>
+          </div>
+          <div>
+            <h4 className="mb-1 flex items-center gap-2 font-medium text-foreground">
+              <StickyNote className="h-4 w-4" /> Tạo ghi chú
+            </h4>
+            <ul className="space-y-1">
+              <li>• Nhập nội dung vào ô <b>Tạo ghi chú</b> ở đầu trang → bấm <b>Tạo ghi chú</b>.</li>
+              <li>• Hệ thống tự lưu kèm <b>tên người tạo</b> và <b>thời gian</b>, đồng thời báo vào nhóm Telegram bàn giao ca.</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="mb-1 flex items-center gap-2 font-medium text-foreground">
+              <CheckCircle2 className="h-4 w-4" /> Đánh dấu hoàn thành
+            </h4>
+            <ul className="space-y-1">
+              <li>• Ở bảng <b>Chưa xử lý</b>, bấm nút <b>Hoàn thành</b> trên dòng việc đã xong.</li>
+              <li>• Hệ thống ghi lại <b>người hoàn thành</b> + <b>thời gian</b> và báo Telegram. Việc đã hoàn thành <b>không sửa lại được</b>.</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="mb-1 font-medium text-foreground">3 bảng trên trang</h4>
+            <ul className="space-y-1">
+              <li>• <b>Chưa xử lý:</b> mọi việc còn tồn (mọi ngày), <b>việc cũ nhất lên đầu</b> để ưu tiên — có nút Hoàn thành.</li>
+              <li>• <b>Hôm nay:</b> việc được <b>tạo hoặc hoàn thành trong hôm nay</b>, kèm badge <span className="font-medium text-orange-600">Chưa xử lý</span> / <span className="font-medium text-emerald-600">Hoàn thành</span>.</li>
+              <li>• <b>Lịch sử:</b> các việc <b>đã hoàn thành</b> (mới nhất trước), đầy đủ người & ngày hoàn thành.</li>
+            </ul>
+          </div>
+          <div className="rounded-lg bg-muted/50 p-3">
+            <b>Mẹo:</b> Ghi ngắn gọn, rõ "việc gì + máy/đơn nào". Bấm{" "}
+            <RefreshCw className="inline h-3.5 w-3.5" /> <b>Làm mới</b> để cập nhật danh sách mới nhất.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/dashboard/ghi-chu"><Button size="sm" variant="outline">Mở Ghi chú bàn giao ca</Button></Link>
+          </div>
         </CardContent>
       </Card>
 
