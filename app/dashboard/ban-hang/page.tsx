@@ -31,6 +31,8 @@ import { PaymentColumn } from "@/components/ban-hang/payment-column"
 import { DepositOrdersTab } from "@/components/ban-hang/deposit-orders-tab"
 import { CartItemList } from "@/components/ban-hang/cart-item-list"
 import { SearchArea } from "@/components/ban-hang/search-area"
+import { AdvancedFilterBar } from "@/components/ban-hang/advanced-filter-bar"
+import { normalizeVi } from "@/lib/ban-hang/quick-accessories"
 
 
 export default function BanHangPage() {
@@ -39,7 +41,15 @@ export default function BanHangPage() {
   const [mobileView, setMobileView] = useState<"san-pham" | "gio-hang" | "thanh-toan">("san-pham")
   // Bộ lọc nhanh cho mobile-first
   const [filterSource, setFilterSource] = useState<"all" | "inhouse" | "partner">("all")
-  const [filterType, setFilterType] = useState<"all" | "iphone" | "ipad" | "accessory">("all")
+  const [filterType, setFilterType] = useState<"all" | "iphone" | "ipad" | "sim_ghep">("all")
+  // Bộ lọc nâng cao (đồng bộ với trang Kho hàng)
+  const BH_MAX_PRICE = 50000000
+  const [productNameFilter, setProductNameFilter] = useState("all")
+  const [loaiMayFilter, setLoaiMayFilter] = useState("all") // "all" | "Lock" | "Qte"
+  const [colorFilter, setColorFilter] = useState("all")
+  const [capacityFilter, setCapacityFilter] = useState("all")
+  const [pinFilter, setPinFilter] = useState<"all" | "100" | "9x" | "8x" | "7x" | "lt70">("all")
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, BH_MAX_PRICE])
   // Lấy employeeId từ API /me và lưu vào localStorage
   useEffect(() => {
     async function fetchEmployeeId() {
@@ -165,6 +175,12 @@ export default function BanHangPage() {
   const [transferAmount, setTransferAmount] = useState(0)
   const [cardEnabled, setCardEnabled] = useState(false)
   const [cardAmount, setCardAmount] = useState(0)
+  // Thu máy cũ (khách lên đời): tính như một phương thức thanh toán
+  const [thuMayEnabled, setThuMayEnabled] = useState(false)
+  const [thuMayAmount, setThuMayAmount] = useState(0)
+  const [thuMayTenSanPham, setThuMayTenSanPham] = useState("")
+  const [thuMayLoaiMay, setThuMayLoaiMay] = useState("")
+  const [thuMayImei, setThuMayImei] = useState("")
   const [installmentEnabled, setInstallmentEnabled] = useState(false)
   const [installmentType, setInstallmentType] = useState<'' | 'Góp iCloud' | 'Thẻ tín dụng' | 'Mira'>('')
   const [installmentDown, setInstallmentDown] = useState(0)
@@ -213,7 +229,24 @@ export default function BanHangPage() {
   const savedType = localStorage.getItem('bh_filter_type') as any
       if (savedQ !== null) setSearchQuery(savedQ)
       if (savedSrc === 'all' || savedSrc === 'inhouse' || savedSrc === 'partner') setFilterSource(savedSrc)
-  if (savedType === 'all' || savedType === 'iphone' || savedType === 'ipad' || savedType === 'accessory') setFilterType(savedType)
+  if (savedType === 'iphone' || savedType === 'ipad' || savedType === 'sim_ghep') setFilterType(savedType)
+  else if (savedType === 'all' || savedType === 'accessory') setFilterType('all')
+      // Bộ lọc nâng cao
+      const savedName = localStorage.getItem('bh_filter_name')
+      const savedLoai = localStorage.getItem('bh_filter_loai_may')
+      const savedColor = localStorage.getItem('bh_filter_color')
+      const savedCap = localStorage.getItem('bh_filter_capacity')
+      const savedPin = localStorage.getItem('bh_filter_pin') as any
+      const savedPrice = localStorage.getItem('bh_filter_price')
+      if (savedName) setProductNameFilter(savedName)
+      if (savedLoai === 'all' || savedLoai === 'Lock' || savedLoai === 'Qte') setLoaiMayFilter(savedLoai)
+      if (savedColor) setColorFilter(savedColor)
+      if (savedCap) setCapacityFilter(savedCap)
+      if (['all', '100', '9x', '8x', '7x', 'lt70'].includes(savedPin)) setPinFilter(savedPin)
+      if (savedPrice) {
+        const parsed = JSON.parse(savedPrice)
+        if (Array.isArray(parsed) && parsed.length === 2) setPriceRange([Number(parsed[0]) || 0, Number(parsed[1]) || BH_MAX_PRICE])
+      }
     } catch {}
     // run once
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,6 +254,12 @@ export default function BanHangPage() {
   useEffect(() => { try { localStorage.setItem('bh_search_query', searchQuery) } catch{} }, [searchQuery])
   useEffect(() => { try { localStorage.setItem('bh_filter_source', filterSource) } catch{} }, [filterSource])
   useEffect(() => { try { localStorage.setItem('bh_filter_type', filterType) } catch{} }, [filterType])
+  useEffect(() => { try { localStorage.setItem('bh_filter_name', productNameFilter) } catch{} }, [productNameFilter])
+  useEffect(() => { try { localStorage.setItem('bh_filter_loai_may', loaiMayFilter) } catch{} }, [loaiMayFilter])
+  useEffect(() => { try { localStorage.setItem('bh_filter_color', colorFilter) } catch{} }, [colorFilter])
+  useEffect(() => { try { localStorage.setItem('bh_filter_capacity', capacityFilter) } catch{} }, [capacityFilter])
+  useEffect(() => { try { localStorage.setItem('bh_filter_pin', pinFilter) } catch{} }, [pinFilter])
+  useEffect(() => { try { localStorage.setItem('bh_filter_price', JSON.stringify(priceRange)) } catch{} }, [priceRange])
   // Reset row selection when query changes
   useEffect(() => { setSelectedIndex(-1) }, [searchQuery])
   // Hàm reload danh sách khách hàng
@@ -445,10 +484,11 @@ export default function BanHangPage() {
 
   
   // handleDiscountPreset chuyển sang hook useDiscount
-  // Tổng thanh toán ngay (không bao gồm phần góp): Tiền mặt + Chuyển khoản + Thẻ
+  // Tổng thanh toán ngay (không bao gồm phần góp): Tiền mặt + Chuyển khoản + Thẻ + Thu máy
   const immediateSum = (cashEnabled ? (cashAmount||0) : 0)
     + (transferEnabled ? (transferAmount||0) : 0)
     + (cardEnabled ? (cardAmount||0) : 0)
+    + (thuMayEnabled ? (thuMayAmount||0) : 0)
   // Logic trả góp: Trả trước = immediateSum. Tổng đã nhập = Trả trước + Góp (không cộng lại Trả trước lần nữa)
   const sumPayments = Math.max(0, immediateSum + (installmentEnabled ? (installmentLoan||0) : 0))
   // Nếu có trả góp, yêu cầu Trả trước == (Tiền mặt + Chuyển khoản + Thẻ)
@@ -457,6 +497,7 @@ export default function BanHangPage() {
   if (cashEnabled && cashAmount>0) paymentParts.push(`Tiền mặt: ₫${cashAmount.toLocaleString('vi-VN')}`)
   if (transferEnabled && transferAmount>0) paymentParts.push(`Chuyển khoản: ₫${transferAmount.toLocaleString('vi-VN')}`)
   if (cardEnabled && cardAmount>0) paymentParts.push(`Thẻ: ₫${cardAmount.toLocaleString('vi-VN')}`)
+  if (thuMayEnabled && thuMayAmount>0) paymentParts.push(`Thu máy: ₫${thuMayAmount.toLocaleString('vi-VN')}`)
   if (installmentEnabled && (installmentDown>0 || installmentLoan>0)) {
     const label = installmentType || 'Trả góp'
     const parts: string[] = []
@@ -465,39 +506,131 @@ export default function BanHangPage() {
     paymentParts.push(`${label}: ${parts.join(' + ')}`)
   }
   const paymentSummary = paymentParts.join(' | ')
+  // Thông tin máy thu cũ -> gộp vào Ghi chú (để hiện trong Telegram)
+  const thuMayNote = thuMayEnabled
+    ? `[Thu máy cũ] ${[thuMayTenSanPham.trim(), thuMayLoaiMay.trim()].filter(Boolean).join(' - ')}${thuMayImei.trim() ? ` | IMEI: ${thuMayImei.trim()}` : ''} | Giá thu: ₫${(thuMayAmount || 0).toLocaleString('vi-VN')}`
+    : ''
+  const ghiChuFull = [ghiChu.trim(), thuMayNote].filter(Boolean).join(' | ')
   const paymentsArray = [
     cashEnabled && cashAmount>0 ? { method: 'Tiền mặt', amount: cashAmount } : null,
     transferEnabled && transferAmount>0 ? { method: 'Chuyển khoản', amount: transferAmount } : null,
     cardEnabled && cardAmount>0 ? { method: 'Thẻ', amount: cardAmount } : null,
+    thuMayEnabled && thuMayAmount>0 ? { method: 'Thu máy', amount: thuMayAmount } : null,
   ].filter(Boolean) as any[]
   if (installmentEnabled && (installmentDown>0 || installmentLoan>0)) {
     paymentsArray.push({ method: 'Trả góp', provider: installmentType || undefined, downPayment: installmentDown||0, loanAmount: installmentLoan||0, amount: (installmentDown||0)+(installmentLoan||0) })
   }
 
-  // Kết quả tìm kiếm sau khi áp bộ lọc Nguồn/Loại, dùng chung cho mobile cards + desktop table
+  // Helper dùng chung để nhận diện phụ kiện
+  const isAccessoryItem = (p: any) => (p.type === "accessory") || (!!p.loai_phu_kien && !p.imei && !p.serial)
+
+  // Đặt lại toàn bộ bộ lọc (tìm kiếm + nhanh + nâng cao)
+  const resetAdvancedFilters = () => {
+    setSearchQuery("")
+    setFilterSource("all")
+    setFilterType("all")
+    setProductNameFilter("all")
+    setLoaiMayFilter("all")
+    setColorFilter("all")
+    setCapacityFilter("all")
+    setPinFilter("all")
+    setPriceRange([0, BH_MAX_PRICE])
+  }
+
+  // Kết quả tìm kiếm sau khi áp bộ lọc Nguồn/Loại + bộ lọc nâng cao, dùng chung cho mobile cards + desktop table
   const filteredSearchResults = useMemo(() => {
     const isIpad = (p: any) => {
       const name = String(p.ten_san_pham || '').toLowerCase()
       const loai = String(p.loai_may || p['Loại Máy'] || '').toLowerCase()
       return name.includes('ipad') || loai.includes('ipad')
     }
+    const [minP, maxP] = priceRange
+    const isSimGhep = (p: any) => {
+      const t = normalizeVi(`${p.loai_phu_kien || ''} ${p.ten_san_pham || ''}`)
+      return t.includes('sim ghep') || t.includes('simghep')
+    }
     return searchResults.filter((p: any) => {
       const src = String(p.nguon || p.source || "").toLowerCase()
       const isPartner = !!src.match(/kho ngoài|kho ngoài/i)
-      const isAccessory = (p.type === "accessory") || (!!p.loai_phu_kien && !p.imei && !p.serial)
-      if (filterSource === "inhouse" && (isPartner || isAccessory)) return false
-      if (filterSource === "partner" && (!isPartner || isAccessory)) return false
+      // Tab "Sim ghép": chỉ hiện phụ kiện sim ghép, bỏ qua các bộ lọc dành cho máy
+      if (filterType === 'sim_ghep') return isAccessoryItem(p) && isSimGhep(p)
+      // Các tab còn lại: phụ kiện không hiển thị (đã chuyển sang tích kèm máy trong giỏ)
+      if (isAccessoryItem(p)) return false
+      if (filterSource === "inhouse" && isPartner) return false
+      if (filterSource === "partner" && !isPartner) return false
       if (filterType==='iphone') {
-        if (isAccessory) return false
         if (isIpad(p)) return false
       }
       if (filterType==='ipad') {
         if (!isIpad(p)) return false
       }
-      if (filterType==='accessory' && !isAccessory) return false
+
+      // Bộ lọc tên sản phẩm (áp cho cả máy lẫn phụ kiện)
+      if (productNameFilter !== "all" && p.ten_san_pham !== productNameFilter) return false
+
+      // Khoảng giá (áp cho tất cả)
+      const gia = Number(p.gia_ban || 0)
+      if (minP > 0 && gia < minP) return false
+      if (maxP > 0 && maxP < BH_MAX_PRICE && gia > maxP) return false
+
+      // Loại máy (Lock / Quốc tế)
+      if (loaiMayFilter !== "all") {
+        const type = String(p.loai_may || p['Loại Máy'] || "").toLowerCase()
+        if (loaiMayFilter === "Lock") {
+          if (!type.includes("lock")) return false
+        } else {
+          if (!(type.includes("qte") || type.includes("qt") || type.includes("quoc te") || type.includes("quốc tế"))) return false
+        }
+      }
+      // Màu
+      if (colorFilter !== "all" && (p.mau_sac || p['Màu Sắc']) !== colorFilter) return false
+      // Dung lượng
+      if (capacityFilter !== "all" && (p.dung_luong || p['Dung Lượng']) !== capacityFilter) return false
+      // Pin
+      if (pinFilter !== "all") {
+        const pinVal = parseInt(String(p.pin ?? p['Pin (%)'] ?? "0").replace(/[^\d]/g, ''))
+        if (!pinVal) return false
+        if (pinFilter === "100" && pinVal !== 100) return false
+        if (pinFilter === "9x" && !(pinVal >= 90 && pinVal < 100)) return false
+        if (pinFilter === "8x" && !(pinVal >= 80 && pinVal < 90)) return false
+        if (pinFilter === "7x" && !(pinVal >= 70 && pinVal < 80)) return false
+        if (pinFilter === "lt70" && !(pinVal < 70)) return false
+      }
       return true
     })
-  }, [searchResults, filterSource, filterType])
+  }, [searchResults, filterSource, filterType, productNameFilter, loaiMayFilter, colorFilter, capacityFilter, pinFilter, priceRange])
+
+  // Tùy chọn động cho dropdown (lấy từ máy trong kết quả tìm kiếm, có cross-filter giống Kho hàng)
+  const advancedFilterOptions = useMemo(() => {
+    const phones = searchResults.filter((p: any) => {
+      if (isAccessoryItem(p)) return false
+      const src = String(p.nguon || p.source || "").toLowerCase()
+      const isPartner = !!src.match(/kho ngoài|kho ngoài/i)
+      if (filterSource === "inhouse" && isPartner) return false
+      if (filterSource === "partner" && !isPartner) return false
+      return true
+    })
+    const matchName = (p: any) => productNameFilter === "all" || p.ten_san_pham === productNameFilter
+    const matchColor = (p: any) => colorFilter === "all" || (p.mau_sac || p['Màu Sắc']) === colorFilter
+    const matchCap = (p: any) => capacityFilter === "all" || (p.dung_luong || p['Dung Lượng']) === capacityFilter
+    const sortVi = (a: string, b: string) => a.localeCompare(b, "vi", { sensitivity: "base" })
+
+    const productNames = Array.from(new Set(
+      phones.filter((p) => matchColor(p) && matchCap(p)).map((p: any) => p.ten_san_pham).filter(Boolean)
+    )) as string[]
+    const colors = Array.from(new Set(
+      phones.filter((p) => matchName(p) && matchCap(p)).map((p: any) => p.mau_sac || p['Màu Sắc']).filter(Boolean)
+    )) as string[]
+    const capacities = Array.from(new Set(
+      phones.filter((p) => matchName(p) && matchColor(p)).map((p: any) => p.dung_luong || p['Dung Lượng']).filter(Boolean)
+    )) as string[]
+
+    return {
+      productNames: productNames.sort(sortVi),
+      colors: colors.sort(sortVi),
+      capacities: capacities.sort(sortVi),
+    }
+  }, [searchResults, filterSource, productNameFilter, colorFilter, capacityFilter])
 
   // Sort results based on column and order
   const sortedSearchResults = useMemo(() => {
@@ -615,12 +748,12 @@ export default function BanHangPage() {
       toast({ title: 'Giảm giá không hợp lệ', variant: 'destructive' as any })
       return
     }
-    // Quy tắc: Nếu có trả góp, Trả trước phải bằng tổng thanh toán ngay (Tiền mặt + Chuyển khoản + Thẻ)
-    if (installmentEnabled && ((installmentDown||0) !== ((cashEnabled ? (cashAmount||0) : 0) + (transferEnabled ? (transferAmount||0) : 0) + (cardEnabled ? (cardAmount||0) : 0)))) {
-      const immediate = (cashEnabled ? (cashAmount||0) : 0) + (transferEnabled ? (transferAmount||0) : 0) + (cardEnabled ? (cardAmount||0) : 0)
+    // Quy tắc: Nếu có trả góp, Trả trước phải bằng tổng thanh toán ngay (Tiền mặt + Chuyển khoản + Thẻ + Thu máy)
+    if (installmentEnabled && ((installmentDown||0) !== ((cashEnabled ? (cashAmount||0) : 0) + (transferEnabled ? (transferAmount||0) : 0) + (cardEnabled ? (cardAmount||0) : 0) + (thuMayEnabled ? (thuMayAmount||0) : 0)))) {
+      const immediate = (cashEnabled ? (cashAmount||0) : 0) + (transferEnabled ? (transferAmount||0) : 0) + (cardEnabled ? (cardAmount||0) : 0) + (thuMayEnabled ? (thuMayAmount||0) : 0)
       toast({
         title: 'Trả trước chưa khớp',
-        description: `Trả trước ₫${(installmentDown||0).toLocaleString('vi-VN')} phải bằng tổng Tiền mặt + Chuyển khoản + Thẻ: ₫${immediate.toLocaleString('vi-VN')}`,
+        description: `Trả trước ₫${(installmentDown||0).toLocaleString('vi-VN')} phải bằng tổng Tiền mặt + Chuyển khoản + Thẻ + Thu máy: ₫${immediate.toLocaleString('vi-VN')}`,
         variant: 'destructive' as any
       })
       try { setMobileView('thanh-toan') } catch {}
@@ -718,7 +851,7 @@ export default function BanHangPage() {
             dia_chi_nhan: loaiDon === "Đơn onl" ? diaChiNhan : "",
             "Địa Chỉ Nhận": loaiDon === "Đơn onl" ? diaChiNhan : "",
             ngay_dat_coc: new Date().toLocaleDateString("vi-VN"),
-            ghi_chu: ghiChu,
+            ghi_chu: ghiChuFull,
           }
           const res = await fetch("/api/dat-coc", {
             method: "POST",
@@ -749,8 +882,9 @@ export default function BanHangPage() {
           setGiamGiaInput("")
           setGhiChu("")
           setMaGhtk("")
-          setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false)
-          setCashAmount(0); setTransferAmount(0); setCardAmount(0)
+          setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false); setThuMayEnabled(false)
+          setCashAmount(0); setTransferAmount(0); setCardAmount(0); setThuMayAmount(0)
+          setThuMayTenSanPham(""); setThuMayLoaiMay(""); setThuMayImei("")
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0)
           setCurrentDepositOrderId(dc.id_don_hang || dc.id || null)
           try { localStorage.removeItem('cart_draft_v1'); localStorage.removeItem('cart_warranty_sel_v1') } catch{}
@@ -820,7 +954,7 @@ export default function BanHangPage() {
           "Loại Đơn": loaiDon,
           "Hình Thức Vận Chuyển": buildShipMethod(),
           "Lãi": "",
-          "Ghi Chú": ghiChu,
+          "Ghi Chú": ghiChuFull,
           "Giảm Giá": giamGiaToUse,
           products: products.map(p => ({
             id: p.id,
@@ -982,8 +1116,9 @@ export default function BanHangPage() {
           setGhiChu("")
           setMaGhtk("");
           setDiaChiNhan("");
-          setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false);
-          setCashAmount(0); setTransferAmount(0); setCardAmount(0);
+          setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false); setThuMayEnabled(false);
+          setCashAmount(0); setTransferAmount(0); setCardAmount(0); setThuMayAmount(0);
+          setThuMayTenSanPham(""); setThuMayLoaiMay(""); setThuMayImei("");
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0);
           setGiamGiaInput("");
           try {
@@ -1150,6 +1285,27 @@ export default function BanHangPage() {
                   editPriceRef={editPriceRef}
                   setCart={setCart}
                   toast={toast}
+                  advancedFilter={
+                    <AdvancedFilterBar
+                      productNames={advancedFilterOptions.productNames}
+                      colors={advancedFilterOptions.colors}
+                      capacities={advancedFilterOptions.capacities}
+                      maxPrice={BH_MAX_PRICE}
+                      productNameFilter={productNameFilter}
+                      setProductNameFilter={setProductNameFilter}
+                      loaiMayFilter={loaiMayFilter}
+                      setLoaiMayFilter={setLoaiMayFilter}
+                      colorFilter={colorFilter}
+                      setColorFilter={setColorFilter}
+                      capacityFilter={capacityFilter}
+                      setCapacityFilter={setCapacityFilter}
+                      pinFilter={pinFilter}
+                      setPinFilter={setPinFilter}
+                      priceRange={priceRange}
+                      setPriceRange={setPriceRange}
+                      resetFilters={resetAdvancedFilters}
+                    />
+                  }
                 />
 
                 {(!isMobile || mobileView === 'gio-hang') && (
@@ -1177,6 +1333,7 @@ export default function BanHangPage() {
                           selectedWarranties={selectedWarranties}
                           setSelectedWarranties={setSelectedWarranties}
                           setEditingPriceId={setEditingPriceId}
+                          accessoryProducts={accessoryProducts}
                         />
                       )}
                     </CardContent>
@@ -1204,6 +1361,11 @@ export default function BanHangPage() {
                     transferAmount={transferAmount} setTransferAmount={setTransferAmount}
                     cardEnabled={cardEnabled} setCardEnabled={setCardEnabled}
                     cardAmount={cardAmount} setCardAmount={setCardAmount}
+                    thuMayEnabled={thuMayEnabled} setThuMayEnabled={setThuMayEnabled}
+                    thuMayAmount={thuMayAmount} setThuMayAmount={setThuMayAmount}
+                    thuMayTenSanPham={thuMayTenSanPham} setThuMayTenSanPham={setThuMayTenSanPham}
+                    thuMayLoaiMay={thuMayLoaiMay} setThuMayLoaiMay={setThuMayLoaiMay}
+                    thuMayImei={thuMayImei} setThuMayImei={setThuMayImei}
                     installmentEnabled={installmentEnabled} setInstallmentEnabled={setInstallmentEnabled}
                     installmentType={installmentType} setInstallmentType={setInstallmentType}
                     installmentDown={installmentDown} setInstallmentDown={setInstallmentDown}

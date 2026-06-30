@@ -296,11 +296,33 @@ export async function GET(request: NextRequest) {
     // Reverse to get newest first (new rows are appended naturally)
     orderSummaries.reverse()
 
-    const total = orderSummaries.length
+    // Lọc theo từ khoá trên TOÀN BỘ đơn (SĐT, tên KH, mã đơn, IMEI) TRƯỚC khi phân trang.
+    // Nếu lọc sau phân trang thì kết quả ở các trang sau sẽ không tìm thấy.
+    const searchRaw = (searchParams.get("search") || "").trim()
+    let filteredSummaries = orderSummaries
+    if (searchRaw) {
+      const q = norm(searchRaw)
+      const qDigits = searchRaw.replace(/\D/g, "")
+      filteredSummaries = orderSummaries.filter((o: any) => {
+        const nameN = norm(String(o.ten_khach_hang || ""))
+        const maDonN = norm(String(o.ma_don_hang || ""))
+        const phoneDigits = String(o.so_dien_thoai || "").replace(/\D/g, "")
+        const imeiList = Array.isArray(o.imeis) ? o.imeis.map((x: any) => String(x)) : []
+        const byName = q.length > 0 && nameN.includes(q)
+        const byMaDon = q.length > 0 && maDonN.includes(q)
+        const byPhone = qDigits.length > 0 && phoneDigits.includes(qDigits)
+        const byImei = imeiList.some(
+          (im: string) => im.includes(searchRaw) || (qDigits.length > 0 && im.replace(/\D/g, "").includes(qDigits)),
+        )
+        return byName || byMaDon || byPhone || byImei
+      })
+    }
+
+    const total = filteredSummaries.length
     const totalPages = Math.max(1, Math.ceil(total / limit))
     const start = (page - 1) * limit
     const end = start + limit
-    const paginatedOrders = orderSummaries.slice(start, end)
+    const paginatedOrders = filteredSummaries.slice(start, end)
 
     return NextResponse.json({
       data: paginatedOrders,

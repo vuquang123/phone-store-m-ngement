@@ -23,6 +23,7 @@ export interface CheckinInput {
   khoTrong: KhoCounts
   trangThai: TrangThai
   lyDo?: string
+  tienMat?: number // tiền mặt đầu ca (VNĐ)
   nhanVien?: string
 }
 
@@ -35,7 +36,7 @@ function esc(s: any): string {
 }
 
 export function buildCheckinMessage(input: CheckinInput): string {
-  const { ca, khoNgoai, khoTrong, trangThai, lyDo, nhanVien } = input
+  const { ca, khoNgoai, khoTrong, trangThai, lyDo, tienMat, nhanVien } = input
 
   const tongThucTe = (khoNgoai.thucTe || 0) + (khoTrong.thucTe || 0)
   const tongWebsite = (khoNgoai.website || 0) + (khoTrong.website || 0)
@@ -60,6 +61,7 @@ export function buildCheckinMessage(input: CheckinInput): string {
     `Ipad: [${khoTrong.ipad}]`,
     `Khác (14/13/12/Lẻ): [${khoTrong.khac}]`,
     `TRẠNG THÁI : ${statusLine}`,
+    `Tiền mặt đầu ca: [${tienMat ? `${Math.round(tienMat / 1000)}k` : "0"}]`,
   ]
 
   if (nhanVien) {
@@ -73,13 +75,14 @@ export function buildCheckinMessage(input: CheckinInput): string {
 // ===================== LƯU LỊCH SỬ CHECK-IN VÀO SHEET "Check_in" =====================
 
 const SHEET = "Check_in"
-// 23 cột (A:W). KN = Kho Ngoài, KT = Kho Trong.
+// 24 cột (A:X). KN = Kho Ngoài, KT = Kho Trong.
 const HEADER = [
   "ID", "Thời Gian", "Nhân Viên", "Ca", "Trạng Thái", "Lý Do",
   "KN Website", "KN Thực Tế", "KN 17", "KN 16", "KN 15", "KN Ipad", "KN Khác",
   "KT Website", "KT Thực Tế", "KT 17", "KT 16", "KT 15", "KT Ipad", "KT Khác",
-  "Tổng Web", "Tổng Thực Tế", "Số Ảnh",
+  "Tổng Web", "Tổng Thực Tế", "Số Ảnh", "Tiền Mặt",
 ]
+const HEADER_RANGE = `'${SHEET}'!A1:X1`
 
 function genId(): string {
   try {
@@ -98,15 +101,15 @@ async function ensureHeader() {
   try {
     const { header } = await readFromGoogleSheets(SHEET)
     if (!header || header.length === 0) {
-      await updateRangeValues(`'${SHEET}'!A1:W1`, [HEADER])
+      await updateRangeValues(HEADER_RANGE, [HEADER])
       return
     }
     const lower = header.map((h) => (h || "").trim().toLowerCase())
     if (HEADER.some((h) => !lower.includes(h.trim().toLowerCase()))) {
-      await updateRangeValues(`'${SHEET}'!A1:W1`, [HEADER])
+      await updateRangeValues(HEADER_RANGE, [HEADER])
     }
   } catch {
-    try { await updateRangeValues(`'${SHEET}'!A1:W1`, [HEADER]) } catch {}
+    try { await updateRangeValues(HEADER_RANGE, [HEADER]) } catch {}
   }
 }
 
@@ -125,6 +128,7 @@ export async function saveCheckin(input: CheckinInput, soAnh = 0): Promise<{ id:
     (kn.website || 0) + (kt.website || 0),
     (kn.thucTe || 0) + (kt.thucTe || 0),
     soAnh,
+    Number(input.tienMat) || 0,
   ]
   await appendToGoogleSheets(SHEET, row)
   return { id }
@@ -140,6 +144,7 @@ export interface CheckinRecord {
   tong_web: number
   tong_thuc_te: number
   so_anh: number
+  tien_mat: number
   khoNgoai: KhoCounts
   khoTrong: KhoCounts
 }
@@ -164,6 +169,7 @@ export async function getCheckins(force = false): Promise<CheckinRecord[]> {
       tong_web: toNum(g(r, "Tổng Web")),
       tong_thuc_te: toNum(g(r, "Tổng Thực Tế")),
       so_anh: toNum(g(r, "Số Ảnh")),
+      tien_mat: toNum(g(r, "Tiền Mặt")),
       khoNgoai: {
         website: toNum(g(r, "KN Website")), thucTe: toNum(g(r, "KN Thực Tế")),
         s17: toNum(g(r, "KN 17")), s16: toNum(g(r, "KN 16")), s15: toNum(g(r, "KN 15")),

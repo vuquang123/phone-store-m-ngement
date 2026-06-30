@@ -23,8 +23,8 @@ interface SearchAreaProps {
   addToCart: (p: any) => void
   filterSource: "all" | "inhouse" | "partner"
   setFilterSource: React.Dispatch<React.SetStateAction<"all" | "inhouse" | "partner">>
-  filterType: "all" | "iphone" | "ipad" | "accessory"
-  setFilterType: React.Dispatch<React.SetStateAction<"all" | "iphone" | "ipad" | "accessory">>
+  filterType: "all" | "iphone" | "ipad" | "sim_ghep"
+  setFilterType: React.Dispatch<React.SetStateAction<"all" | "iphone" | "ipad" | "sim_ghep">>
   toggleSort: (k: any) => void
   sortKey: string
   sortOrder: "asc" | "desc"
@@ -39,6 +39,7 @@ interface SearchAreaProps {
   editPriceRef: React.RefObject<HTMLInputElement>
   setCart: React.Dispatch<React.SetStateAction<CartItem[]>>
   toast: any
+  advancedFilter?: React.ReactNode
 }
 
 export function SearchArea({
@@ -69,7 +70,8 @@ export function SearchArea({
   setEditingPriceId,
   editPriceRef,
   setCart,
-  toast
+  toast,
+  advancedFilter
 }: SearchAreaProps) {
   if (isMobile && mobileView !== 'san-pham') return null
 
@@ -83,7 +85,7 @@ export function SearchArea({
         <div className="relative mb-4">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Tìm theo Tên, Loại phụ kiện, IMEI/Serial..."
+            placeholder="Tìm theo Tên, IMEI/Serial..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-8"
@@ -133,11 +135,13 @@ export function SearchArea({
             <Button size="sm" variant={filterType === 'ipad' ? 'default' : 'outline'}
               className={filterType === 'ipad' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
               onClick={() => setFilterType('ipad')}>iPad</Button>
-            <Button size="sm" variant={filterType === 'accessory' ? 'default' : 'outline'}
-              className={filterType === 'accessory' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
-              onClick={() => setFilterType('accessory')}>Phụ kiện</Button>
+            <Button size="sm" variant={filterType === 'sim_ghep' ? 'default' : 'outline'}
+              className={filterType === 'sim_ghep' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
+              onClick={() => setFilterType('sim_ghep')}>Sim ghép</Button>
           </div>
         </div>
+
+        {advancedFilter && <div className="mb-3">{advancedFilter}</div>}
 
         <div className="min-h-0">
           {(isSearching || searchResults.length > 0) && (
@@ -266,11 +270,10 @@ export function SearchArea({
 
               {/* Desktop: Table list — scroll nội bộ (max-h) để header không dính lên đỉnh trang */}
               <div
-                className="hidden md:block max-h-[60vh] overflow-auto rounded-lg border"
+                className="hidden md:block rounded-lg border"
                 ref={tableContainerRef}
-                style={{ scrollbarGutter: "stable" }}
               >
-                <Table className="min-w-[640px]">
+                <Table className="min-w-[640px]" containerClassName="max-h-[calc(100vh-360px)] min-h-[200px] [scrollbar-gutter:stable]">
                   <TableHeader>
                     <TableRow className="sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))] hover:bg-card">
                       <TableHead className="cursor-pointer" onClick={() => toggleSort('san_pham')}>

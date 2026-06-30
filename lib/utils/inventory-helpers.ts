@@ -28,7 +28,7 @@ export function classifyCondition(p: any) {
 export function getTrangThaiColor(status: string) {
   switch (status) {
     case "Còn hàng": return "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
-    case "Đang CNC": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400"
+    case "Đang CNC": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-red-400"
     case "Bảo hành": return "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
     case "Giao đối tác": return "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400"
     case "Đã đặt cọc": return "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"

@@ -17,6 +17,11 @@ interface PaymentColumnProps {
   transferAmount: number; setTransferAmount: (v: number) => void
   cardEnabled: boolean; setCardEnabled: (v: boolean) => void
   cardAmount: number; setCardAmount: (v: number) => void
+  thuMayEnabled: boolean; setThuMayEnabled: (v: boolean) => void
+  thuMayAmount: number; setThuMayAmount: (v: number) => void
+  thuMayTenSanPham: string; setThuMayTenSanPham: (v: string) => void
+  thuMayLoaiMay: string; setThuMayLoaiMay: (v: string) => void
+  thuMayImei: string; setThuMayImei: (v: string) => void
   installmentEnabled: boolean; setInstallmentEnabled: (v: boolean) => void
   installmentType: string; setInstallmentType: (v: any) => void
   installmentDown: number; setInstallmentDown: (v: number) => void
@@ -61,6 +66,8 @@ export function PaymentColumn(props: PaymentColumnProps) {
     cashEnabled, setCashEnabled, cashAmount, setCashAmount,
     transferEnabled, setTransferEnabled, transferAmount, setTransferAmount,
     cardEnabled, setCardEnabled, cardAmount, setCardAmount,
+    thuMayEnabled, setThuMayEnabled, thuMayAmount, setThuMayAmount,
+    thuMayTenSanPham, setThuMayTenSanPham, thuMayLoaiMay, setThuMayLoaiMay, thuMayImei, setThuMayImei,
     installmentEnabled, setInstallmentEnabled, installmentType, setInstallmentType,
     installmentDown, setInstallmentDown, installmentLoan, setInstallmentLoan,
     sumPayments, expectedCollect,
@@ -102,6 +109,30 @@ export function PaymentColumn(props: PaymentColumnProps) {
                 </label>
                 {cardEnabled && <Input className="flex-1" placeholder="₫0" value={cardAmount ? cardAmount.toLocaleString('vi-VN') : ''} onChange={(e) => setCardAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />}
               </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" className="rounded-full w-4 h-4 accent-blue-600" checked={thuMayEnabled} onChange={(e) => { setThuMayEnabled(e.target.checked); if (!e.target.checked) { setThuMayAmount(0); setThuMayTenSanPham(''); setThuMayLoaiMay(''); setThuMayImei(''); } }} />
+                  <span className="text-sm">Thu máy</span>
+                </label>
+                {thuMayEnabled && <Input className="flex-1" placeholder="₫0 (giá thu máy cũ)" value={thuMayAmount ? thuMayAmount.toLocaleString('vi-VN') : ''} onChange={(e) => setThuMayAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />}
+              </div>
+              {thuMayEnabled && (
+                <div className="pl-7 space-y-2">
+                  <Input placeholder="Tên sản phẩm (máy cũ)" value={thuMayTenSanPham} onChange={(e) => setThuMayTenSanPham(e.target.value)} />
+                  <Input placeholder="Loại máy (vd: Lock, Quốc tế...)" value={thuMayLoaiMay} onChange={(e) => setThuMayLoaiMay(e.target.value)} />
+                  <div className="space-y-1">
+                    <Input
+                      placeholder="IMEI (15 số)"
+                      inputMode="numeric"
+                      value={thuMayImei}
+                      onChange={(e) => setThuMayImei(e.target.value.replace(/[^\d]/g, '').slice(0, 15))}
+                    />
+                    {thuMayImei.length > 0 && thuMayImei.length !== 15 && (
+                      <p className="text-[11px] text-amber-600">IMEI cần đủ 15 số (hiện {thuMayImei.length}).</p>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-2 cursor-pointer">

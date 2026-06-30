@@ -178,11 +178,11 @@ export function ProductTable({
         )}
       </div>
 
-      {/* Desktop (>= md): bảng như cũ */}
-      <div className="hidden overflow-x-auto rounded-md border border-border bg-card shadow-sm md:block">
-      <Table className="min-w-[560px]">
-        <TableHeader className="bg-muted/80">
-          <TableRow>
+      {/* Desktop (>= md): bảng — header dính (sticky), chỉ data cuộn */}
+      <div className="hidden rounded-md border border-border bg-card shadow-sm md:block">
+      <Table className="min-w-[560px]" containerClassName="max-h-[calc(100vh-360px)] min-h-[200px]">
+        <TableHeader className="sticky top-0 z-20 bg-muted [&_tr]:border-b-0 shadow-[inset_0_-1px_0_hsl(var(--border))]">
+          <TableRow className="hover:bg-muted">
             {isEditMode && (
               <TableHead className="w-12 text-center">
                 <Checkbox 

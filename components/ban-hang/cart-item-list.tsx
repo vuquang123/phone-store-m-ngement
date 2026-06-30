@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { CartItem, WarrantyPackageUI } from "@/lib/types/ban-hang"
 import { CartItemRow } from "./cart-item"
 import { Smartphone, Package, ShieldCheck } from "lucide-react"
+import { groupAccessoriesByCategory } from "@/lib/ban-hang/quick-accessories"
 
 interface CartItemListProps {
   cart: CartItem[]
@@ -15,6 +16,7 @@ interface CartItemListProps {
   updateQuantity: (id: string, type: string, newQty: number) => void
   removeFromCart: (id: string, type: string) => void
   setEditingPriceId: React.Dispatch<React.SetStateAction<string | null>>
+  accessoryProducts?: any[]
 }
 
 export function CartItemList({
@@ -26,9 +28,15 @@ export function CartItemList({
   isWarrantyEligible,
   updateQuantity,
   removeFromCart,
-  setEditingPriceId
+  setEditingPriceId,
+  accessoryProducts = []
 }: CartItemListProps) {
   const [openWarrantyInfo, setOpenWarrantyInfo] = useState<string | null>(null)
+
+  const accessoriesByCategory = useMemo(
+    () => groupAccessoriesByCategory(accessoryProducts),
+    [accessoryProducts]
+  )
 
   const devices = cart.filter(item => item.type === 'product')
   const accessories = cart.filter(item => item.type === 'accessory')
@@ -108,6 +116,7 @@ export function CartItemList({
                 setOpenWarrantyInfo={setOpenWarrantyInfo}
                 updateQuantity={updateQuantity}
                 removeFromCart={removeFromCart}
+                accessoriesByCategory={accessoriesByCategory}
               />
             ))}
           </div>

@@ -4,10 +4,20 @@ import { useState } from "react"
 import { CartItem, WarrantyPackageUI } from "@/lib/types/ban-hang"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { CheckCircle, Plus, Minus, Trash2, Pencil, Check, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { getLoaiMayLabel } from "@/lib/utils/inventory-helpers"
+import {
+  QUICK_ACC_CATEGORIES,
+  type QuickAccCategory,
+  type QuickAccProduct,
+  addAccessoryUnit,
+  removeAccessoryUnit,
+  accessoryQtyInCart,
+  filterAccessoriesForPhone,
+} from "@/lib/ban-hang/quick-accessories"
 
 interface CartItemRowProps {
   item: CartItem
@@ -22,6 +32,7 @@ interface CartItemRowProps {
   setOpenWarrantyInfo: React.Dispatch<React.SetStateAction<string | null>>
   updateQuantity: (id: string, type: string, newQty: number) => void
   removeFromCart: (id: string, type: string) => void
+  accessoriesByCategory?: Record<QuickAccCategory, QuickAccProduct[]>
 }
 
 export function CartItemRow({
@@ -36,16 +47,87 @@ export function CartItemRow({
   openWarrantyInfo,
   setOpenWarrantyInfo,
   updateQuantity,
-  removeFromCart
+  removeFromCart,
+  accessoriesByCategory
 }: CartItemRowProps) {
   const [isEditingPrice, setIsEditingPrice] = useState(false)
   const [tempPrice, setTempPrice] = useState(String(item.gia_ban))
-  
+
   const isPartner = String(item.nguon || item.source || '').toLowerCase().includes('kho ngoài')
   const deviceId = (item.imei || item.serial || item.id) as string
 
+  // ===== Phụ kiện kèm theo máy (quick-add) =====
+  const quickAcc = (item.quick_acc || {}) as Record<string, string>
+  // Chỉ hiện phụ kiện hợp model của máy (vd 16 Pro Max -> cường lực/ốp lưng 16 Pro Max).
+  const accForPhone = (item.type === 'product' && accessoriesByCategory)
+    ? (Object.fromEntries(
+        QUICK_ACC_CATEGORIES.map((c) => [c.key, filterAccessoriesForPhone(accessoriesByCategory[c.key] || [], item.ten_san_pham)])
+      ) as Record<QuickAccCategory, QuickAccProduct[]>)
+    : null
+  const hasQuickAcc = !!accForPhone &&
+    QUICK_ACC_CATEGORIES.some((c) => (accForPhone[c.key] || []).length > 0)
+
+  // Chọn mặc định: rẻ nhất còn tồn (so với giỏ hiện tại)
+  const pickDefault = (cartNow: CartItem[], cat: QuickAccCategory): QuickAccProduct | null => {
+    const prods = (accForPhone?.[cat] || []).filter((p) => p.so_luong_ton - accessoryQtyInCart(cartNow, p.id) > 0)
+    if (!prods.length) return null
+    return [...prods].sort((a, b) => a.gia_ban - b.gia_ban)[0]
+  }
+
+  const toggleQuickAcc = (cat: QuickAccCategory, checked: boolean) => {
+    setCart((prev) => {
+      if (checked) {
+        const prod = pickDefault(prev, cat)
+        if (!prod) return prev
+        let next = addAccessoryUnit(prev, prod)
+        next = next.map((p) => (p.id === item.id && p.type === 'product')
+          ? { ...p, quick_acc: { ...(p.quick_acc || {}), [cat]: prod.id } } : p)
+        return next
+      }
+      const accId = quickAcc[cat]
+      let next = accId ? removeAccessoryUnit(prev, accId) : prev
+      next = next.map((p) => {
+        if (p.id === item.id && p.type === 'product') {
+          const qa = { ...(p.quick_acc || {}) }
+          delete qa[cat]
+          return { ...p, quick_acc: qa }
+        }
+        return p
+      })
+      return next
+    })
+  }
+
+  const changeQuickAcc = (cat: QuickAccCategory, newId: string) => {
+    setCart((prev) => {
+      const oldId = quickAcc[cat]
+      if (oldId === newId) return prev
+      let next = oldId ? removeAccessoryUnit(prev, oldId) : prev
+      const prod = (accForPhone?.[cat] || []).find((p) => p.id === newId)
+      if (prod) next = addAccessoryUnit(next, prod)
+      next = next.map((p) => (p.id === item.id && p.type === 'product')
+        ? { ...p, quick_acc: { ...(p.quick_acc || {}), [cat]: newId } } : p)
+      return next
+    })
+  }
+
+  // Xoá máy: dọn luôn các phụ kiện đã kèm theo máy này
+  const handleRemove = () => {
+    const accIds = Object.values(quickAcc)
+    if (item.type !== 'product' || accIds.length === 0) {
+      removeFromCart(item.id, item.type)
+      return
+    }
+    setCart((prev) => {
+      let next = prev
+      for (const accId of accIds) next = removeAccessoryUnit(next, accId)
+      return next.filter((p) => !(p.id === item.id && p.type === item.type))
+    })
+  }
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-[1.4fr_1fr_0.9fr_0.9fr_auto] gap-2 items-start sm:items-center border rounded-lg p-3 sm:p-2.5 bg-card shadow-sm">
+    <div className="border rounded-lg p-3 sm:p-2.5 bg-card shadow-sm">
+    <div className="grid grid-cols-1 sm:grid-cols-[1.4fr_1fr_0.9fr_0.9fr_auto] gap-2 items-start sm:items-center">
       <div className="min-w-0">
         <p className="font-medium truncate" title={item.ten_san_pham}>{item.ten_san_pham}</p>
         {item.type === 'product' && (item.dung_luong || item.mau_sac || item.loai_may) && (
@@ -306,10 +388,68 @@ export function CartItemRow({
         variant="ghost"
         size="icon"
         className="h-8 w-8 text-muted-foreground hover:text-red-500 sm:ml-auto"
-        onClick={() => removeFromCart(item.id, item.type)}
+        onClick={handleRemove}
       >
         <Trash2 className="h-4 w-4" />
       </Button>
+    </div>
+
+    {/* Phụ kiện kèm theo máy: checkbox + tồn kho + chọn sản phẩm */}
+    {hasQuickAcc && (
+      <div className="mt-2.5 border-t pt-2.5">
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Phụ kiện kèm máy</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {QUICK_ACC_CATEGORIES.map((cat) => {
+            const prods = accForPhone?.[cat.key] || []
+            if (prods.length === 0) return null
+            // Tồn còn lại cho đúng model này (đã trừ phần đang trong giỏ)
+            const remaining = prods.reduce((s, p) => s + Math.max(0, p.so_luong_ton - accessoryQtyInCart(cart, p.id)), 0)
+            const selectedId = quickAcc[cat.key]
+            const isChecked = !!selectedId
+            const inStock = prods.filter((p) => p.so_luong_ton - accessoryQtyInCart(cart, p.id) > 0)
+            const canCheck = isChecked || inStock.length > 0
+            // Tuỳ chọn dropdown: hàng còn tồn + sản phẩm đang chọn (kể cả nếu vừa hết)
+            const options = [...inStock]
+            if (selectedId && !options.some((p) => p.id === selectedId)) {
+              const sel = prods.find((p) => p.id === selectedId)
+              if (sel) options.unshift(sel)
+            }
+            return (
+              <div
+                key={cat.key}
+                className={`flex flex-col gap-1 rounded-md border px-2 py-1.5 ${isChecked ? 'border-blue-300 bg-blue-50/50 dark:border-blue-500/40 dark:bg-blue-500/10' : 'bg-muted/30'}`}
+              >
+                <label className={`flex items-center gap-1.5 text-[11px] font-medium ${canCheck ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                  <Checkbox
+                    checked={isChecked}
+                    disabled={!canCheck}
+                    onCheckedChange={(v) => toggleQuickAcc(cat.key, !!v)}
+                    className="h-3.5 w-3.5"
+                  />
+                  <span className="truncate">{cat.label}</span>
+                  <span className={`ml-auto shrink-0 text-[10px] tabular-nums ${remaining > 0 ? 'text-muted-foreground' : 'text-red-500'}`}>
+                    {remaining > 0 ? `Tồn ${remaining}` : 'Hết'}
+                  </span>
+                </label>
+                {isChecked && options.length > 0 && (
+                  <select
+                    value={selectedId}
+                    onChange={(e) => changeQuickAcc(cat.key, e.target.value)}
+                    className="w-full rounded border bg-card px-1 py-0.5 text-[10px]"
+                  >
+                    {options.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.ten_san_pham} • ₫{p.gia_ban.toLocaleString()}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )}
     </div>
   )
 }

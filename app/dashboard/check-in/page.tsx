@@ -27,6 +27,7 @@ interface CheckinRow {
   tong_web: number
   tong_thuc_te: number
   so_anh: number
+  tien_mat: number
 }
 
 type KhoKey = "website" | "thucTe" | "s17" | "s16" | "s15" | "ipad" | "khac"
@@ -75,8 +76,11 @@ export default function CheckInPage() {
   const [khoTrong, setKhoTrong] = useState<CountState>({ ...EMPTY })
   const [trangThai, setTrangThai] = useState<"khop" | "khong_khop">("khop")
   const [lyDo, setLyDo] = useState("")
+  const [tienMatRaw, setTienMatRaw] = useState("")
   const [images, setImages] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
+
+  const tienMatDisplay = tienMatRaw ? Number(tienMatRaw).toLocaleString("vi-VN") : ""
 
   const lineTotal = (k: CountState) => n(k.s17) + n(k.s16) + n(k.s15) + n(k.ipad) + n(k.khac)
 
@@ -102,6 +106,7 @@ export default function CheckInPage() {
     setKhoTrong({ ...EMPTY })
     setTrangThai("khop")
     setLyDo("")
+    setTienMatRaw("")
     setImages([])
   }
 
@@ -130,6 +135,7 @@ export default function CheckInPage() {
           khoTrong: toNums(khoTrong),
           trangThai,
           lyDo: trangThai === "khong_khop" ? lyDo : undefined,
+          tienMat: Number(tienMatRaw || 0) || 0,
           images,
         }),
       })
@@ -187,19 +193,30 @@ export default function CheckInPage() {
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Check-in đầu ca</h1>
         </div>
 
-        {/* Ca */}
-        <div className="max-w-[200px] space-y-2">
-          <Label>Ca làm việc</Label>
-          <Select value={ca} onValueChange={setCa}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">Ca 1</SelectItem>
-              <SelectItem value="2">Ca 2</SelectItem>
-              <SelectItem value="3">Ca 3</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Ca + Tiền mặt đầu ca */}
+        <div className="flex flex-wrap gap-4">
+          <div className="w-[160px] space-y-2">
+            <Label>Ca làm việc</Label>
+            <Select value={ca} onValueChange={setCa}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Ca 1</SelectItem>
+                <SelectItem value="2">Ca 2</SelectItem>
+                <SelectItem value="3">Ca 3</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-[200px] space-y-2">
+            <Label>Tiền mặt đầu ca</Label>
+            <Input
+              inputMode="numeric"
+              placeholder="0"
+              value={tienMatDisplay}
+              onChange={(e) => setTienMatRaw(e.target.value.replace(/[^\d]/g, ""))}
+            />
+          </div>
         </div>
 
         {/* 2 kho */}
@@ -321,6 +338,7 @@ export default function CheckInPage() {
                   { key: "ca", header: "Ca", className: "text-center text-sm", cell: (h) => h.ca },
                   { key: "tt", header: "Trạng thái", cell: (h) => statusBadge(h.trang_thai) },
                   { key: "ttweb", header: "Thực tế / Web", className: "text-center text-sm tabular-nums", cell: (h) => `${h.tong_thuc_te}/${h.tong_web}` },
+                  { key: "tienmat", header: "Tiền mặt", className: "text-right text-sm tabular-nums", cell: (h) => `${Number(h.tien_mat || 0).toLocaleString("vi-VN")}₫` },
                   { key: "anh", header: "Ảnh", className: "text-center text-sm", cell: (h) => h.so_anh || 0 },
                   { key: "lydo", header: "Lý do", className: "max-w-[220px] text-sm", cell: (h) => <span className="line-clamp-1" title={h.ly_do}>{h.ly_do || "—"}</span> },
                 ]}
@@ -335,7 +353,10 @@ export default function CheckInPage() {
                       <span className="tabular-nums text-muted-foreground">TT/Web: <span className="font-medium text-foreground">{h.tong_thuc_te}/{h.tong_web}</span></span>
                     </div>
                     {h.ly_do ? <div className="text-sm text-muted-foreground">Lý do: <span className="text-foreground">{h.ly_do}</span></div> : null}
-                    <div className="text-xs text-muted-foreground">Ảnh: {h.so_anh || 0}</div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Tiền mặt: <span className="text-foreground tabular-nums">{Number(h.tien_mat || 0).toLocaleString("vi-VN")}₫</span></span>
+                      <span>Ảnh: {h.so_anh || 0}</span>
+                    </div>
                   </div>
                 )}
               />

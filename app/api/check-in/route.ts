@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = getServerUser(req)
     const body = await req.json().catch(() => ({}))
-    const { ca, khoNgoai, khoTrong, trangThai, lyDo, images } = body || {}
+    const { ca, khoNgoai, khoTrong, trangThai, lyDo, tienMat, images } = body || {}
 
     const caStr = String(ca)
     if (!["1", "2", "3"].includes(caStr)) {
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
       khoTrong: normCounts(khoTrong),
       trangThai: ttStr as TrangThai,
       lyDo: lyDo ? String(lyDo) : undefined,
+      tienMat: num(tienMat),
       nhanVien,
     }
     const text = buildCheckinMessage(checkinData)

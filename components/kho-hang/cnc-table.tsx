@@ -137,6 +137,7 @@ export function CNCTable({
               <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">{p.tinh_trang}</TableCell>
               <TableCell>
                 <Badge className={`${getTrangThaiColor(p.trang_thai)} border-none text-[11px]`}>
+                  
                   {p.trang_thai}
                 </Badge>
               </TableCell>

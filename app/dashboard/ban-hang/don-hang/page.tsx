@@ -179,7 +179,7 @@ export default function DonHangPage() {
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Tìm kiếm theo số điện thoại, tên khách hàng..."
+                    placeholder="Tìm theo SĐT, tên khách, mã đơn, IMEI..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="pl-8"
