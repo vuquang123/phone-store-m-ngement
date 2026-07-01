@@ -230,15 +230,18 @@ async function upsertCustomerByPhone({ phone, name, amountToAdd }: { phone: stri
 export async function GET(request: NextRequest) {
   try {
     const searchParams = new URL(request.url).searchParams
+    const ghtkOnly = searchParams.get("ghtk") === "1"
     const pageRaw = Number(searchParams.get("page") || 1)
     const limitRaw = Number(searchParams.get("limit") || 10)
+    const maxLimit = ghtkOnly ? 1000 : 100
     const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1
-    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 100) : 10
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), maxLimit) : 10
 
     const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
     const idx = idxBanHang(header)
     const idxLoaiDon = header.indexOf("Loại Đơn")
     const idxTrangThai = colIndex(header, "Trạng Thái", "trang_thai")
+    const idxHinhThuc = colIndex(header, "Hình Thức Vận Chuyển", "Hình thức vận chuyển", "Hinh Thuc Van Chuyen", "hinh_thuc_van_chuyen")
     
     // Group rows by order ID
     const groupedOrdersMap = new Map<string, any[]>()
@@ -274,6 +277,7 @@ export async function GET(request: NextRequest) {
         nhan_vien: row[idx.nguoiBan] ? { id: row[idx.nguoiBan] } : undefined,
         loai_don: idxLoaiDon !== -1 ? row[idxLoaiDon] : "",
         trang_thai: idxTrangThai !== -1 ? row[idxTrangThai] : "hoan_thanh",
+        hinh_thuc_van_chuyen: idxHinhThuc !== -1 ? String(row[idxHinhThuc] || "") : "",
       })
     })
 
@@ -283,8 +287,11 @@ export async function GET(request: NextRequest) {
       // Sum up the total price for all items in the order
       const totalThanhToan = items.reduce((sum, item) => sum + (Number(item.gia_ban) || 0), 0)
       
+      // Hình thức vận chuyển: lấy giá trị đầu tiên khác rỗng trong các dòng của đơn
+      const hinhThuc = String(items.find((it) => it.hinh_thuc_van_chuyen)?.hinh_thuc_van_chuyen || first.hinh_thuc_van_chuyen || "")
       return {
         ...first,
+        hinh_thuc_van_chuyen: hinhThuc,
         thanh_toan: totalThanhToan,
         tong_tien: totalThanhToan,
         items_count: items.length,
@@ -316,6 +323,17 @@ export async function GET(request: NextRequest) {
         )
         return byName || byMaDon || byPhone || byImei
       })
+    }
+
+    // Chỉ lấy đơn online GHTK: Hình Thức Vận Chuyển dạng "GHTK - <mã>" và trích mã GHTK.
+    if (ghtkOnly) {
+      const GHTK_RE = /^\s*GHTK\s*-\s*(\S.*)$/i
+      filteredSummaries = filteredSummaries
+        .map((o: any) => {
+          const m = String(o.hinh_thuc_van_chuyen || "").match(GHTK_RE)
+          return m ? { ...o, ma_ghtk: m[1].trim() } : null
+        })
+        .filter(Boolean) as any[]
     }
 
     const total = filteredSummaries.length

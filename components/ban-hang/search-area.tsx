@@ -40,6 +40,7 @@ interface SearchAreaProps {
   setCart: React.Dispatch<React.SetStateAction<CartItem[]>>
   toast: any
   advancedFilter?: React.ReactNode
+  cartProductKeys?: Set<string>
 }
 
 export function SearchArea({
@@ -71,9 +72,18 @@ export function SearchArea({
   editPriceRef,
   setCart,
   toast,
-  advancedFilter
+  advancedFilter,
+  cartProductKeys
 }: SearchAreaProps) {
   if (isMobile && mobileView !== 'san-pham') return null
+
+  // Máy đã có trong giỏ -> tô màu để phân biệt
+  const isInCart = (p: any) =>
+    !!cartProductKeys && (
+      (p.id != null && cartProductKeys.has(String(p.id))) ||
+      (!!p.imei && cartProductKeys.has(String(p.imei))) ||
+      (!!p.serial && cartProductKeys.has(String(p.serial)))
+    )
 
   return (
     <Card className="min-h-[220px] flex flex-col overflow-hidden">
@@ -170,11 +180,12 @@ export function SearchArea({
                     setTimeout(() => setJustAddedKey(null), 500)
                     try { (navigator as any).vibrate && navigator.vibrate(10) } catch { }
                   }
+                  const inCart = isInCart(product)
                   return (
                     <div
                       key={`${product.id || product.imei || product.serial || product.ten_san_pham}`}
                       aria-disabled={isDisabled}
-                      className={`relative flex flex-col rounded-2xl border bg-card p-4 shadow-sm transition select-none sm:p-5 ${isDisabled ? 'opacity-60' : ''} ${justAddedKey === (product.id || product.imei || product.serial) ? 'ring-2 ring-green-500' : ''}`}
+                      className={`relative flex flex-col rounded-2xl border p-4 shadow-sm transition select-none sm:p-5 ${inCart ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10' : 'bg-card'} ${isDisabled ? 'opacity-60' : ''} ${justAddedKey === (product.id || product.imei || product.serial) ? 'ring-2 ring-green-500' : ''}`}
                     >
                       {/* Tiêu đề */}
                       <h3 className="text-base font-bold leading-snug text-foreground sm:text-lg">{tieuDe}</h3>
@@ -314,11 +325,20 @@ export function SearchArea({
                         const tinhTrang = product.tinh_trang || product['Tình Trạng Máy'] || ''
                         const trangThai = product.trang_thai || 'Còn hàng'
                         const idVal = product.imei || product.serial
+                        const rowKey = product.id || product.imei || product.serial
+                        const inCart = isInCart(product)
+                        const rowBg = justAddedKey === rowKey
+                          ? 'animate-pulse bg-green-50 dark:bg-green-500/15'
+                          : idx === selectedIndex
+                            ? 'bg-blue-50 dark:bg-blue-500/15'
+                            : inCart
+                              ? 'bg-emerald-50 dark:bg-emerald-500/10'
+                              : 'odd:bg-muted/30'
                         return (
                           <TableRow
                             key={`${product.id || product.imei || product.serial || product.ten_san_pham}`}
                             data-index={idx}
-                            className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-accent'} ${idx === selectedIndex ? 'bg-blue-50 dark:bg-blue-500/15' : ''} ${justAddedKey === (product.id || product.imei || product.serial) ? 'animate-pulse bg-green-50 dark:bg-green-500/15' : ''} odd:bg-muted/30`}
+                            className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-accent'} ${inCart ? 'border-l-2 border-emerald-500' : ''} ${rowBg}`}
                             onClick={() => { if (!isDisabled) { addToCart(product); setJustAddedKey(product.id || product.imei || product.serial || null); setTimeout(() => setJustAddedKey(null), 500) } }}
                           >
                             {/* Sản phẩm: tên + màu • dung lượng + nguồn + dạng sim (gộp như Kho hàng) */}

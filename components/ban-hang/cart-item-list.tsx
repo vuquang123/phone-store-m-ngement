@@ -51,14 +51,14 @@ export function CartItemList({
     <div className="flex-1 overflow-y-auto space-y-6 pr-1">
       {/* Apply all warranty logic */}
       {eligibleItems.length > 1 && warrantyPackages.length > 0 && (
-        <div className="flex items-center gap-3 border rounded-xl p-3 bg-blue-50/50 border-blue-100 shadow-sm">
-          <div className="bg-blue-600 p-1.5 rounded-lg">
+        <div className="flex items-center gap-3 border rounded-xl p-3 shadow-sm bg-blue-50/60 border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/30">
+          <div className="bg-blue-600 p-1.5 rounded-lg shrink-0">
             <ShieldCheck className="h-4 w-4 text-white" />
           </div>
           <div className="flex-1 flex flex-wrap items-center gap-3">
-            <span className="text-xs font-medium text-blue-900">Áp gói bảo hành nhanh:</span>
+            <span className="text-xs font-medium text-blue-900 dark:text-blue-200">Áp gói bảo hành nhanh:</span>
             <select
-              className="text-xs border rounded-lg px-2 py-1.5 bg-card shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              className="text-xs border rounded-lg px-2 py-1.5 bg-background text-foreground border-input shadow-sm focus:ring-2 focus:ring-ring outline-none"
               defaultValue=""
               onChange={e => {
                 const code = e.target.value || null
@@ -79,7 +79,7 @@ export function CartItemList({
             </select>
             <button
               type="button"
-              className="text-[11px] text-red-600 hover:text-red-700 font-medium underline-offset-2 hover:underline"
+              className="text-[11px] text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium underline-offset-2 hover:underline"
               onClick={() => setSelectedWarranties(prev => {
                 const next = { ...prev }
                 eligibleItems.forEach(it => {

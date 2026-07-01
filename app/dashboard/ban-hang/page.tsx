@@ -190,6 +190,8 @@ export default function BanHangPage() {
   const [diaChiNhan, setDiaChiNhan] = useState("")
   const [ghiChu, setGhiChu] = useState("")
   const [maGhtk, setMaGhtk] = useState("")
+  // Tiền thu hộ COD (chỉ dùng khi vận chuyển GHTK) — tính như một phương thức thanh toán
+  const [codAmount, setCodAmount] = useState(0)
 
   // Hình thức vận chuyển: GHTK kèm luôn mã đơn -> "GHTK - 1990038382" để lưu thẳng vào sheet.
   const buildShipMethod = () => {
@@ -213,8 +215,10 @@ export default function BanHangPage() {
   const [customerResults, setCustomerResults] = useState<any[]>([])
   // Máy kho ngoài cache để lọc nhanh trong tìm kiếm
   const [partnerProducts, setPartnerProducts] = useState<any[]>([])
-  // Cache phụ kiện để tránh gọi API lặp khi query ngắn
+  // Cache phụ kiện để tránh gọi API lặp khi query ngắn (chỉ hàng còn tồn > 0, dùng cho tìm kiếm/bán)
   const [accessoryProducts, setAccessoryProducts] = useState<any[]>([])
+  // Toàn bộ phụ kiện (kể cả tồn = 0) — dùng cho checkbox phụ kiện kèm máy ở giỏ (hiện nhưng khoá khi hết)
+  const [allAccessoryProducts, setAllAccessoryProducts] = useState<any[]>([])
   // Desktop search table UX enhancements
   const [sortKey, setSortKey] = useState<SortKey>('san_pham')
   const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc')
@@ -397,11 +401,11 @@ export default function BanHangPage() {
 
         // Phụ kiện
         let mappedAccessories: any[] = []
+        let mappedAllAccessories: any[] = []
         if (resPhuKien.ok) {
           const data = await resPhuKien.json()
-          let accessories = Array.isArray(data) ? data : data.data || []
-          accessories = accessories.filter((a: any) => Number(a.so_luong_ton) > 0)
-          mappedAccessories = accessories.map((a: any) => {
+          const accessories = Array.isArray(data) ? data : data.data || []
+          mappedAllAccessories = accessories.map((a: any) => {
             let price = 0
             if (typeof a.gia_ban === 'string') {
               const cleaned = a.gia_ban.replace(/[^\d]/g, '')
@@ -411,6 +415,8 @@ export default function BanHangPage() {
             }
             return { ...a, type: 'accessory', ten_san_pham: a.ten_san_pham || a.ten_phu_kien || '', gia_ban: price }
           })
+          // Danh sách bán/tìm kiếm chỉ gồm hàng còn tồn > 0
+          mappedAccessories = mappedAllAccessories.filter((a: any) => Number(a.so_luong_ton) > 0)
         }
 
         // Kho ngoài
@@ -446,6 +452,7 @@ export default function BanHangPage() {
         if (!alive) return
         setKhoHangProducts(mappedKho)
         setAccessoryProducts(mappedAccessories)
+        setAllAccessoryProducts(mappedAllAccessories)
         setPartnerProducts(mappedPartner)
 
         // Nếu đang không search, cập nhật ngay list hiển thị để người dùng thấy dữ liệu mới
@@ -456,6 +463,7 @@ export default function BanHangPage() {
         if (!alive) return
         setKhoHangProducts([])
         setAccessoryProducts([])
+        setAllAccessoryProducts([])
         setPartnerProducts([])
         if (searchQuery.trim().length < 2) setSearchResults([])
       }
@@ -489,8 +497,11 @@ export default function BanHangPage() {
     + (transferEnabled ? (transferAmount||0) : 0)
     + (cardEnabled ? (cardAmount||0) : 0)
     + (thuMayEnabled ? (thuMayAmount||0) : 0)
-  // Logic trả góp: Trả trước = immediateSum. Tổng đã nhập = Trả trước + Góp (không cộng lại Trả trước lần nữa)
-  const sumPayments = Math.max(0, immediateSum + (installmentEnabled ? (installmentLoan||0) : 0))
+  // COD chỉ áp dụng khi đơn onl + vận chuyển GHTK
+  const codActive = loaiDon === 'Đơn onl' && hinhThucVanChuyen === 'GHTK'
+  const codToUse = codActive ? (codAmount || 0) : 0
+  // Logic trả góp: Trả trước = immediateSum. Tổng đã nhập = Trả trước + Góp + COD (thu hộ GHTK)
+  const sumPayments = Math.max(0, immediateSum + (installmentEnabled ? (installmentLoan||0) : 0) + codToUse)
   // Nếu có trả góp, yêu cầu Trả trước == (Tiền mặt + Chuyển khoản + Thẻ)
   const mustMatchDownPayment = !installmentEnabled || ((installmentDown||0) === immediateSum)
   const paymentParts: string[] = []
@@ -498,6 +509,7 @@ export default function BanHangPage() {
   if (transferEnabled && transferAmount>0) paymentParts.push(`Chuyển khoản: ₫${transferAmount.toLocaleString('vi-VN')}`)
   if (cardEnabled && cardAmount>0) paymentParts.push(`Thẻ: ₫${cardAmount.toLocaleString('vi-VN')}`)
   if (thuMayEnabled && thuMayAmount>0) paymentParts.push(`Thu máy: ₫${thuMayAmount.toLocaleString('vi-VN')}`)
+  if (codActive && codToUse>0) paymentParts.push(`COD (GHTK): ₫${codToUse.toLocaleString('vi-VN')}`)
   if (installmentEnabled && (installmentDown>0 || installmentLoan>0)) {
     const label = installmentType || 'Trả góp'
     const parts: string[] = []
@@ -516,6 +528,7 @@ export default function BanHangPage() {
     transferEnabled && transferAmount>0 ? { method: 'Chuyển khoản', amount: transferAmount } : null,
     cardEnabled && cardAmount>0 ? { method: 'Thẻ', amount: cardAmount } : null,
     thuMayEnabled && thuMayAmount>0 ? { method: 'Thu máy', amount: thuMayAmount } : null,
+    codActive && codToUse>0 ? { method: 'COD', amount: codToUse } : null,
   ].filter(Boolean) as any[]
   if (installmentEnabled && (installmentDown>0 || installmentLoan>0)) {
     paymentsArray.push({ method: 'Trả góp', provider: installmentType || undefined, downPayment: installmentDown||0, loanAmount: installmentLoan||0, amount: (installmentDown||0)+(installmentLoan||0) })
@@ -536,6 +549,18 @@ export default function BanHangPage() {
     setPinFilter("all")
     setPriceRange([0, BH_MAX_PRICE])
   }
+
+  // Tập định danh các máy đã có trong giỏ (để tô màu ở bảng tìm kiếm)
+  const cartProductKeys = useMemo(() => {
+    const s = new Set<string>()
+    for (const it of cart) {
+      if (it.type !== 'product') continue
+      if (it.id) s.add(String(it.id))
+      if (it.imei) s.add(String(it.imei))
+      if (it.serial) s.add(String(it.serial))
+    }
+    return s
+  }, [cart])
 
   // Kết quả tìm kiếm sau khi áp bộ lọc Nguồn/Loại + bộ lọc nâng cao, dùng chung cho mobile cards + desktop table
   const filteredSearchResults = useMemo(() => {
@@ -748,6 +773,19 @@ export default function BanHangPage() {
       toast({ title: 'Giảm giá không hợp lệ', variant: 'destructive' as any })
       return
     }
+    // Đơn online GHTK: bắt buộc Mã đơn GHTK + Tiền thu hộ COD
+    if (loaiDon === 'Đơn onl' && hinhThucVanChuyen === 'GHTK') {
+      if (!maGhtk.trim()) {
+        toast({ title: 'Thiếu mã đơn GHTK', description: 'Vui lòng nhập Mã đơn hàng GHTK cho đơn online.', variant: 'destructive' as any })
+        try { setMobileView('thanh-toan') } catch {}
+        return
+      }
+      if (!(codAmount > 0)) {
+        toast({ title: 'Thiếu tiền thu hộ COD', description: 'Vui lòng nhập Tiền thu hộ COD cho đơn GHTK.', variant: 'destructive' as any })
+        try { setMobileView('thanh-toan') } catch {}
+        return
+      }
+    }
     // Quy tắc: Nếu có trả góp, Trả trước phải bằng tổng thanh toán ngay (Tiền mặt + Chuyển khoản + Thẻ + Thu máy)
     if (installmentEnabled && ((installmentDown||0) !== ((cashEnabled ? (cashAmount||0) : 0) + (transferEnabled ? (transferAmount||0) : 0) + (cardEnabled ? (cardAmount||0) : 0) + (thuMayEnabled ? (thuMayAmount||0) : 0)))) {
       const immediate = (cashEnabled ? (cashAmount||0) : 0) + (transferEnabled ? (transferAmount||0) : 0) + (cardEnabled ? (cardAmount||0) : 0) + (thuMayEnabled ? (thuMayAmount||0) : 0)
@@ -883,7 +921,7 @@ export default function BanHangPage() {
           setGhiChu("")
           setMaGhtk("")
           setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false); setThuMayEnabled(false)
-          setCashAmount(0); setTransferAmount(0); setCardAmount(0); setThuMayAmount(0)
+          setCashAmount(0); setTransferAmount(0); setCardAmount(0); setThuMayAmount(0); setCodAmount(0)
           setThuMayTenSanPham(""); setThuMayLoaiMay(""); setThuMayImei("")
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0)
           setCurrentDepositOrderId(dc.id_don_hang || dc.id || null)
@@ -1117,7 +1155,7 @@ export default function BanHangPage() {
           setMaGhtk("");
           setDiaChiNhan("");
           setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false); setThuMayEnabled(false);
-          setCashAmount(0); setTransferAmount(0); setCardAmount(0); setThuMayAmount(0);
+          setCashAmount(0); setTransferAmount(0); setCardAmount(0); setThuMayAmount(0); setCodAmount(0);
           setThuMayTenSanPham(""); setThuMayLoaiMay(""); setThuMayImei("");
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0);
           setGiamGiaInput("");
@@ -1285,6 +1323,7 @@ export default function BanHangPage() {
                   editPriceRef={editPriceRef}
                   setCart={setCart}
                   toast={toast}
+                  cartProductKeys={cartProductKeys}
                   advancedFilter={
                     <AdvancedFilterBar
                       productNames={advancedFilterOptions.productNames}
@@ -1333,7 +1372,7 @@ export default function BanHangPage() {
                           selectedWarranties={selectedWarranties}
                           setSelectedWarranties={setSelectedWarranties}
                           setEditingPriceId={setEditingPriceId}
-                          accessoryProducts={accessoryProducts}
+                          accessoryProducts={allAccessoryProducts}
                         />
                       )}
                     </CardContent>
@@ -1382,6 +1421,7 @@ export default function BanHangPage() {
                     loaiDon={loaiDon} setLoaiDon={setLoaiDon}
                     hinhThucVanChuyen={hinhThucVanChuyen} setHinhThucVanChuyen={setHinhThucVanChuyen}
                     maGhtk={maGhtk} setMaGhtk={setMaGhtk}
+                    codAmount={codAmount} setCodAmount={setCodAmount}
                     diaChiNhan={diaChiNhan} setDiaChiNhan={setDiaChiNhan}
                     loaiThanhToan={loaiThanhToan} setLoaiThanhToan={setLoaiThanhToan}
                     soTienCoc={soTienCoc} setSoTienCoc={setSoTienCoc}

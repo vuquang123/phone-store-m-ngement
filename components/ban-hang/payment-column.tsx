@@ -48,6 +48,7 @@ interface PaymentColumnProps {
   loaiDon: string; setLoaiDon: (v: string) => void
   hinhThucVanChuyen: string; setHinhThucVanChuyen: (v: string) => void
   maGhtk: string; setMaGhtk: (v: string) => void
+  codAmount: number; setCodAmount: (v: number) => void
   diaChiNhan: string; setDiaChiNhan: (v: string) => void
   // Payment type
   loaiThanhToan: string; setLoaiThanhToan: (v: string) => void
@@ -75,7 +76,7 @@ export function PaymentColumn(props: PaymentColumnProps) {
     computedDiscountMsg, discountParseMsg,
     ghiChu, setGhiChu,
     tongTien, warrantyTotal, giamGiaToUse, currentDepositOrderId, depositAmountAlreadyPaid, finalThanhToan,
-    loaiDon, setLoaiDon, hinhThucVanChuyen, setHinhThucVanChuyen, maGhtk, setMaGhtk, diaChiNhan, setDiaChiNhan,
+    loaiDon, setLoaiDon, hinhThucVanChuyen, setHinhThucVanChuyen, maGhtk, setMaGhtk, codAmount, setCodAmount, diaChiNhan, setDiaChiNhan,
     loaiThanhToan, setLoaiThanhToan, soTienCoc, setSoTienCoc, ngayHenTraDu, setNgayHenTraDu,
     receiptBlobs, setReceiptBlobs,
     isLoading, cartCount, handleCheckout,
@@ -261,6 +262,19 @@ export function PaymentColumn(props: PaymentColumnProps) {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Mã đơn hàng GHTK</label>
                 <Input placeholder="VD: S1.A1.xxxxxxx" value={maGhtk} onChange={(e) => setMaGhtk(e.target.value)} />
+              </div>
+            )}
+
+            {loaiDon === 'Đơn onl' && hinhThucVanChuyen === 'GHTK' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Tiền thu hộ COD</label>
+                <Input
+                  inputMode="numeric"
+                  placeholder="₫0 (số tiền shipper thu hộ)"
+                  value={codAmount ? codAmount.toLocaleString('vi-VN') : ''}
+                  onChange={(e) => setCodAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)}
+                />
+                <p className="text-xs text-muted-foreground">COD sẽ được cộng vào tổng phương thức thanh toán.</p>
               </div>
             )}
           </div>
