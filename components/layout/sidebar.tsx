@@ -55,17 +55,17 @@ const getNavigation = () => [
     items: [
       { title: "Bán hàng", href: "/dashboard/ban-hang", icon: ShoppingCart, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Đơn hàng", href: "/dashboard/ban-hang/don-hang", icon: Receipt, roles: ["quan_ly", "nhan_vien"] as Role[] },
-      { title: "Khách hàng", href: "/dashboard/khach-hang", icon: Users, roles: ["quan_ly", "nhan_vien"] as Role[] },
-      { title: "Hoàn trả", href: "/dashboard/hoan-tra", icon: RotateCcw, roles: ["quan_ly", "nhan_vien"] as Role[] },
-      { title: "Quỹ tiền mặt", href: "/dashboard/tien-mat", icon: Wallet, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Đơn online", href: "/dashboard/don-online", icon: Truck, roles: ["quan_ly", "nhan_vien"] as Role[] },
+      { title: "Khách hàng", href: "/dashboard/khach-hang", icon: Users, roles: ["quan_ly", "nhan_vien"] as Role[] },
+      { title: "Quỹ tiền mặt", href: "/dashboard/tien-mat", icon: Wallet, roles: ["quan_ly", "nhan_vien"] as Role[] },
+      { title: "Hoàn trả", href: "/dashboard/hoan-tra", icon: RotateCcw, roles: ["quan_ly", "nhan_vien"] as Role[] },
     ],
   },
   {
     title: "Quản lý",
     items: [
-      { title: "Nhân viên", href: "/dashboard/nhan-vien", icon: UserCheck, roles: ["quan_ly"] as Role[] },
       { title: "Ghi chú", href: "/dashboard/ghi-chu", icon: StickyNote, roles: ["quan_ly", "nhan_vien"] as Role[] },
+      { title: "Nhân viên", href: "/dashboard/nhan-vien", icon: UserCheck, roles: ["quan_ly"] as Role[] },
       { title: "Thông báo", href: "/dashboard/thong-bao", icon: Bell, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Cài đặt", href: "/dashboard/cai-dat", icon: Settings, roles: ["quan_ly"] as Role[] },
       { title: "Hướng dẫn", href: "/dashboard/huong-dan", icon: BookOpen, roles: ["quan_ly", "nhan_vien"] as Role[] },
