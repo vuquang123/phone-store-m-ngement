@@ -6,6 +6,7 @@ import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheet
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
+import { recordCashTransaction } from "@/lib/cash"
 
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
@@ -865,6 +866,29 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error("[WARN] Không cập nhật được Khach_Hang:", err)
       // Không throw để tránh làm fail đơn hàng
+    }
+
+    /* =================== Quỹ tiền mặt: cộng phần "Tiền mặt" vào quỹ =================== */
+    // Khi phương thức thanh toán có Tiền mặt -> ghi 1 khoản "thu" vào sổ quỹ, tham chiếu mã đơn.
+    try {
+      const payments = Array.isArray(body.payments) ? body.payments : []
+      const cashAmt = payments
+        .filter((p: any) => norm(String(p?.method || "")) === norm("Tiền mặt"))
+        .reduce((sum: number, p: any) => sum + (Number(p?.amount) || 0), 0)
+      if (cashAmt > 0) {
+        const nhanVien = body.employeeName || body.employeeId || body["Người Bán"] || ""
+        await recordCashTransaction({
+          loai: "thu",
+          so_tien: cashAmt,
+          nguon: "ban_hang",
+          ma_tham_chieu: idDonHang,
+          ly_do: `Bán hàng${idDonHang ? ` ${idDonHang}` : ""}`,
+          nhan_vien: String(nhanVien),
+        })
+      }
+    } catch (err) {
+      // Không throw để tránh làm fail đơn hàng
+      console.warn("[CASH] Không thể cộng tiền mặt vào quỹ:", err)
     }
 
     // Gửi thông báo về Telegram khi tạo đơn hàng mới
