@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm, updateProductsNguon } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm, updateProductsNguon, updateProductsDangXuLy } from "@/lib/google-sheets"
 
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
-import { sendStockEventNotification } from "@/lib/telegram"
+import { sendStockEventNotification, sendProcessingDeviceMessage, deleteTelegramMessage } from "@/lib/telegram"
 
 export const dynamic = "force-dynamic"
 
@@ -118,6 +118,9 @@ function getValForHeader(
   if (k === "Dạng Sim" || k === "Dạng sim" || k === "Kiểu dạng sim") {
     return body.do_sim || bodyNormMap["dangsim"] || bodyNormMap["kieudangsim"] || ""
   }
+  if (nk === "dangxuly") {
+    return body.dang_xu_ly || bodyNormMap["dangxuly"] || "No"
+  }
   return (
     body[k] ??
     body[k.replace(/\s/g, "_").toLowerCase()] ??
@@ -147,6 +150,7 @@ function idxKho(header: string[]) {
     trangThaiKho: colIndex(header, "Trạng Thái Kho", "Trạng thái kho", "Tình Trạng Tồn", "Kho Hiển Thị"),
     nguon: colIndex(header, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang"),
     doSim: colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim"),
+    dangXuLy: colIndex(header, "Đang xử lý", "Đang Xử Lý", "Dang xu ly"),
   }
 }
 
@@ -174,6 +178,7 @@ export async function GET(request: NextRequest) {
       nguon: (idx.nguon !== -1 && row[idx.nguon]) ? row[idx.nguon] : (idx.trangThaiKho !== -1 ? row[idx.trangThaiKho] : ""),
       ghi_chu: row[idx.ghiChu],
       do_sim: idx.doSim !== -1 ? row[idx.doSim] : "",
+      dang_xu_ly: idx.dangXuLy !== -1 ? String(row[idx.dangXuLy] || "").trim() : "",
       ngay_nhap: row[idx.ngayNhap],
     }))
     return NextResponse.json({ data: products })
@@ -251,6 +256,37 @@ export async function POST(request: NextRequest) {
         }).catch(e => console.error("[TG] transfer notify fail:", e))
       }
       return NextResponse.json({ ok: true, updated: body.productIds.length }, { status: 200 })
+    } else if (body.action === "toggle_dang_xu_ly" && Array.isArray(body.productIds) && body.productIds.length > 0) {
+      // Toggle trạng thái "Đang xử lý": ghi tên nhân viên (employeeName) hoặc "No".
+      // Có thể đặt giá trị cụ thể qua body.value.
+      const employeeName = body.employeeName || body.employeeId || ""
+      const result: any = await updateProductsDangXuLy(body.productIds, employeeName, body.value)
+      if (!result.success) {
+        return NextResponse.json({ error: result.error }, { status: 500 })
+      }
+      // Telegram topic "Máy đang xử lý":
+      // - Đánh dấu xử lý -> gửi 1 tin/máy, lưu message_id vào cột "TG Msg Xử Lý"
+      // - Hủy xử lý -> xóa đúng tin nhắn của máy đó
+      if (Array.isArray(result.updated) && result.updated.length > 0) {
+        for (const d of result.updated) {
+          try {
+            if (String(d.dang_xu_ly || "").toLowerCase() === "no") {
+              const msgId = Number(d.tg_msg_id)
+              if (Number.isFinite(msgId) && msgId > 0) {
+                await deleteTelegramMessage(msgId)
+              }
+            } else {
+              const sent = await sendProcessingDeviceMessage(d, employeeName || "NV-UNKNOWN")
+              if (sent?.success && sent.message_id && d.tg_msg_cell) {
+                await updateRangeValues(d.tg_msg_cell, [[String(sent.message_id)]])
+              }
+            }
+          } catch (e) {
+            console.error("[TG] processing toggle notify fail:", e)
+          }
+        }
+      }
+      return NextResponse.json({ ok: true, updated: result.updated }, { status: 200 })
     } else if (body.action === "update" && body.id) {
       // Tìm index cột ID Máy
       const idxId = colIndex(header, "ID Máy")

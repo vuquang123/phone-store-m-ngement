@@ -773,15 +773,16 @@ export default function BanHangPage() {
       toast({ title: 'Giảm giá không hợp lệ', variant: 'destructive' as any })
       return
     }
-    // Đơn online GHTK: bắt buộc Mã đơn GHTK + Tiền thu hộ COD
+    // Đơn online GHTK: bắt buộc Mã đơn GHTK. Tiền thu hộ COD được phép = 0
+    // (khách đã thanh toán trước, shipper không thu hộ).
     if (loaiDon === 'Đơn onl' && hinhThucVanChuyen === 'GHTK') {
       if (!maGhtk.trim()) {
         toast({ title: 'Thiếu mã đơn GHTK', description: 'Vui lòng nhập Mã đơn hàng GHTK cho đơn online.', variant: 'destructive' as any })
         try { setMobileView('thanh-toan') } catch {}
         return
       }
-      if (!(codAmount > 0)) {
-        toast({ title: 'Thiếu tiền thu hộ COD', description: 'Vui lòng nhập Tiền thu hộ COD cho đơn GHTK.', variant: 'destructive' as any })
+      if (codAmount < 0) {
+        toast({ title: 'Tiền thu hộ COD không hợp lệ', description: 'Tiền thu hộ COD không được âm.', variant: 'destructive' as any })
         try { setMobileView('thanh-toan') } catch {}
         return
       }

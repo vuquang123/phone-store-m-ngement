@@ -630,6 +630,80 @@ export async function logProductHistory(productIds: string[], newStatus: string,
   return { success: true, count: productIds.length }
 }
 
+// Toggle/đặt trạng thái "Đang xử lý" cho nhiều sản phẩm trong sheet Kho_Hang.
+// Giá trị: tên nhân viên đang xử lý (lấy từ thông tin đăng nhập), hoặc "No" nếu không xử lý.
+// Chỉ ghi đúng ô của cột "Đang xử lý" (không ghi đè cả sheet) để tránh xung đột dữ liệu.
+export async function updateProductsDangXuLy(productIds: string[], employeeName?: string, value?: string) {
+  const { header, rows } = await readFromGoogleSheets("Kho_Hang")
+  const idxId = colIndex(header, "ID Máy")
+  const idxDangXuLy = colIndex(header, "Đang xử lý", "Đang Xử Lý", "Dang xu ly")
+  if (idxId === -1) return { success: false, error: "Không tìm thấy cột ID Máy" }
+  if (idxDangXuLy === -1) return { success: false, error: 'Không tìm thấy cột "Đang xử lý" trong sheet Kho_Hang' }
+
+  const normIds = productIds.map(id => String(id || "").trim()).filter(Boolean)
+  const colName = numberToColumnName(idxDangXuLy + 1)
+
+  // Cột lưu message_id Telegram của tin "đang xử lý" (tự tạo header nếu chưa có)
+  let idxTgMsg = colIndex(header, "TG Msg Xử Lý", "TG Msg Xu Ly")
+  if (idxTgMsg === -1) {
+    idxTgMsg = header.length
+    await updateRangeValues(`'Kho_Hang'!${numberToColumnName(idxTgMsg + 1)}1`, [["TG Msg Xử Lý"]])
+  }
+  const tgMsgColName = numberToColumnName(idxTgMsg + 1)
+
+  // Index các cột thông tin máy (dùng cho thông báo Telegram)
+  const idxIMEI = colIndex(header, "IMEI")
+  const idxTenSP = colIndex(header, "Tên Sản Phẩm")
+  const idxMauSac = colIndex(header, "Màu Sắc")
+  const idxDungLuong = colIndex(header, "Dung Lượng")
+  const idxTinhTrang = colIndex(header, "Tình Trạng Máy", "Tình trạng")
+  const idxGiaBan = colIndex(header, "Giá Bán")
+  const idxNguon = colIndex(header, "Nguồn", "Nguồn Hàng", "Trạng Thái Kho", "Trạng thái kho")
+  const idxDoSim = colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim")
+  const cell = (row: string[], idx: number) => (idx !== -1 ? String(row[idx] || "").trim() : "")
+
+  const updated: {
+    id: string; dang_xu_ly: string; tg_msg_id: string; tg_msg_cell: string;
+    imei: string; name: string; mau_sac: string;
+    dung_luong: string; tinh_trang: string; gia_ban: string; nguon: string; do_sim: string;
+  }[] = []
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const idMay = String(row[idxId] || "").trim()
+    if (!normIds.includes(idMay)) continue
+    const current = String(row[idxDangXuLy] || "").trim()
+    // Đang xử lý = ô có giá trị khác rỗng và khác "No"
+    const isProcessing = current !== "" && current.toLowerCase() !== "no"
+    const newVal = value ?? (isProcessing ? "No" : (String(employeeName || "").trim() || "Yes"))
+    const rowNumber = i + 2 // +1 header, +1 vì 1-indexed
+    await updateRangeValues(`'Kho_Hang'!${colName}${rowNumber}`, [[newVal]])
+    const oldTgMsg = cell(row, idxTgMsg)
+    const tgMsgCell = `'Kho_Hang'!${tgMsgColName}${rowNumber}`
+    // Hủy xử lý -> xóa message_id đã lưu (tin Telegram sẽ được route xóa)
+    if (newVal.toLowerCase() === "no" && oldTgMsg) {
+      await updateRangeValues(tgMsgCell, [[""]])
+    }
+    updated.push({
+      id: idMay,
+      dang_xu_ly: newVal,
+      tg_msg_id: oldTgMsg,
+      tg_msg_cell: tgMsgCell,
+      imei: cell(row, idxIMEI),
+      name: cell(row, idxTenSP),
+      mau_sac: cell(row, idxMauSac),
+      dung_luong: cell(row, idxDungLuong),
+      tinh_trang: cell(row, idxTinhTrang),
+      gia_ban: cell(row, idxGiaBan),
+      nguon: cell(row, idxNguon),
+      do_sim: cell(row, idxDoSim),
+    })
+  }
+
+  if (updated.length === 0) return { success: false, error: "Không tìm thấy sản phẩm cần cập nhật" }
+  return { success: true, updated }
+}
+
 export async function updateProductsNguon(productIds: string[], newNguon: string, employeeId: string) {
   const { header, rows } = await readFromGoogleSheets("Kho_Hang")
   const idxId = colIndex(header, "ID Máy")

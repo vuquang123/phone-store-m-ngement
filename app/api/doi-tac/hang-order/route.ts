@@ -4,10 +4,12 @@ import { readFromGoogleSheets } from "@/lib/google-sheets"
 // Chỉ đọc dữ liệu (quản lý nhập thủ công ở Google Sheets)
 // Sheet có thể được đặt tên tiếng Việt. Route này sẽ thử nhiều tên sheet phổ biến.
 
+// LƯU Ý: KHÔNG thêm "Hang_Doi_Tac"/"Hang Doi Tac" vào danh sách này.
+// Tab "Hang_doi_tac" là kho máy đối tác riêng (quản lý ở tab "Hàng đối tác"
+// trong /dashboard/kho-hang, API /api/hang-doi-tac) và KHÔNG được trộn vào
+// tab Sản phẩm. Tên sheet trong Google Sheets không phân biệt hoa thường.
 const CANDIDATE_SHEET_NAMES = [
   "Hàng Đối Tác",
-  "Hang Doi Tac",
-  "Hang_Doi_Tac",
   "Hàng Order Đối Tác",
   "Hang Order Doi Tac",
   "Hang_Order_Doi_Tac",
@@ -128,16 +130,18 @@ export async function GET(request: Request) {
           { status: 429 },
         )
       }
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Không tìm thấy sheet 'Hàng Đối Tác'. Vui lòng tạo 1 sheet có tên như: 'Hàng Đối Tác' hoặc 'Hang_Doi_Tac' và nhập dữ liệu.",
-          candidates: CANDIDATE_SHEET_NAMES,
-          detail: lastError?.message,
-        },
-        { status: 404 },
-      )
+      // Không có sheet đối tác cũ là trạng thái BÌNH THƯỜNG (hàng đối tác giờ
+      // quản lý qua tab Hang_doi_tac riêng). Trả 200 + danh sách rỗng để FE
+      // không báo lỗi, và cache lại để không dò lại các tên sheet mỗi request.
+      const emptyPayload: PartnerCachePayload = {
+        success: true,
+        sheet: "",
+        count: 0,
+        items: [],
+        cachedAt: new Date().toISOString(),
+      }
+      cachedPartnerSheet = { timestamp: now, payload: emptyPayload }
+      return NextResponse.json(emptyPayload)
     }
 
     // Ánh xạ cột tiếng Việt (nhiều biến thể) → chỉ đọc, không ghi

@@ -97,12 +97,13 @@ export function InventoryTabs() {
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      <TabsList className="grid w-full grid-cols-5 max-w-3xl bg-muted/50 p-1 rounded-xl h-11">
+      <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 max-w-4xl bg-muted/50 p-1 rounded-xl h-auto sm:h-11">
         <TabsTrigger value="san-pham" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">Sản phẩm</TabsTrigger>
         <TabsTrigger value="phu-kien" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">Phụ kiện</TabsTrigger>
         <TabsTrigger value="dang-cnc" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">CNC</TabsTrigger>
         <TabsTrigger value="bao-hanh" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">Bảo hành</TabsTrigger>
         <TabsTrigger value="giao-doi-tac" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">Đối tác</TabsTrigger>
+        <TabsTrigger value="hang-doi-tac" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">Hàng đối tác</TabsTrigger>
       </TabsList>
     </Tabs>
   )

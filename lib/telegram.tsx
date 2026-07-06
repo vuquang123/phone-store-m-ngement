@@ -77,6 +77,95 @@ export async function sendStockEventNotification(event: StockEvent) {
   return second
 }
 
+// ===== Thông báo topic "Máy đang xử lý" =====
+// Topic (message_thread_id) của nhóm "Máy đang xử lý". Override qua env nếu cần.
+const PROCESSING_THREAD = Number(process.env.TELEGRAM_THREAD_DANG_XU_LY) || 38062
+
+export type ProcessingDevice = {
+  id?: string
+  dang_xu_ly?: string
+  imei?: string
+  name?: string
+  mau_sac?: string
+  dung_luong?: string
+  tinh_trang?: string
+  gia_ban?: string | number
+  nguon?: string
+  do_sim?: string
+}
+
+function formatGia(v: string | number | undefined): string {
+  const n = Number(String(v ?? "").replace(/[^\d]/g, ""))
+  return Number.isFinite(n) && n > 0 ? `${n.toLocaleString("vi-VN")}đ` : ""
+}
+
+// Gửi 1 tin nhắn cho 1 MÁY được đánh dấu "Đang xử lý" vào topic nhóm.
+// Trả về message_id để lưu lại (dùng xóa tin khi hủy xử lý hoặc khi bán máy).
+export async function sendProcessingDeviceMessage(d: ProcessingDevice, employee: string): Promise<{ success: boolean; message_id?: number; chat_id?: number; error?: any }> {
+  try {
+    const botToken = getBotToken()
+    const chatId = ORDER_TYPE_CHAT_MAP['offline']
+    if (!botToken || !chatId) return { success: false, error: "Thiếu cấu hình Telegram" }
+
+    const title = [d.name || "Máy", d.dung_luong, d.mau_sac].filter(Boolean).join(" • ")
+    const lines = [`⏳ <b>Nhận xử lý máy</b>`, `Nhân viên: ${employee}`, title]
+    if (d.imei) lines.push(`IMEI: <code>${d.imei}</code>`)
+    if (d.tinh_trang) lines.push(`Tình trạng: ${d.tinh_trang}`)
+    const gia = formatGia(d.gia_ban)
+    if (gia) lines.push(`Giá: ${gia}`)
+    const khoSim = [d.nguon && `Kho: ${d.nguon}`, d.do_sim && `Sim: ${d.do_sim}`].filter(Boolean).join(" • ")
+    if (khoSim) lines.push(khoSim)
+    const text = lines.join("\n")
+
+    const sendOnce = async (withThread: boolean) => {
+      const payload: any = { chat_id: chatId, text, parse_mode: "HTML" }
+      const threadId = effectiveThreadId(chatId, PROCESSING_THREAD)
+      if (withThread && threadId) payload.message_thread_id = threadId
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      return res.json()
+    }
+
+    const first = await sendOnce(true)
+    if (first?.ok) return { success: true, message_id: first.result?.message_id, chat_id: chatId }
+    console.warn("[TG] processing device send failed with topic, retry without topic", first)
+    const second = await sendOnce(false)
+    if (second?.ok) return { success: true, message_id: second.result?.message_id, chat_id: chatId }
+    console.error("[TG] processing device send failed both attempts", { first, second })
+    return { success: false, error: second?.description || first?.description }
+  } catch (error) {
+    console.error("[TG] processing device send error:", error)
+    return { success: false, error }
+  }
+}
+
+// Xóa 1 tin nhắn đã gửi trong group (mặc định group kho/offline).
+export async function deleteTelegramMessage(messageId: number, chatId?: number): Promise<{ success: boolean; error?: any }> {
+  try {
+    const botToken = getBotToken()
+    const chat = (chatId && Number.isFinite(chatId)) ? chatId : ORDER_TYPE_CHAT_MAP['offline']
+    if (!botToken || !chat || !Number.isFinite(messageId) || messageId <= 0) {
+      return { success: false, error: "Thiếu botToken/chat_id/message_id" }
+    }
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/deleteMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chat, message_id: messageId }),
+    })
+    const json = await res.json()
+    if (json?.ok) return { success: true }
+    // Tin có thể đã bị xóa tay hoặc quá 48h — không coi là lỗi nghiêm trọng
+    console.warn("[TG] deleteMessage failed:", json?.description)
+    return { success: false, error: json?.description }
+  } catch (error) {
+    console.error("[TG] deleteMessage error:", error)
+    return { success: false, error }
+  }
+}
+
 // Map logical order types to Telegram chat IDs (groups).
 // Prefer reading chat IDs from environment variables so different deployments can
 // route messages to different groups. Set these env vars on the server:

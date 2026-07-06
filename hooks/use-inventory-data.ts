@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query"
+import { getAuthHeaders } from "@/components/auth/protected-route"
 
 // Fetch JSON có TIMEOUT: nếu request bị treo, abort -> reject -> React Query mới retry được.
 // (Trước đây fetch không timeout -> treo là pending vĩnh viễn -> skeleton xoay mãi, phải refresh.)
-async function fetchJson(url: string, timeoutMs = 12000) {
+async function fetchJson(url: string, timeoutMs = 12000, headers?: Record<string, string>) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(url, { cache: "no-store", signal: controller.signal })
+    const res = await fetch(url, { cache: "no-store", signal: controller.signal, headers })
     if (!res.ok) throw new Error(`Fetch ${url} thất bại: ${res.status}`)
     return res.json()
   } finally {
@@ -38,4 +39,14 @@ export function useBaoHanhHistory() {
 
 export function useAccessoriesData() {
   return useQuery({ queryKey: ["accessories-inventory"], queryFn: () => fetchJson("/api/phu-kien"), ...RESILIENT })
+}
+
+// Máy của các kho đối tác (sheet Hang_doi_tac).
+// Gửi kèm x-user-email để server quyết định có trả Giá Nhập hay không (chỉ quản lý).
+export function useHangDoiTacData() {
+  return useQuery({
+    queryKey: ["hang-doi-tac"],
+    queryFn: () => fetchJson("/api/hang-doi-tac", 12000, getAuthHeaders()),
+    ...RESILIENT
+  })
 }

@@ -26,6 +26,8 @@ import { PartnerTable } from "@/components/kho-hang/partner-table"
 import AddCNCMachineDialog from "@/components/kho-hang/add-cnc-machine-dialog"
 import AddBaoHanhMachineDialog from "@/components/kho-hang/add-baohanh-machine-dialog"
 import { SendPartnerDialog } from "@/components/kho-hang/send-partner-dialog"
+import { HangDoiTacTable } from "@/components/kho-hang/hang-doi-tac-table"
+import { HangDoiTacDialog } from "@/components/kho-hang/hang-doi-tac-dialog"
 import { useRouter } from "next/navigation"
 
 // Hooks & Store
@@ -35,7 +37,8 @@ import {
   usePartnerData,
   useCNCData,
   useBaoHanhHistory,
-  useAccessoriesData
+  useAccessoriesData,
+  useHangDoiTacData
 } from "@/hooks/use-inventory-data"
 import { useInventoryActions } from "@/hooks/use-inventory-actions"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -72,12 +75,14 @@ export default function KhoHangPage() {
   const { data: cncRes, isLoading: isLoadingCNC } = useCNCData()
   const { data: bhRes, isLoading: isLoadingBH } = useBaoHanhHistory()
   const { data: accRes, isLoading: isLoadingAcc } = useAccessoriesData()
+  const { data: hdtRes, isLoading: isLoadingHDT } = useHangDoiTacData()
 
   const rawInventory = invRes?.data || []
   const partnerInventory = partnerRes?.items || partnerRes?.data || []
   const cncProducts = cncRes?.data || []
   const baoHanhHistory = bhRes?.data || []
   const accessories = accRes?.data || []
+  const hangDoiTac = hdtRes?.data || []
 
   // Actions
   const {
@@ -90,6 +95,14 @@ export default function KhoHangPage() {
     isReturningPartner,
     bulkUpdateNguon,
     isUpdatingNguon,
+    toggleDangXuLy,
+    isTogglingDangXuLy,
+    addHangDoiTac,
+    isAddingHangDoiTac,
+    deleteHangDoiTac,
+    isDeletingHangDoiTac,
+    transferHangDoiTac,
+    isTransferringHangDoiTac,
   } = useInventoryActions()
 
   // Local UI State
@@ -99,6 +112,9 @@ export default function KhoHangPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
 
   const [isAddCNCMachineOpen, setIsAddCNCMachineOpen] = useState(false)
+  const [isHangDoiTacDialogOpen, setIsHangDoiTacDialogOpen] = useState(false)
+  const [hangDoiTacSearch, setHangDoiTacSearch] = useState("")
+  const [hangDoiTacPage, setHangDoiTacPage] = useState(1)
   const [isSendCNCDialogOpen, setIsSendCNCDialogOpen] = useState(false)
   const [isAddBaoHanhMachineOpen, setIsAddBaoHanhMachineOpen] = useState(false)
   const [isSendPartnerDialogOpen, setIsSendPartnerDialogOpen] = useState(false)
@@ -301,6 +317,17 @@ export default function KhoHangPage() {
     return result
   }, [rawInventory, searchTerm])
 
+  const filteredHangDoiTac = useMemo(() => {
+    if (!hangDoiTacSearch) return hangDoiTac
+    const q = hangDoiTacSearch.toLowerCase()
+    return hangDoiTac.filter((p: any) =>
+      p.ten_san_pham?.toLowerCase().includes(q) ||
+      p.imei?.toLowerCase().includes(q) ||
+      p.nguon_hang?.toLowerCase().includes(q) ||
+      p.mau_sac?.toLowerCase().includes(q)
+    )
+  }, [hangDoiTac, hangDoiTacSearch])
+
   const productNameOptions = useMemo(() => {
     const validProducts = getFilteredOptions('product');
     const names = Array.from(new Set(validProducts.map((p: any) => p.ten_san_pham).filter(Boolean))) as string[]
@@ -468,6 +495,7 @@ export default function KhoHangPage() {
         queryClient.invalidateQueries({ queryKey: ["partner-inventory"] }),
         queryClient.invalidateQueries({ queryKey: ["cnc-inventory"] }),
         queryClient.invalidateQueries({ queryKey: ["accessories-inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["hang-doi-tac"] }),
       ])
       toast.success("Đã làm mới dữ liệu")
     } catch (error) {
@@ -526,6 +554,23 @@ export default function KhoHangPage() {
                   >
                     Giao đối tác
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 border-yellow-300 text-yellow-700 hover:bg-yellow-50 hover:text-yellow-700 dark:border-yellow-500/40 dark:text-yellow-400 dark:hover:bg-yellow-500/10 dark:hover:text-yellow-300"
+                    disabled={isTogglingDangXuLy}
+                    onClick={() => {
+                      toggleDangXuLy({
+                        productIds: selectedIds,
+                        employeeName: me?.name || me?.employeeId || "NV-UNKNOWN"
+                      }).then(() => {
+                        setSelectedIds([]);
+                        setIsEditMode(false);
+                      }).catch(() => {});
+                    }}
+                  >
+                    Đang xử lý
+                  </Button>
                   <Select onValueChange={(val) => {
                     bulkUpdateNguon({
                       productIds: selectedIds,
@@ -574,6 +619,17 @@ export default function KhoHangPage() {
                   onSendPartner={(p) => {
                     setSelectedIds([p.id])
                     setIsSendPartnerDialogOpen(true)
+                  }}
+                  onToggleProcessing={(p) => {
+                    // Máy kho ngoài (id dạng DT-...) không nằm trong sheet Kho_Hang
+                    if (String(p.id).startsWith("DT-")) {
+                      toast.error("Chỉ đánh dấu được máy trong kho (Kho_Hang)")
+                      return
+                    }
+                    toggleDangXuLy({
+                      productIds: [p.id],
+                      employeeName: me?.name || me?.employeeId || "NV-UNKNOWN"
+                    }).catch(() => {})
                   }}
                   totalCount={filteredProducts.length}
                 />
@@ -832,6 +888,71 @@ export default function KhoHangPage() {
           </div>
         )}
 
+        {activeTab === "hang-doi-tac" && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-2">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                Hàng đối tác
+                <Badge variant="secondary" className="ml-2 bg-purple-50 text-purple-600 border-purple-100">{filteredHangDoiTac.length}</Badge>
+              </h3>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Input
+                  placeholder="Tìm theo tên, IMEI, nguồn hàng..."
+                  className="h-9 bg-card w-full sm:w-[260px]"
+                  value={hangDoiTacSearch}
+                  onChange={(e) => { setHangDoiTacSearch(e.target.value); setHangDoiTacPage(1); }}
+                />
+                <Button onClick={() => setIsHangDoiTacDialogOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 h-9 shrink-0">
+                  <Plus className="w-4 h-4 mr-1" /> Nhập hàng
+                </Button>
+              </div>
+            </div>
+
+            {isLoadingHDT ? <TableSkeleton rows={5} /> : (
+              <>
+                <HangDoiTacTable
+                  products={filteredHangDoiTac.slice((hangDoiTacPage - 1) * pageSize, hangDoiTacPage * pageSize)}
+                  isManager={isManager}
+                  onDelete={(p) => deleteHangDoiTac({ productIds: [p.id || p.imei] }).catch(() => {})}
+                  onTransfer={(p, khoDich) =>
+                    transferHangDoiTac({
+                      productIds: [p.id || p.imei],
+                      khoDich,
+                      employeeId: me?.employeeId || "NV-UNKNOWN",
+                    }).catch(() => {})
+                  }
+                  isDeleting={isDeletingHangDoiTac}
+                  isTransferring={isTransferringHangDoiTac}
+                  totalCount={filteredHangDoiTac.length}
+                />
+
+                {filteredHangDoiTac.length > pageSize && (
+                  <div className="flex items-center justify-center p-4 bg-muted/50 gap-2 rounded-md">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={hangDoiTacPage === 1}
+                      onClick={() => setHangDoiTacPage(hangDoiTacPage - 1)}
+                    >
+                      Trang trước
+                    </Button>
+                    <span className="text-sm font-medium">Trang {hangDoiTacPage} / {Math.ceil(filteredHangDoiTac.length / pageSize)}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={hangDoiTacPage * pageSize >= filteredHangDoiTac.length}
+                      onClick={() => setHangDoiTacPage(hangDoiTacPage + 1)}
+                    >
+                      Trang sau
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {activeTab === "bao-hanh" && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -915,6 +1036,13 @@ export default function KhoHangPage() {
         onClose={() => { setIsDialogOpen(false); setSelectedProduct(null) }}
         product={selectedProduct}
         onSuccess={() => { }}
+      />
+
+      <HangDoiTacDialog
+        isOpen={isHangDoiTacDialogOpen}
+        onClose={() => setIsHangDoiTacDialogOpen(false)}
+        onSubmit={(product) => addHangDoiTac(product)}
+        isSubmitting={isAddingHangDoiTac}
       />
 
       <AddCNCMachineDialog

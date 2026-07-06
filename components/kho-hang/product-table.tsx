@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Edit2, Eye, Hammer, UserPlus } from "lucide-react"
+import { Edit2, Eye, Hammer, Hourglass, UserPlus } from "lucide-react"
 import { getTrangThaiColor, getTrangThaiKhoColor, getLoaiMayLabel, getLoaiMayBadgeClass, getPinColorClass, getAppleColorHex, formatPinDisplay } from "@/lib/utils/inventory-helpers"
 import { cn } from "@/lib/utils"
 
@@ -27,6 +27,25 @@ interface Product {
   loai_may?: string
   nguon?: string
   do_sim?: string
+  dang_xu_ly?: string
+}
+
+// Máy đang được nhân viên xử lý (giữ máy) → highlight để tránh tư vấn trùng.
+// Cột "Đang xử lý" chứa tên nhân viên đang xử lý, hoặc "No" nếu không xử lý.
+const isProcessing = (p: Product) => {
+  const v = String(p.dang_xu_ly || "").trim()
+  return v !== "" && v.toLowerCase() !== "no"
+}
+
+// Tên nhân viên đang xử lý (rỗng nếu giá trị là "Yes" cũ)
+const processingName = (p: Product) => {
+  const v = String(p.dang_xu_ly || "").trim()
+  return v.toLowerCase() === "yes" ? "" : v
+}
+
+const processingLabel = (p: Product) => {
+  const name = processingName(p)
+  return name ? `Đang xử lý · ${name}` : "Đang xử lý"
 }
 
 interface ProductTableProps {
@@ -40,6 +59,7 @@ interface ProductTableProps {
   onSendCNC?: (product: Product) => void
   onSendPartner?: (product: Product) => void
   onViewCustomer?: (product: Product) => void
+  onToggleProcessing?: (product: Product) => void
   totalCount?: number
 }
 
@@ -54,6 +74,7 @@ export function ProductTable({
   onSendCNC,
   onSendPartner,
   onViewCustomer,
+  onToggleProcessing,
   totalCount
 }: ProductTableProps) {
   return (
@@ -73,6 +94,7 @@ export function ProductTable({
                 key={product.id}
                 className={cn(
                   "rounded-lg border bg-card p-3 shadow-sm",
+                  isProcessing(product) && "border-amber-300 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-500/10",
                   isEditMode && selectedIds.includes(product.id) && "border-primary ring-1 ring-primary/40",
                 )}
               >
@@ -87,9 +109,16 @@ export function ProductTable({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <span className="font-medium leading-tight text-foreground">{product.ten_san_pham}</span>
-                      <Badge className={`${getTrangThaiColor(product.trang_thai)} shrink-0 border-none text-[11px]`}>
-                        {product.trang_thai}
-                      </Badge>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <Badge className={`${getTrangThaiColor(product.trang_thai)} shrink-0 border-none text-[11px]`}>
+                          {product.trang_thai}
+                        </Badge>
+                        {isProcessing(product) && (
+                          <Badge className="shrink-0 animate-pulse border-none bg-amber-500 text-[11px] text-white hover:bg-amber-500">
+                            {processingLabel(product)}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -156,6 +185,22 @@ export function ProductTable({
                       </div>
                       {!isEditMode && (
                         <div className="flex shrink-0 gap-1">
+                          {onToggleProcessing && (
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className={cn(
+                                "h-8 w-8",
+                                isProcessing(product)
+                                  ? "border-amber-300 bg-amber-100 text-amber-600 hover:bg-amber-200 hover:text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-400"
+                                  : "text-muted-foreground hover:text-amber-600",
+                              )}
+                              title={isProcessing(product) ? `Bỏ đánh dấu (${processingName(product) || "đang xử lý"})` : "Đánh dấu đang xử lý"}
+                              onClick={() => onToggleProcessing(product)}
+                            >
+                              <Hourglass className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button variant="outline" size="icon" className="h-8 w-8 text-muted-foreground hover:text-orange-500" title="Gửi CNC" onClick={() => onSendCNC?.(product)}>
                             <Hammer className="h-4 w-4" />
                           </Button>
@@ -211,7 +256,13 @@ export function ProductTable({
         </TableHeader>
         <TableBody>
           {products.map((product) => (
-            <TableRow key={product.id} className="hover:bg-accent/50 transition-colors group">
+            <TableRow
+              key={product.id}
+              className={cn(
+                "hover:bg-accent/50 transition-colors group",
+                isProcessing(product) && "bg-amber-50/80 hover:bg-amber-100/60 dark:bg-amber-500/10 dark:hover:bg-amber-500/15",
+              )}
+            >
               {isEditMode && (
                 <TableCell className="text-center">
                   <Checkbox 
@@ -299,9 +350,16 @@ export function ProductTable({
                 <span className="text-sm text-muted-foreground">{product.tinh_trang || "-"}</span>
               </TableCell>
               <TableCell>
-                <Badge className={`${getTrangThaiColor(product.trang_thai)} border-none text-[11px]`}>
-                  {product.trang_thai}
-                </Badge>
+                <div className="flex flex-col items-start gap-1">
+                  <Badge className={`${getTrangThaiColor(product.trang_thai)} border-none text-[11px]`}>
+                    {product.trang_thai}
+                  </Badge>
+                  {isProcessing(product) && (
+                    <Badge className="animate-pulse border-none bg-amber-500 text-[11px] text-white hover:bg-amber-500">
+                      {processingLabel(product)}
+                    </Badge>
+                  )}
+                </div>
               </TableCell>
 
               <TableCell className="text-right">
@@ -323,9 +381,28 @@ export function ProductTable({
               </TableCell>
               {!isEditMode && (
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className={cn(
+                    "flex justify-end gap-1 transition-opacity",
+                    isProcessing(product) ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                  )}>
                     {/* Row-level edit removed as per user request */}
-                    <Button 
+                    {onToggleProcessing && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-8 w-8",
+                          isProcessing(product)
+                            ? "text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-500/20"
+                            : "text-muted-foreground hover:text-amber-600",
+                        )}
+                        title={isProcessing(product) ? `Bỏ đánh dấu (${processingName(product) || "đang xử lý"})` : "Đánh dấu đang xử lý"}
+                        onClick={() => onToggleProcessing(product)}
+                      >
+                        <Hourglass className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
                       variant="ghost" 
                       size="icon" 
                       className="h-8 w-8 text-muted-foreground hover:text-orange-500"

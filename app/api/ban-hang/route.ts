@@ -1,7 +1,7 @@
 
 // app/api/ban-hang/route.ts
 import { type NextRequest, NextResponse } from "next/server"
-import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
+import { sendTelegramMessage, formatOrderMessage, deleteTelegramMessage } from "@/lib/telegram"
 import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
@@ -737,6 +737,9 @@ export async function POST(request: NextRequest) {
         const idxIdMay = colIndex(header, "ID Máy")
         const idxIMEI = colIndex(header, "IMEI")
         const idxSerial = colIndex(header, "Serial")
+        // Máy đang xử lý mà được xuất bán -> xóa tin nhắn "đang xử lý" trong group Telegram
+        const idxTgMsgXuLy = colIndex(header, "TG Msg Xử Lý", "TG Msg Xu Ly")
+        const tgMsgsToDelete: number[] = []
 
         if (idxIdMay !== -1) {
           // Chuẩn hóa danh sách IDs/IMEIs/Serials cần xóa từ mayList
@@ -761,11 +764,20 @@ export async function POST(request: NextRequest) {
                 (imeiLast5 && pid === imeiLast5) ||
                 (serialLast5 && pid === serialLast5)
               )
+              if (isMatch && idxTgMsgXuLy !== -1) {
+                const msgId = Number(String(r[idxTgMsgXuLy] || "").trim())
+                if (Number.isFinite(msgId) && msgId > 0) tgMsgsToDelete.push(msgId)
+              }
               return !isMatch
             })
 
             if (newRows.length < originalLength) {
               await syncToGoogleSheets(SHEETS.KHO_HANG, newRows)
+            }
+
+            // Xóa tin nhắn "đang xử lý" của các máy vừa bán (online lẫn offline)
+            for (const msgId of tgMsgsToDelete) {
+              await deleteTelegramMessage(msgId).catch((e) => console.warn("[TG] delete processing msg fail:", e))
             }
           }
         }
