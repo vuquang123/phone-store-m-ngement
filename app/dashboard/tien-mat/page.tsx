@@ -189,6 +189,10 @@ export default function TienMatPage() {
       toast({ title: "Lỗi", description: "Số tiền phải lớn hơn 0", variant: "destructive" })
       return
     }
+    if (!imagePreview) {
+      toast({ title: "Lỗi", description: "Vui lòng đính kèm hình ảnh", variant: "destructive" })
+      return
+    }
     setSubmitting(true)
     try {
       const res = await fetch("/api/tien-mat", {
@@ -485,7 +489,9 @@ export default function TienMatPage() {
 
               {/* Đính kèm ảnh */}
               <div className="space-y-2">
-                <Label>Hình ảnh đính kèm (không bắt buộc)</Label>
+                <Label>
+                  Hình ảnh đính kèm <span className="text-destructive">*</span>
+                </Label>
                 <input
                   ref={fileRef}
                   type="file"
