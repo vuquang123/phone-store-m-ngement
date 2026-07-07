@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm, updateProductsNguon, updateProductsDangXuLy } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm, khoColIndex, updateProductsNguon, updateProductsDangXuLy } from "@/lib/google-sheets"
 
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { sendStockEventNotification, sendProcessingDeviceMessage, deleteTelegramMessage } from "@/lib/telegram"
@@ -147,7 +147,7 @@ function idxKho(header: string[]) {
     giamGia: colIndex(header, "Giảm Giá", "Giam gia", "Giam Gia"),
     ghiChu: colIndex(header, "Ghi Chú"),
     trangThai: colIndex(header, "Trạng Thái"),
-    trangThaiKho: colIndex(header, "Trạng Thái Kho", "Trạng thái kho", "Tình Trạng Tồn", "Kho Hiển Thị"),
+    trangThaiKho: khoColIndex(header),
     nguon: colIndex(header, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang"),
     doSim: colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim"),
     dangXuLy: colIndex(header, "Đang xử lý", "Đang Xử Lý", "Dang xu ly"),

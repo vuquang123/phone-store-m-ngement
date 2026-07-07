@@ -276,6 +276,7 @@ export function HangDoiTacTable({
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
+              
               Chuyển <b className="text-foreground">{transferTarget?.ten_san_pham}</b>
               {transferTarget?.imei ? ` (IMEI: ${transferTarget.imei})` : ""} từ Hàng đối tác sang Kho hàng.
             </p>

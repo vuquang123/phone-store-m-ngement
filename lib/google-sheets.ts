@@ -25,6 +25,15 @@ export function colIndex(header: string[], ...names: string[]) {
   return -1
 }
 
+// Cột kho trong/kho ngoài của sheet Kho_Hang. Ưu tiên các tên riêng; nếu không có,
+// sheet từng bị đổi header thành 2 cột trùng tên "Trạng Thái" → lấy cột "Trạng Thái" THỨ HAI.
+export function khoColIndex(header: string[]) {
+  const named = colIndex(header, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang", "Trạng Thái Kho", "Trạng thái kho", "Tình Trạng Tồn", "Kho Hiển Thị")
+  if (named !== -1) return named
+  const dups = header.reduce<number[]>((acc, h, i) => (norm(h) === norm("Trạng Thái") ? [...acc, i] : acc), [])
+  return dups.length >= 2 ? dups[1] : -1
+}
+
 
 // Cập nhật trạng thái bảo hành cho nhiều sản phẩm trong sheet Bao_Hanh
 export async function updateBaoHanhStatus(imeis: string[], employeeId: string) {
@@ -487,7 +496,7 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
   const { header: khoHeader, rows } = await readFromGoogleSheets("Kho_Hang")
   const idxId = colIndex(khoHeader, "ID Máy")
   const idxTrangThai = colIndex(khoHeader, "Trạng Thái")
-  const idxNguonKho = colIndex(khoHeader, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang", "Trạng Thái Kho")
+  const idxNguonKho = khoColIndex(khoHeader)
   const idxDoSim = colIndex(khoHeader, "Dạng Sim", "Dạng sim", "Kiểu dạng sim")
   if (idxId === -1 || idxTrangThai === -1) return { success: false, error: "Không tìm thấy cột ID Máy hoặc Trạng Thái" }
 
@@ -658,7 +667,7 @@ export async function updateProductsDangXuLy(productIds: string[], employeeName?
   const idxDungLuong = colIndex(header, "Dung Lượng")
   const idxTinhTrang = colIndex(header, "Tình Trạng Máy", "Tình trạng")
   const idxGiaBan = colIndex(header, "Giá Bán")
-  const idxNguon = colIndex(header, "Nguồn", "Nguồn Hàng", "Trạng Thái Kho", "Trạng thái kho")
+  const idxNguon = khoColIndex(header)
   const idxDoSim = colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim")
   const cell = (row: string[], idx: number) => (idx !== -1 ? String(row[idx] || "").trim() : "")
 
@@ -708,7 +717,7 @@ export async function updateProductsNguon(productIds: string[], newNguon: string
   const { header, rows } = await readFromGoogleSheets("Kho_Hang")
   const idxId = colIndex(header, "ID Máy")
   // Kiểm tra nhiều tên cột khác nhau để tìm cột Nguồn hàng (giống logic trong app/api/kho-hang/route.ts)
-  const idxNguon = colIndex(header, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang", "Trạng Thái Kho", "Trạng thái kho", "Tình Trạng Tồn", "Kho Hiển Thị")
+  const idxNguon = khoColIndex(header)
   const idxTrangThai = colIndex(header, "Trạng Thái")
 
   if (idxId === -1 || idxNguon === -1) {
