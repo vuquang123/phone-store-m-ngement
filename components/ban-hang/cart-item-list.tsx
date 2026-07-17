@@ -17,6 +17,7 @@ interface CartItemListProps {
   removeFromCart: (id: string, type: string) => void
   setEditingPriceId: React.Dispatch<React.SetStateAction<string | null>>
   accessoryProducts?: any[]
+  isManager?: boolean
 }
 
 export function CartItemList({
@@ -29,7 +30,8 @@ export function CartItemList({
   updateQuantity,
   removeFromCart,
   setEditingPriceId,
-  accessoryProducts = []
+  accessoryProducts = [],
+  isManager = false
 }: CartItemListProps) {
   const [openWarrantyInfo, setOpenWarrantyInfo] = useState<string | null>(null)
 
@@ -117,6 +119,7 @@ export function CartItemList({
                 updateQuantity={updateQuantity}
                 removeFromCart={removeFromCart}
                 accessoriesByCategory={accessoriesByCategory}
+                isManager={isManager}
               />
             ))}
           </div>
@@ -146,6 +149,7 @@ export function CartItemList({
                 setOpenWarrantyInfo={setOpenWarrantyInfo}
                 updateQuantity={updateQuantity}
                 removeFromCart={removeFromCart}
+                isManager={isManager}
               />
             ))}
           </div>

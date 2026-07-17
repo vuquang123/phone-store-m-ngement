@@ -33,6 +33,7 @@ interface CartItemRowProps {
   updateQuantity: (id: string, type: string, newQty: number) => void
   removeFromCart: (id: string, type: string) => void
   accessoriesByCategory?: Record<QuickAccCategory, QuickAccProduct[]>
+  isManager?: boolean
 }
 
 export function CartItemRow({
@@ -48,10 +49,13 @@ export function CartItemRow({
   setOpenWarrantyInfo,
   updateQuantity,
   removeFromCart,
-  accessoriesByCategory
+  accessoriesByCategory,
+  isManager = false
 }: CartItemRowProps) {
   const [isEditingPrice, setIsEditingPrice] = useState(false)
   const [tempPrice, setTempPrice] = useState(String(item.gia_ban))
+  const [isEditingCost, setIsEditingCost] = useState(false)
+  const [tempCost, setTempCost] = useState(String(item.gia_nhap ?? 0))
 
   const isPartner = String(item.nguon || item.source || '').toLowerCase().includes('kho ngoài')
   const deviceId = (item.imei || item.serial || item.id) as string
@@ -381,6 +385,62 @@ export function CartItemRow({
           <p className="text-[10px] text-blue-600">
             + ₫{(warrantyPackages.find(p => p.code === selectedWarranties[deviceId])?.price || 0).toLocaleString()}
           </p>
+        )}
+
+        {isManager && (
+          isEditingCost ? (
+            <div className="mt-1 flex items-center gap-1 justify-end">
+              <span className="text-[10px] text-muted-foreground">Nhập:</span>
+              <Input
+                className="h-6 w-20 text-[11px] px-1 text-right"
+                value={tempCost}
+                autoFocus
+                onChange={e => setTempCost(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const newCost = parseInt(tempCost) || 0
+                    setCart(prev => prev.map(it => (it.id === item.id && it.type === item.type) ? { ...it, gia_nhap: newCost } : it))
+                    setIsEditingCost(false)
+                  } else if (e.key === 'Escape') {
+                    setTempCost(String(item.gia_nhap ?? 0))
+                    setIsEditingCost(false)
+                  }
+                }}
+              />
+              <button
+                className="text-green-600 hover:text-green-700"
+                onClick={() => {
+                  const newCost = parseInt(tempCost) || 0
+                  setCart(prev => prev.map(it => (it.id === item.id && it.type === item.type) ? { ...it, gia_nhap: newCost } : it))
+                  setIsEditingCost(false)
+                }}
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button
+                className="text-muted-foreground hover:text-muted-foreground"
+                onClick={() => {
+                  setTempCost(String(item.gia_nhap ?? 0))
+                  setIsEditingCost(false)
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="mt-1 flex items-center gap-1 justify-end group/cost">
+              <p className="text-[10px] text-muted-foreground">Nhập: ₫{Number(item.gia_nhap ?? 0).toLocaleString()}</p>
+              <button
+                className="opacity-0 group-hover/cost:opacity-100 transition-opacity text-muted-foreground hover:text-blue-500"
+                onClick={() => {
+                  setTempCost(String(item.gia_nhap ?? 0))
+                  setIsEditingCost(true)
+                }}
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            </div>
+          )
         )}
       </div>
 

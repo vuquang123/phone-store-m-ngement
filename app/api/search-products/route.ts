@@ -110,6 +110,11 @@ export async function GET(request: NextRequest) {
       const idMayCol = h("ID Máy")
       const trangThaiCol = h("Trạng Thái")
       const doSimCol = h("Dạng Sim")
+      const serialCol = header.findIndex((x) => String(x).trim() === "Serial")
+      // Cột nguồn kho (Kho trong / Kho ngoài). Sheet hiện dùng "Trạng Thái Kho".
+      const nguonCol = header.findIndex((x) =>
+        ["Nguồn", "Nguồn Hàng", "Trạng Thái Kho", "Trạng thái kho"].includes(String(x).trim())
+      )
 
       productResults = pAll
         .slice(1)
@@ -141,11 +146,14 @@ export async function GET(request: NextRequest) {
             pin: pinCol >= 0 ? row[pinCol] : "",
             mau_sac: mauCol >= 0 ? row[mauCol] : "",
             imei: imeiCol >= 0 ? row[imeiCol] : "",
+            serial: serialCol >= 0 ? row[serialCol] : "",
             tinh_trang: ttMayCol >= 0 ? row[ttMayCol] : "",
             gia_nhap,
             gia_ban,
             ghi_chu: ghiChu,
             trang_thai: trangThaiCol >= 0 ? row[trangThaiCol] : "",
+            trang_thai_kho: nguonCol >= 0 ? row[nguonCol] : "",
+            nguon: nguonCol >= 0 ? row[nguonCol] : "",
             do_sim: doSimCol >= 0 ? row[doSimCol] : "",
           };
         })

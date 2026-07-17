@@ -158,7 +158,7 @@ export function SearchArea({
             <>
               {/* Mobile: Card grid */}
               <div className="md:hidden mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto overflow-x-hidden rounded-lg border mb-4 p-3 min-h-0">
-                {sortedSearchResults.map((product: any) => {
+                {sortedSearchResults.map((product: any, idx: number) => {
                   const isDisabled = product.trang_thai === "Đã đặt cọc" || product.trang_thai === "Đã bán"
                   const rawPin = product.pin ?? product['Pin (%)']
                   const hasPin = rawPin !== undefined && rawPin !== null && String(rawPin).trim() !== ''
@@ -183,7 +183,7 @@ export function SearchArea({
                   const inCart = isInCart(product)
                   return (
                     <div
-                      key={`${product.id || product.imei || product.serial || product.ten_san_pham}`}
+                      key={`${product.imei || product.serial || product.id || product.ten_san_pham}-${idx}`}
                       aria-disabled={isDisabled}
                       className={`relative flex flex-col rounded-2xl border p-4 shadow-sm transition select-none sm:p-5 ${inCart ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10' : 'bg-card'} ${isDisabled ? 'opacity-60' : ''} ${justAddedKey === (product.id || product.imei || product.serial) ? 'ring-2 ring-green-500' : ''}`}
                     >
@@ -336,7 +336,7 @@ export function SearchArea({
                               : 'odd:bg-muted/30'
                         return (
                           <TableRow
-                            key={`${product.id || product.imei || product.serial || product.ten_san_pham}`}
+                            key={`${product.imei || product.serial || product.id || product.ten_san_pham}-${idx}`}
                             data-index={idx}
                             className={`${isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-accent'} ${inCart ? 'border-l-2 border-emerald-500' : ''} ${rowBg}`}
                             onClick={() => { if (!isDisabled) { addToCart(product); setJustAddedKey(product.id || product.imei || product.serial || null); setTimeout(() => setJustAddedKey(null), 500) } }}

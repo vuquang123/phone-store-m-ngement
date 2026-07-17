@@ -24,6 +24,7 @@ import { CartItem, WarrantyPackageUI, Customer, SortKey } from "@/lib/types/ban-
 import { computeDynamicDiscount } from "@/lib/ban-hang/discount"
 import { isWarrantyEligible, computeCartSubtotal, computeWarrantyTotal } from "@/lib/ban-hang/totals"
 import { useCart } from "@/hooks/ban-hang/use-cart"
+import { useAuthMe } from "@/hooks/use-auth-me"
 import { useDiscount } from "@/hooks/ban-hang/use-discount"
 import { CustomerCard } from "@/components/ban-hang/customer-card"
 import { MobileCheckoutBar } from "@/components/ban-hang/mobile-checkout-bar"
@@ -38,6 +39,8 @@ import { normalizeVi } from "@/lib/ban-hang/quick-accessories"
 export default function BanHangPage() {
   const { toast } = useToast()
   const isMobile = useIsMobile()
+  const { me } = useAuthMe()
+  const isManager = me?.role === "quan_ly"
   const [mobileView, setMobileView] = useState<"san-pham" | "gio-hang" | "thanh-toan">("san-pham")
   // Bộ lọc nhanh cho mobile-first
   const [filterSource, setFilterSource] = useState<"all" | "inhouse" | "partner">("all")
@@ -342,7 +345,9 @@ export default function BanHangPage() {
           (item.loai_phu_kien?.toLowerCase().includes(qLower) ?? false)
         ))
 
-        const allProducts = [...results, ...filteredKho, ...filteredPartner, ...filteredAccessories]
+        // Ưu tiên dữ liệu cache (kho/đối tác/phụ kiện) vì đầy đủ field (nguon, serial, ...);
+        // kết quả từ /api/search-products chỉ bổ sung máy không có sẵn trong cache.
+        const allProducts = [...filteredKho, ...filteredPartner, ...filteredAccessories, ...results]
           .reduce((acc: any[], item: any) => {
             if (!acc.some((p: any) => p.id === item.id)) {
               if (!item.type && item.imei) item.type = 'product'
@@ -1374,6 +1379,7 @@ export default function BanHangPage() {
                           setSelectedWarranties={setSelectedWarranties}
                           setEditingPriceId={setEditingPriceId}
                           accessoryProducts={allAccessoryProducts}
+                          isManager={isManager}
                         />
                       )}
                     </CardContent>
