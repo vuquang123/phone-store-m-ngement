@@ -27,6 +27,7 @@ interface Order {
   phuong_thuc_list?: string[]
   trang_thai: string
   ngay_ban: string
+  tinh_trang_may?: string
   khach_hang?: { ho_ten: string; so_dien_thoai: string }
   nhan_vien?: { id?: string; name?: string; role?: string }
   loai_don?: string
@@ -147,6 +148,15 @@ export default function DonHangPage() {
       : isReturned(trangThai)
         ? "border-yellow-500/40 text-yellow-600 dark:text-yellow-500"
         : "border-emerald-500/40 text-emerald-600 dark:text-emerald-500"
+
+  // Ngày bán có thể rỗng / hỏng (một số dòng cũ bị ghi nhầm mã đơn vào cột này)
+  // -> chỉ hiện khi parse được thành ngày thật, còn lại hiện "-".
+  const formatNgayBan = (v: string) => {
+    if (!v) return "-"
+    const d = new Date(v)
+    if (Number.isNaN(d.getTime())) return "-"
+    return d.toLocaleDateString("vi-VN")
+  }
 
   const getPhuongThucColor = (label: string) => {
     const s = (label || '').toLowerCase()
@@ -314,14 +324,17 @@ export default function DonHangPage() {
                             )}
                           </div>
                           
-                            <div className="text-sm text-muted-foreground">{new Date(order.ngay_ban).toLocaleDateString("vi-VN")}</div>
+                            <div className="text-sm text-muted-foreground">{formatNgayBan(order.ngay_ban)}</div>
+                            {order.tinh_trang_may && (
+                              <div className="text-sm text-muted-foreground">{order.tinh_trang_may}</div>
+                            )}
                         </div>
                           <div className="text-right">
                             <div className="text-xl font-bold text-foreground">đ{Number(order.thanh_toan || 0).toLocaleString("en-US")}</div>
                             {order.loai_don && <div className="text-sm text-muted-foreground">{order.loai_don}</div>}
-                            {String(order.loai_don || "").toLowerCase().includes("onl") && (
+                            {order.ma_ghtk && (
                               <div className="mt-1 flex justify-end">
-                                <GhtkStatusBadge code={order.ma_ghtk || order.ma_don_hang || order.id} />
+                                <GhtkStatusBadge code={order.ma_ghtk} />
                               </div>
                             )}
                           </div>
@@ -357,6 +370,7 @@ export default function DonHangPage() {
                       <TableHead>Thanh toán</TableHead>
                       
                       <TableHead>Loại đơn</TableHead>
+                      <TableHead>Tình trạng máy</TableHead>
                       <TableHead>Trạng thái</TableHead>
                       <TableHead>Ngày bán</TableHead>
                       <TableHead className="text-right">Thao tác</TableHead>
@@ -447,17 +461,23 @@ export default function DonHangPage() {
                             <TableCell>
                               <div className="flex flex-col items-start gap-1">
                                 <Badge variant="outline">{order.loai_don || <span className="text-muted-foreground">-</span>}</Badge>
-                                {String(order.loai_don || "").toLowerCase().includes("onl") && (
-                                  <GhtkStatusBadge code={order.ma_ghtk || order.ma_don_hang || order.id} />
-                                )}
+                                {/* Chỉ tra cứu khi có mã vận đơn thật, tránh tra nhầm bằng mã đơn hàng. */}
+                                {order.ma_ghtk && <GhtkStatusBadge code={order.ma_ghtk} />}
                               </div>
+                            </TableCell>
+                            <TableCell>
+                              {order.tinh_trang_may ? (
+                                <span className="text-sm">{order.tinh_trang_may}</span>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
                             </TableCell>
                             <TableCell>
                               <Badge className={getTrangThaiColor(order.trang_thai)}>
                                 {getTrangThaiLabel(order.trang_thai)}
                               </Badge>
                             </TableCell>
-                            <TableCell>{new Date(order.ngay_ban).toLocaleDateString("vi-VN")}</TableCell>
+                            <TableCell>{formatNgayBan(order.ngay_ban)}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
                                 <Button variant="ghost" size="icon" onClick={() => handleViewOrder(order.ma_don_hang || order.id)}>

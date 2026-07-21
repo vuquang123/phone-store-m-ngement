@@ -7,6 +7,7 @@ import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
 import { recordCashTransaction } from "@/lib/cash"
+import { extractGhtkCode } from "@/lib/ghtk-status"
 
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
@@ -88,7 +89,8 @@ async function tryRemovePartnerRowByIMEI(imei: string) {
 function idxBanHang(header: string[]) {
   return {
     idDon: colIndex(header, "ID Đơn Hàng"),
-    ngayXuat: colIndex(header, "Ngày Xuất"),
+    // Sheet dùng tên "Ngày bán"; giữ "Ngày Xuất" làm alias cho dữ liệu cũ.
+    ngayXuat: colIndex(header, "Ngày Bán", "Ngày bán", "Ngày Xuất", "ngay_ban"),
     tenKH: colIndex(header, "Tên Khách Hàng"),
     sdt: colIndex(header, "Số Điện Thoại"),
     diaChiNhan: colIndex(header, "Địa Chỉ Nhận", "Dia Chi Nhan", "Dia_Chi_Nhan"),
@@ -238,7 +240,9 @@ export async function GET(request: NextRequest) {
     const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), maxLimit) : 10
 
-    const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
+    // Nút "Làm mới" gửi ?refresh=1 -> bỏ qua cache đọc sheet.
+    const forceRefresh = searchParams.get("refresh") === "1"
+    const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force: forceRefresh })
     const idx = idxBanHang(header)
     const idxLoaiDon = header.indexOf("Loại Đơn")
     const idxTrangThai = colIndex(header, "Trạng Thái", "trang_thai")
@@ -290,9 +294,19 @@ export async function GET(request: NextRequest) {
       
       // Hình thức vận chuyển: lấy giá trị đầu tiên khác rỗng trong các dòng của đơn
       const hinhThuc = String(items.find((it) => it.hinh_thuc_van_chuyen)?.hinh_thuc_van_chuyen || first.hinh_thuc_van_chuyen || "")
+      // Ngày bán: lấy giá trị đầu tiên khác rỗng (dòng máy sau có thể để trống)
+      const ngayBan = String(items.find((it) => it.ngay_xuat)?.ngay_xuat || first.ngay_xuat || "")
+      // Tình trạng máy: gộp các giá trị khác nhau của mọi máy trong đơn
+      const tinhTrangMay = Array.from(
+        new Set(items.map((it) => String(it.tinh_trang_may || "").trim()).filter(Boolean)),
+      ).join(", ")
       return {
         ...first,
+        ngay_xuat: ngayBan,
+        tinh_trang_may: tinhTrangMay,
         hinh_thuc_van_chuyen: hinhThuc,
+        // "" nếu cột vận chuyển không kèm mã -> FE ẩn badge/tra cứu GHTK.
+        ma_ghtk: extractGhtkCode(hinhThuc),
         thanh_toan: totalThanhToan,
         tong_tien: totalThanhToan,
         items_count: items.length,
@@ -326,15 +340,9 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Chỉ lấy đơn online GHTK: Hình Thức Vận Chuyển dạng "GHTK - <mã>" và trích mã GHTK.
+    // Chỉ lấy đơn online GHTK: Hình Thức Vận Chuyển dạng "GHTK - <mã>" (ma_ghtk đã trích ở trên).
     if (ghtkOnly) {
-      const GHTK_RE = /^\s*GHTK\s*-\s*(\S.*)$/i
-      filteredSummaries = filteredSummaries
-        .map((o: any) => {
-          const m = String(o.hinh_thuc_van_chuyen || "").match(GHTK_RE)
-          return m ? { ...o, ma_ghtk: m[1].trim() } : null
-        })
-        .filter(Boolean) as any[]
+      filteredSummaries = filteredSummaries.filter((o: any) => !!o.ma_ghtk)
     }
 
     const total = filteredSummaries.length
@@ -589,6 +597,16 @@ export async function POST(request: NextRequest) {
 
       const newRow = header.map((k) => {
         if (k === "ID Đơn Hàng") return idDonHang;
+        if (norm(k) === "ngay_ban" || norm(k) === "ngay_xuat") {
+          // FE gửi khoá "Ngày Xuất"; sheet dùng cột "Ngày bán" -> chấp nhận cả hai.
+          return (
+            body["Ngày Bán"] ||
+            body["Ngày bán"] ||
+            body["Ngày Xuất"] ||
+            body.ngay_ban ||
+            DateTime.now().setZone("Asia/Ho_Chi_Minh").toFormat("d/M/yyyy")
+          );
+        }
         if (k === "Phụ Kiện") return i === 0 ? phuKien : "";
         if (k === "Giá Nhập") {
           const rounded = Math.round(tongGiaNhap);

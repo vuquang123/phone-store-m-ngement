@@ -383,7 +383,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                     <p>{order.nhan_vien?.ho_ten || "N/A"}</p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Trạng thái:</span>
+                    <span className="text-sm font-medium text-muted-foreground">Trạng thái: </span>
                     <Badge className={getTrangThaiColor(order.trang_thai)}>
                       {order.trang_thai === "hoan_thanh" ? "Hoàn thành" : "Đã hủy"}
                     </Badge>
@@ -428,19 +428,26 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
 
             <Separator />
 
-            {/* Vận chuyển GHTK */}
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Vận chuyển (GHTK)</h3>
-              <GhtkTrackingPanel
-                defaultCode={
-                  order.ma_ghtk ||
-                  order.ghi_chu?.match(/\[GHTK:\s*([^\]]+)\]/i)?.[1]?.trim() ||
-                  order.ma_don_hang
-                }
-              />
-            </div>
+            {/* Vận chuyển GHTK: chỉ hiện khi có mã vận đơn thật.
+                Mã lấy từ cột "Hình Thức Vận Chuyển" dạng "GHTK - <mã>" (fallback Ghi chú cũ).
+                Đơn không phải GHTK thì ẩn hẳn, tránh tra cứu nhầm bằng mã đơn hàng. */}
+            {(() => {
+              const ghtkCode =
+                order.ma_ghtk?.trim() ||
+                order.ghi_chu?.match(/\[GHTK:\s*([^\]]+)\]/i)?.[1]?.trim() ||
+                ""
+              if (!ghtkCode) return null
+              return (
+                <>
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Vận chuyển (GHTK)</h3>
+                    <GhtkTrackingPanel defaultCode={ghtkCode} />
+                  </div>
 
-            <Separator />
+                  <Separator />
+                </>
+              )
+            })()}
 
             {/* Bảo hành */}
             <div>

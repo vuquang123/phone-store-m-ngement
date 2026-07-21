@@ -1,6 +1,7 @@
 // API chi tiết đơn hàng: /api/ban-hang/[orderId]
 import { type NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
+import { extractGhtkCode } from "@/lib/ghtk-status"
 
 const SHEET_NAME = "Ban_Hang"
 
@@ -43,7 +44,8 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderI
     const orderDetail = {
       id: orderId,
       ma_don_hang: orderId,
-      ngay_ban: first[idx("Ngày Xuất")],
+      // Sheet dùng cột "Ngày bán"; giữ "Ngày Xuất" làm alias cho dữ liệu cũ.
+      ngay_ban: first[colIndex("Ngày Bán", "Ngày bán", "Ngày Xuất")],
       trang_thai: "hoan_thanh",
       phuong_thuc_thanh_toan: first[idx("Hình Thức Thanh Toán")],
       phu_kien_text: idxPhuKien !== -1 ? (first[idxPhuKien] || "") : "",
@@ -87,14 +89,7 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderI
       ghi_chu: first[idx("Ghi Chú")],
       hinh_thuc_van_chuyen: first[idx("Hình Thức Vận Chuyển")] || "",
       // Mã GHTK lấy từ "Hình Thức Vận Chuyển" dạng "GHTK - 1990038382" (fallback Ghi chú cũ).
-      ma_ghtk: (() => {
-        const vc = String(first[idx("Hình Thức Vận Chuyển")] || "")
-        const m = vc.match(/GHTK\s*[-–]\s*(\S+)/i)
-        if (m) return m[1].trim()
-        const gc = String(first[idx("Ghi Chú")] || "")
-        const m2 = gc.match(/\[GHTK:\s*([^\]]+)\]/i)
-        return m2 ? m2[1].trim() : ""
-      })(),
+      ma_ghtk: extractGhtkCode(first[idx("Hình Thức Vận Chuyển")], first[idx("Ghi Chú")]),
     }
 
     return NextResponse.json(orderDetail)

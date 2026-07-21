@@ -58,3 +58,15 @@ export const STATUS_GROUP_COLOR: Record<GhtkStatusGroup, string> = {
   canceled: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
   other: "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-300",
 }
+
+// Trích mã vận đơn GHTK từ cột "Hình Thức Vận Chuyển" dạng "GHTK - <mã>" (chấp nhận
+// "GHTK-<mã>" và phần đuôi thừa kiểu "GHTK - <mã> - Đã gửi - <giờ>").
+// Trả "" khi không có mã (vd cột chỉ ghi "GHTK", "Book Grab", hoặc rỗng)
+// -> nơi gọi dùng để ẩn hẳn UI tra cứu thay vì tra nhầm bằng mã đơn hàng.
+// ghiChu là fallback cho dữ liệu cũ lưu dạng "[GHTK: <mã>]".
+export function extractGhtkCode(hinhThucVanChuyen?: string, ghiChu?: string): string {
+  const m = String(hinhThucVanChuyen || "").match(/GHTK\s*[-–]\s*(\S+)/i)
+  if (m) return m[1].trim()
+  const m2 = String(ghiChu || "").match(/\[GHTK:\s*([^\]]+)\]/i)
+  return m2 ? m2[1].trim() : ""
+}
