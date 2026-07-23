@@ -200,6 +200,12 @@ export async function POST(request: NextRequest) {
           name: p.ten_san_pham || p["Tên Sản Phẩm"],
           imei: p.imei || p["IMEI"],
           serial: p.serial || p["Serial"],
+          mau_sac: p.mau_sac || p["Màu Sắc"],
+          dung_luong: p.dung_luong || p["Dung Lượng"],
+          tinh_trang: p.tinh_trang || p.tinh_trang_may || p["Tình Trạng Máy"],
+          pin: p.pin || p["Pin (%)"],
+          do_sim: p.do_sim || p["Dạng Sim"] || p["Dạng sim"] || p["Kiểu dạng sim"],
+          loai_may: p.loai_may || p["Loại Máy"],
         }))
         await sendStockEventNotification({
           type: "import",

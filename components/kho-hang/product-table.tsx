@@ -86,12 +86,13 @@ export function ProductTable({
             Không tìm thấy sản phẩm nào phù hợp.
           </div>
         ) : (
-          products.map((product) => {
+          products.map((product, idx) => {
             const giaSau = product.gia_ban - (product.giam_gia || 0)
             const isPartner = String(product.nguon || "").toLowerCase().includes("kho ngoài")
+            const rowKey = `${product.id || "no-id"}-${product.imei || product.serial || product.ten_san_pham || "no-device"}-${idx}`
             return (
               <div
-                key={product.id}
+                key={rowKey}
                 className={cn(
                   "rounded-lg border bg-card p-3 shadow-sm",
                   isProcessing(product) && "border-amber-300 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-500/10",
@@ -255,9 +256,11 @@ export function ProductTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {products.map((product) => (
+          {products.map((product, idx) => {
+            const rowKey = `${product.id || "no-id"}-${product.imei || product.serial || product.ten_san_pham || "no-device"}-${idx}`
+            return (
             <TableRow
-              key={product.id}
+              key={rowKey}
               className={cn(
                 "hover:bg-accent/50 transition-colors group",
                 isProcessing(product) && "bg-amber-50/80 hover:bg-amber-100/60 dark:bg-amber-500/10 dark:hover:bg-amber-500/15",
@@ -434,7 +437,7 @@ export function ProductTable({
                 </TableCell>
               )}
             </TableRow>
-          ))}
+          )})}
           {products.length === 0 && (
             <TableRow>
               <TableCell colSpan={isEditMode ? 9 : 8} className="h-32 text-center text-muted-foreground">

@@ -11,8 +11,24 @@ export async function PATCH(req: Request) {
     // Đọc dữ liệu hiện tại
     const { header, rows } = await readFromGoogleSheets("Dat_Coc");
     const idxIMEI = colIndex(header, "IMEI");
+    const idxSerial = colIndex(header, "Serial");
     const idxTrangThai = colIndex(header, "Trạng Thái");
     const idxMaDon = colIndex(header, "Mã Đơn Hàng", "ID Đơn Hàng");
+    const idxTenKhach = colIndex(header, "Tên Khách Hàng");
+    const idxSoDienThoai = colIndex(header, "Số Điện Thoại");
+    const idxTenSanPham = colIndex(header, "Tên Sản Phẩm");
+    const idxLoaiMay = colIndex(header, "Loại Máy");
+    const idxDungLuong = colIndex(header, "Dung Lượng");
+    const idxMauSac = colIndex(header, "Màu Sắc");
+    const idxPin = colIndex(header, "Pin (%)");
+    const idxTinhTrang = colIndex(header, "Tình Trạng Máy");
+    const idxDoSim = colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim");
+    const idxNguoiBan = colIndex(header, "Người Bán");
+    const idxLoaiDon = colIndex(header, "Loại Đơn");
+    const idxSoTienCoc = colIndex(header, "Số Tiền Cọc");
+    const idxSoTienConLai = colIndex(header, "Số Tiền Còn Lại", "Còn Lại");
+    const idxHanThanhToan = colIndex(header, "Hạn Thanh Toán");
+    const idxGhiChu = colIndex(header, "Ghi Chú");
     
     if (idxIMEI === -1 || idxTrangThai === -1) {
       return NextResponse.json({ error: "Không tìm thấy cột IMEI hoặc Trạng Thái" }, { status: 400 });
@@ -21,6 +37,11 @@ export async function PATCH(req: Request) {
     // Đổi trạng thái thành 'Đã hoàn thành' cho các dòng có IMEI nằm trong productIds
     const desired = String(newStatus || 'Đã hoàn thành');
     const imeiSet = new Set((productIds || []).map((i: any) => String(i).trim()));
+    const matchedRows = rows.filter((row) => {
+      const matchImei = imeiSet.size > 0 && imeiSet.has(String(row[idxIMEI]).trim());
+      const matchOrder = !!orderId && (idxMaDon !== -1) && (String(row[idxMaDon] || '').trim() === String(orderId).trim());
+      return matchImei || matchOrder;
+    });
     const updatedRows = rows.map(row => {
       const matchImei = imeiSet.size > 0 && imeiSet.has(String(row[idxIMEI]).trim());
       const matchOrder = !!orderId && (idxMaDon !== -1) && (String(row[idxMaDon] || '').trim() === String(orderId).trim());
@@ -32,6 +53,45 @@ export async function PATCH(req: Request) {
     // Ghi lại sheet: giữ header, ghi lại header + updatedRows
     const allRows = [header, ...updatedRows];
     await updateRangeValues("Dat_Coc!A1", allRows);
+
+    if (matchedRows.length > 0 && desired.toLowerCase() === "hủy đặt cọc") {
+      try {
+        const parseAmount = (value: any) => {
+          const numeric = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
+          return Number.isFinite(numeric) ? numeric : 0;
+        };
+        const orderInfo: any = {
+          ma_don_hang: (idxMaDon !== -1 ? matchedRows[0]?.[idxMaDon] : "") || orderId || "(chưa có)",
+          nhan_vien_ban: idxNguoiBan !== -1 ? matchedRows[0]?.[idxNguoiBan] || "N/A" : "N/A",
+          khach_hang: {
+            ten: idxTenKhach !== -1 ? matchedRows[0]?.[idxTenKhach] || "Khách lẻ" : "Khách lẻ",
+            so_dien_thoai: idxSoDienThoai !== -1 ? matchedRows[0]?.[idxSoDienThoai] || "" : "",
+          },
+          loai_don: idxLoaiDon !== -1 ? matchedRows[0]?.[idxLoaiDon] || "" : "",
+          han_thanh_toan: idxHanThanhToan !== -1 ? matchedRows[0]?.[idxHanThanhToan] || "" : "",
+          ghi_chu: idxGhiChu !== -1 ? matchedRows[0]?.[idxGhiChu] || "" : "",
+          so_tien_coc: idxSoTienCoc !== -1 ? parseAmount(matchedRows[0]?.[idxSoTienCoc]) : 0,
+          so_tien_con_lai: idxSoTienConLai !== -1 ? parseAmount(matchedRows[0]?.[idxSoTienConLai]) : 0,
+          products: matchedRows.map((row) => ({
+            ten_san_pham: idxTenSanPham !== -1 ? row[idxTenSanPham] : "",
+            loai_may: idxLoaiMay !== -1 ? row[idxLoaiMay] : "",
+            dung_luong: idxDungLuong !== -1 ? row[idxDungLuong] : "",
+            mau_sac: idxMauSac !== -1 ? row[idxMauSac] : "",
+            pin: idxPin !== -1 ? row[idxPin] : "",
+            tinh_trang: idxTinhTrang !== -1 ? row[idxTinhTrang] : "",
+            do_sim: idxDoSim !== -1 ? row[idxDoSim] : "",
+            imei: idxIMEI !== -1 ? row[idxIMEI] : "",
+            serial: idxSerial !== -1 ? row[idxSerial] : "",
+          })),
+          reason: "Hủy đặt cọc",
+          ngay_tao: Date.now(),
+        };
+        await sendTelegramMessage(formatOrderMessage(orderInfo, "return"), "deposit", { message_thread_id: 5747 });
+      } catch (telegramError) {
+        console.warn("[TELE] Không thể gửi thông báo hủy đặt cọc:", telegramError);
+      }
+    }
+
     return NextResponse.json({ ok: true, updated: productIds?.length || 0 }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -167,6 +227,7 @@ export async function POST(req: Request) {
       setField(row, "Dung Lượng", p.dung_luong || body.dung_luong || "")
       setField(row, "Pin (%)", p.pin || body.pin || "")
       setField(row, "Màu Sắc", p.mau_sac || body.mau_sac || "")
+      setField(row, "Dạng Sim", p.do_sim || body.do_sim || "")
       setField(row, "IMEI", p.imei || body.imei || "")
       setField(row, "Serial", (p.serial || body.serial || "").toString().toUpperCase())
       setField(row, "Tình Trạng Máy", p.tinh_trang_may || body.tinh_trang_may || "")
@@ -206,6 +267,9 @@ export async function POST(req: Request) {
             loai_may: m.loai_may,
             dung_luong: m.dung_luong,
             mau_sac: m.mau_sac,
+            pin: m.pin,
+            tinh_trang: m.tinh_trang_may || m.tinh_trang,
+            do_sim: m.do_sim,
             imei: m.imei,
             serial: m.serial
           })),
@@ -243,6 +307,9 @@ export async function POST(req: Request) {
             loai_may: body.loai_may,
             dung_luong: body.dung_luong,
             mau_sac: body.mau_sac,
+            pin: body.pin,
+            tinh_trang: body.tinh_trang_may || body.tinh_trang,
+            do_sim: body.do_sim,
             imei: body.imei,
             serial: body.serial
           }],
@@ -267,4 +334,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
-

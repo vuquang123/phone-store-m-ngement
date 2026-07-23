@@ -51,6 +51,14 @@ import { isConHangProduct, extractPartnerInfo } from "@/lib/utils/inventory-help
 
 
 export default function KhoHangPage() {
+  const normalizeFilterValue = (value: any) =>
+    String(value ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim()
+
   const router = useRouter()
   const { me } = useAuthMe()
   const isMobile = useIsMobile()
@@ -66,6 +74,9 @@ export default function KhoHangPage() {
     capacityFilter,
     pinFilter,
     setSearchTerm,
+    setProductNameFilter,
+    setColorFilter,
+    setCapacityFilter,
     resetFilters
   } = useInventoryStore()
 
@@ -156,17 +167,10 @@ export default function KhoHangPage() {
     checkRole()
   }, [])
 
-  // Combined Inventory (Shop + Partner)
-  const allProducts = useMemo(() => {
-    const partnerMapped = partnerInventory.map((it: any) => ({
-      ...it,
-      id: `DT-${it.row_index}-${it.imei}`,
-      trang_thai: "Còn hàng",
-      trang_thai_kho: it.nguon || "Kho ngoài",
-      nguon: it.nguon || "Kho ngoài"
-    }))
-    return [...rawInventory, ...partnerMapped]
-  }, [rawInventory, partnerInventory])
+  // Tab "Sản phẩm" chỉ hiển thị dữ liệu kho hệ thống.
+  // KHÔNG trộn sheet partner order cũ vào đây vì dễ lọt các máy serial/đối tác
+  // không thuộc kho hiện tại và phá bộ lọc.
+  const allProducts = useMemo(() => rawInventory, [rawInventory])
 
   // Filtering Logic
   const baseFilteredProducts = useMemo(() => {
@@ -217,22 +221,34 @@ export default function KhoHangPage() {
   const getFilteredOptions = (excludeFilter: 'product' | 'color' | 'capacity') => {
     let result = baseFilteredProducts;
     if (excludeFilter !== 'product' && productNameFilter !== "all") {
-      result = result.filter((p: any) => p.ten_san_pham === productNameFilter)
+      const selectedProduct = normalizeFilterValue(productNameFilter)
+      result = result.filter((p: any) => normalizeFilterValue(p.ten_san_pham) === selectedProduct)
     }
     if (excludeFilter !== 'color' && colorFilter !== "all") {
-      result = result.filter((p: any) => p.mau_sac === colorFilter)
+      const selectedColor = normalizeFilterValue(colorFilter)
+      result = result.filter((p: any) => normalizeFilterValue(p.mau_sac) === selectedColor)
     }
     if (excludeFilter !== 'capacity' && capacityFilter !== "all") {
-      result = result.filter((p: any) => p.dung_luong === capacityFilter)
+      const selectedCapacity = normalizeFilterValue(capacityFilter)
+      result = result.filter((p: any) => normalizeFilterValue(p.dung_luong) === selectedCapacity)
     }
     return result;
   }
 
   const filteredProducts = useMemo(() => {
     let result = baseFilteredProducts
-    if (productNameFilter !== "all") result = result.filter((p: any) => p.ten_san_pham === productNameFilter)
-    if (colorFilter !== "all") result = result.filter((p: any) => p.mau_sac === colorFilter)
-    if (capacityFilter !== "all") result = result.filter((p: any) => p.dung_luong === capacityFilter)
+    if (productNameFilter !== "all") {
+      const selectedProduct = normalizeFilterValue(productNameFilter)
+      result = result.filter((p: any) => normalizeFilterValue(p.ten_san_pham) === selectedProduct)
+    }
+    if (colorFilter !== "all") {
+      const selectedColor = normalizeFilterValue(colorFilter)
+      result = result.filter((p: any) => normalizeFilterValue(p.mau_sac) === selectedColor)
+    }
+    if (capacityFilter !== "all") {
+      const selectedCapacity = normalizeFilterValue(capacityFilter)
+      result = result.filter((p: any) => normalizeFilterValue(p.dung_luong) === selectedCapacity)
+    }
     
     // Pin Filter Logic
     if (pinFilter !== "all") {
@@ -345,6 +361,28 @@ export default function KhoHangPage() {
     const caps = Array.from(new Set(validProducts.map((p: any) => p.dung_luong).filter(Boolean))) as string[]
     return caps.sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }))
   }, [baseFilteredProducts, productNameFilter, colorFilter])
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchTerm, khoFilter, priceRange, trangThai, sourceFilter, productNameFilter, colorFilter, capacityFilter, pinFilter])
+
+  useEffect(() => {
+    if (productNameFilter !== "all" && !productNameOptions.some((name) => normalizeFilterValue(name) === normalizeFilterValue(productNameFilter))) {
+      setProductNameFilter("all")
+    }
+  }, [productNameFilter, productNameOptions, setProductNameFilter])
+
+  useEffect(() => {
+    if (colorFilter !== "all" && !colorOptions.some((color) => normalizeFilterValue(color) === normalizeFilterValue(colorFilter))) {
+      setColorFilter("all")
+    }
+  }, [colorFilter, colorOptions, setColorFilter])
+
+  useEffect(() => {
+    if (capacityFilter !== "all" && !capacityOptions.some((capacity) => normalizeFilterValue(capacity) === normalizeFilterValue(capacityFilter))) {
+      setCapacityFilter("all")
+    }
+  }, [capacityFilter, capacityOptions, setCapacityFilter])
 
 
   // Stats
@@ -605,6 +643,7 @@ export default function KhoHangPage() {
             ) : (
               <Card className="border-none shadow-sm overflow-hidden">
                 <ProductTable
+                  key={`${page}-${productNameFilter}-${colorFilter}-${capacityFilter}-${pinFilter}-${searchTerm}-${sourceFilter}-${trangThai}-${khoFilter}-${filteredProducts.map((p: any) => `${p.id}|${p.imei || p.serial || p.ten_san_pham}`).join("~")}`}
                   products={filteredProducts.slice((page - 1) * pageSize, page * pageSize)}
                   selectedIds={selectedIds}
                   onSelect={handleSelect}
@@ -1054,7 +1093,7 @@ export default function KhoHangPage() {
       <SendCNCDialog
         isOpen={isSendCNCDialogOpen}
         onClose={() => setIsSendCNCDialogOpen(false)}
-        selectedProducts={allProducts.filter(p => selectedIds.includes(p.id))}
+        selectedProducts={allProducts.filter((p: any) => selectedIds.includes(p.id))}
         onSuccess={() => {
           setSelectedIds([])
           setIsEditMode(false)
@@ -1070,7 +1109,7 @@ export default function KhoHangPage() {
       <SendPartnerDialog
         open={isSendPartnerDialogOpen}
         onOpenChange={setIsSendPartnerDialogOpen}
-        selectedProducts={allProducts.filter(p => selectedIds.includes(p.id))}
+        selectedProducts={allProducts.filter((p: any) => selectedIds.includes(p.id))}
         employeeId={me?.employeeId}
         onSuccess={() => {
           setSelectedIds([])

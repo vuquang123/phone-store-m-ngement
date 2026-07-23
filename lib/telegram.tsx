@@ -6,14 +6,56 @@ try { dns.setDefaultResultOrder("ipv4first") } catch {}
 type OrderType = "online" | "offline" | "return" | "deposit" | string
 interface TelegramOptions { message_thread_id?: number; chat_id?: number }
 
+type DeviceSummary = {
+  name?: string
+  imei?: string
+  serial?: string
+  mau_sac?: string
+  dung_luong?: string
+  tinh_trang?: string
+  pin?: string | number
+  do_sim?: string
+  loai_may?: string
+}
+
+function formatPinLabel(pin: string | number | undefined) {
+  const raw = String(pin ?? "").trim()
+  if (!raw) return ""
+  return /^\d+$/.test(raw) ? `${raw}%` : raw
+}
+
+function resolveSimLabel(device: DeviceSummary) {
+  const direct = String(device.do_sim ?? "").trim()
+  if (direct) return direct
+  const loaiMay = String(device.loai_may ?? "").trim()
+  if (/lock|qu[oô]c\s*t[eê]|qte/i.test(loaiMay)) return loaiMay
+  return ""
+}
+
+function formatDeviceSummaryLine(device: DeviceSummary, index: number) {
+  const name = String(device.name || "Máy").trim()
+  const specs = [device.mau_sac, device.dung_luong].map((v) => String(v ?? "").trim()).filter(Boolean)
+  const details: string[] = []
+  if (device.imei) details.push(`IMEI: ${device.imei}`)
+  if (device.serial) details.push(`Serial: ${device.serial}`)
+  if (device.tinh_trang) details.push(`Tình trạng: ${device.tinh_trang}`)
+  const pinLabel = formatPinLabel(device.pin)
+  if (pinLabel) details.push(`Pin: ${pinLabel}`)
+  const simLabel = resolveSimLabel(device)
+  if (simLabel) details.push(`Loại máy: ${simLabel}`)
+
+  const left = [name, ...specs].filter(Boolean).join(" • ")
+  return `${index + 1}. ${left}${details.length ? ` • ${details.join(" • ")}` : ""}`
+}
+
 type StockEvent =
-  | { type: "import"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
-  | { type: "send_cnc"; total: number; address: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
-  | { type: "complete_cnc"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
-  | { type: "send_warranty"; total: number; address: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
-  | { type: "complete_warranty"; total: number; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
-  | { type: "send_partner"; total: number; partner: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
-  | { type: "transfer"; total: number; to: string; devices: { name?: string; imei?: string; serial?: string }[]; employee?: string }
+  | { type: "import"; total: number; devices: DeviceSummary[]; employee?: string }
+  | { type: "send_cnc"; total: number; address: string; devices: DeviceSummary[]; employee?: string }
+  | { type: "complete_cnc"; total: number; devices: DeviceSummary[]; employee?: string }
+  | { type: "send_warranty"; total: number; address: string; devices: DeviceSummary[]; employee?: string }
+  | { type: "complete_warranty"; total: number; devices: DeviceSummary[]; employee?: string }
+  | { type: "send_partner"; total: number; partner: string; devices: DeviceSummary[]; employee?: string }
+  | { type: "transfer"; total: number; to: string; devices: DeviceSummary[]; employee?: string }
 
 export function buildStockEventMessage(event: StockEvent): { text: string; threadId: number } {
   const threadId = 22
@@ -45,14 +87,7 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
     if (to) lines.push(`Kho đích: ${to}`)
   }
   lines.push(`Số lượng: ${event.total}`)
-  const list = (event.devices || []).map((d, idx) => {
-    const name = d.name || "Máy"
-    const ids = []
-    if (d.imei) ids.push(`IMEI: ${d.imei}`)
-    if (d.serial) ids.push(`Serial: ${d.serial}`)
-    const idStr = ids.join(" - ")
-    return `${idx + 1}. ${name}${idStr ? ` • ${idStr}` : ""}`
-  })
+  const list = (event.devices || []).map((d, idx) => formatDeviceSummaryLine(d, idx))
   if (list.length) {
     lines.push("Danh sách:")
     lines.push(...list)
@@ -643,15 +678,14 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     const statusLine = (() => {
       const pinRaw = p.pin ?? p["Pin (%)"] ?? p.pin_pct
       const tinhTrang = p.tinh_trang || p.tinhTrang || p["Tình Trạng Máy"]
-      const pinStr = (() => {
-        const s = String(pinRaw ?? "").trim()
-        if (!s) return ""
-        return /^\d+$/.test(s) ? `${s}%` : s
-      })()
+      const pinStr = formatPinLabel(pinRaw)
+      const doSim = p.do_sim || p.doSim || p["Dạng Sim"] || p["Dạng sim"] || p["Kiểu dạng sim"]
+      const simLabel = resolveSimLabel({ do_sim: doSim, loai_may: loaiMay })
       const escTT = String(tinhTrang ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       const parts: string[] = []
       if (pinStr) parts.push(`Pin: ${pinStr}`)
       if (escTT) parts.push(`Tình trạng: ${escTT}`)
+      if (simLabel) parts.push(`Loại máy: ${simLabel}`)
       return parts.length ? `\n   <i>${parts.join(" | ")}</i>` : ""
     })()
 
