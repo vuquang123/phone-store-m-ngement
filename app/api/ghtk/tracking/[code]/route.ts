@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server"
 import { getGhtkTracking } from "@/lib/ghtk"
 import { mapGhtkStatus } from "@/lib/ghtk-status"
+import { syncCashFlowForGhtkCode } from "@/lib/cash-flow/sheets"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -33,6 +34,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ code: s
 
   const o = result.order
   const status = mapGhtkStatus(o.status ?? "")
+
+  if (status.group === "delivered" || status.group === "reconciled") {
+    try {
+      await syncCashFlowForGhtkCode(decodeURIComponent(code))
+    } catch (error) {
+      console.warn("[DONG_TIEN] Không thể đồng bộ COD từ GHTK:", error)
+    }
+  }
 
   return NextResponse.json({
     success: true,

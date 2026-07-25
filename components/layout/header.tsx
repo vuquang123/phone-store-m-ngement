@@ -37,6 +37,7 @@ const PAGE_TITLES: [string, string][] = [
   ["/dashboard/don-online", "Đơn online"],
   ["/dashboard/check-in", "Check-in đầu ca"],
   ["/dashboard/check-out", "Báo cáo cuối ca"],
+  ["/dashboard/dongtien", "Dòng tiền"],
   ["/dashboard/nhan-vien", "Nhân viên"],
   ["/dashboard/ghi-chu", "Ghi chú bàn giao ca"],
   ["/dashboard/thong-bao", "Thông báo"],

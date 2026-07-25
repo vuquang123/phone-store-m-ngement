@@ -2,12 +2,14 @@
 // app/api/ban-hang/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { sendTelegramMessage, formatOrderMessage, deleteTelegramMessage } from "@/lib/telegram"
-import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, batchUpdateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
 import { recordCashTransaction } from "@/lib/cash"
-import { extractGhtkCode } from "@/lib/ghtk-status"
+import { extractGhtkCode, mapGhtkStatus } from "@/lib/ghtk-status"
+import { syncCashFlowFromSale } from "@/lib/cash-flow/sheets"
+import { getGhtkTracking } from "@/lib/ghtk"
 
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
@@ -31,6 +33,40 @@ function normalizePhone(p: string) {
   const digits = (p || "").replace(/\D/g, "")
   if (digits.startsWith("84")) return "0" + digits.slice(2)
   return digits
+}
+
+function toNumberLoose(value: any) {
+  if (typeof value === "number") return value
+  const parsed = Number(String(value ?? "").replace(/[^\d.-]/g, ""))
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function getStoredGhtkStatusLabel(hinhThucVanChuyen: string) {
+  const raw = String(hinhThucVanChuyen || "").trim()
+  const match = raw.match(/^GHTK\s*[-–]\s*\S+\s*[-–]\s*(.+)$/i)
+  return match ? match[1].trim() : ""
+}
+
+function formatGhtkTransport(code: string, statusLabel: string) {
+  return `GHTK - ${code}${statusLabel ? ` - ${statusLabel}` : ""}`
+}
+
+function parseGhtkMetaNote(note: string, code: string) {
+  const safeCode = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const match = String(note || "").match(new RegExp(`\\[GHTK_META:${safeCode}:COD=(\\d+):SHIP=(\\d+)\\]`))
+  if (!match) return null
+  return {
+    codMoney: Number(match[1] || 0),
+    shipMoney: Number(match[2] || 0),
+  }
+}
+
+function upsertGhtkMetaNote(note: string, code: string, codMoney: number, shipMoney: number) {
+  const safeCode = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const token = `[GHTK_META:${code}:COD=${Math.max(0, Math.round(codMoney))}:SHIP=${Math.max(0, Math.round(shipMoney))}]`
+  const raw = String(note || "").trim()
+  const cleaned = raw.replace(new RegExp(`\\s*\\[GHTK_META:${safeCode}:COD=\\d+:SHIP=\\d+\\]`, "g"), "").trim()
+  return cleaned ? `${cleaned} ${token}` : token
 }
 
 /* =================== Partner sheet helpers =================== */
@@ -105,6 +141,7 @@ function idxBanHang(header: string[]) {
     phuKien: colIndex(header, "Phụ Kiện"),
     giaBan: colIndex(header, "Giá Bán"),
     hinhThucTT: colIndex(header, "Hình Thức Thanh Toán"),
+    ghiChu: colIndex(header, "Ghi Chú"),
     giaNhap: colIndex(header, "Giá Nhập"),
     lai: colIndex(header, "Lãi"),
     nguoiBan: colIndex(header, "Người Bán"),
@@ -265,6 +302,7 @@ export async function GET(request: NextRequest) {
       groupedOrdersMap.get(orderId)!.push({
         id: orderId,
         ma_don_hang: orderId,
+        row_number: rowIndex + 2,
         ngay_xuat: row[idx.ngayXuat],
         ten_khach_hang: row[idx.tenKH],
         so_dien_thoai: row[idx.sdt],
@@ -279,6 +317,7 @@ export async function GET(request: NextRequest) {
         phu_kien: row[idx.phuKien],
         gia_ban: giaBanNum,
         hinh_thuc_thanh_toan: row[idx.hinhThucTT],
+        ghi_chu: idx.ghiChu !== -1 ? String(row[idx.ghiChu] || "") : "",
         gia_nhap: row[idx.giaNhap],
         lai: row[idx.lai],
         nhan_vien: row[idx.nguoiBan] ? { id: row[idx.nguoiBan] } : undefined,
@@ -307,6 +346,8 @@ export async function GET(request: NextRequest) {
         ngay_xuat: ngayBan,
         tinh_trang_may: tinhTrangMay,
         hinh_thuc_van_chuyen: hinhThuc,
+        ghi_chu: String(items.find((it) => it.ghi_chu)?.ghi_chu || first.ghi_chu || ""),
+        row_numbers: items.map((it) => Number(it.row_number)).filter((n) => Number.isFinite(n)),
         // "" nếu cột vận chuyển không kèm mã -> FE ẩn badge/tra cứu GHTK.
         ma_ghtk: extractGhtkCode(hinhThuc),
         thanh_toan: totalThanhToan,
@@ -345,6 +386,77 @@ export async function GET(request: NextRequest) {
     // Chỉ lấy đơn online GHTK: Hình Thức Vận Chuyển dạng "GHTK - <mã>" (ma_ghtk đã trích ở trên).
     if (ghtkOnly) {
       filteredSummaries = filteredSummaries.filter((o: any) => !!o.ma_ghtk)
+      if (filteredSummaries.length && idxHinhThuc !== -1) {
+        const updates: Array<{ range: string; values: any[][] }> = []
+        filteredSummaries = await Promise.all(filteredSummaries.map(async (order: any) => {
+          const code = String(order.ma_ghtk || "").trim()
+          if (!code) return order
+
+          const storedStatusLabel = getStoredGhtkStatusLabel(String(order.hinh_thuc_van_chuyen || ""))
+          const cachedMeta = parseGhtkMetaNote(String(order.ghi_chu || ""), code)
+
+          if (storedStatusLabel === "Đã đối soát" && cachedMeta) {
+            return {
+              ...order,
+              status_code: "6",
+              status_label: "Đã đối soát",
+              status_group: "reconciled",
+              cod_money: cachedMeta.codMoney,
+              ship_money: cachedMeta.shipMoney,
+            }
+          }
+
+          try {
+            const tracking = await getGhtkTracking(code)
+            if (!tracking.success) return order
+
+            const mapped = mapGhtkStatus(tracking.order.status || "")
+            const statusLabel = tracking.order.status_text || mapped.label
+            const codMoney = toNumberLoose(tracking.order.pick_money)
+            const shipMoney = toNumberLoose(tracking.order.ship_money)
+            const nextTransport = formatGhtkTransport(code, statusLabel)
+            const nextNote = upsertGhtkMetaNote(String(order.ghi_chu || ""), code, codMoney, shipMoney)
+
+            if (String(order.hinh_thuc_van_chuyen || "") !== nextTransport) {
+              for (const rowNumber of order.row_numbers || []) {
+                updates.push({
+                  range: `'${SHEETS.BAN_HANG}'!${toColumnLetter(idxHinhThuc + 1)}${rowNumber}`,
+                  values: [[nextTransport]],
+                })
+              }
+            }
+            if (idx.ghiChu !== -1 && String(order.ghi_chu || "") !== nextNote) {
+              for (const rowNumber of order.row_numbers || []) {
+                updates.push({
+                  range: `'${SHEETS.BAN_HANG}'!${toColumnLetter(idx.ghiChu + 1)}${rowNumber}`,
+                  values: [[nextNote]],
+                })
+              }
+            }
+
+            return {
+              ...order,
+              hinh_thuc_van_chuyen: nextTransport,
+              ghi_chu: nextNote,
+              status_code: mapped.code,
+              status_label: statusLabel,
+              status_group: mapped.group,
+              cod_money: codMoney,
+              ship_money: shipMoney,
+            }
+          } catch {
+            return {
+              ...order,
+              status_label: storedStatusLabel || "",
+              cod_money: cachedMeta?.codMoney,
+              ship_money: cachedMeta?.shipMoney,
+            }
+          }
+        }))
+        if (updates.length) {
+          await batchUpdateRangeValues(updates)
+        }
+      }
     }
 
     const total = filteredSummaries.length
@@ -920,22 +1032,57 @@ export async function POST(request: NextRequest) {
       console.warn("[CASH] Không thể cộng tiền mặt vào quỹ:", err)
     }
 
+    try {
+      await syncCashFlowFromSale({
+        orderId: idDonHang,
+        customer:
+          body.customerName ||
+          body.ten_khach_hang ||
+          body.ho_ten ||
+          body["Tên Khách Hàng"] ||
+          "Khách lẻ",
+        orderDate:
+          body["Ngày Bán"] ||
+          body.ngay_ban ||
+          body["Ngày Xuất"] ||
+          DateTime.now().setZone("Asia/Ho_Chi_Minh").toFormat("yyyy-MM-dd"),
+        shipping: body["Hình Thức Vận Chuyển"] || body.hinh_thuc_van_chuyen || "",
+        paymentSummary:
+          body["Phuong Thuc Thanh Toan"] ||
+          body["phuong_thuc_thanh_toan"] ||
+          body.paymentMethod ||
+          body.hinh_thuc_thanh_toan ||
+          body["Hình Thức Thanh Toán"] ||
+          "",
+        payments: Array.isArray(body.payments) ? body.payments : [],
+      })
+    } catch (err) {
+      console.warn("[DONG_TIEN] Không thể đồng bộ dòng tiền sau khi xuất đơn:", err)
+    }
+
+    let telegramStatus: { success: boolean; error?: any } = { success: true }
+
     // Gửi thông báo về Telegram khi tạo đơn hàng mới
     try {
       // Thu thập danh sách sản phẩm bán
       const productList: any[] = []
       for (const may of mayList) {
         if (!may) continue
+        const tenSanPham = may.ten_san_pham || may["Tên Sản Phẩm"] || ""
+        const imei = may.imei || may["IMEI"] || ""
+        const serial = may.serial || may["Serial"] || ""
+        if (!tenSanPham && !imei && !serial) continue
         const sourceStr = String(
           may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "",
         ).toLowerCase()
         const isPartner = sourceStr.includes("kho ngoài") || sourceStr.includes("đối tác") || sourceStr.includes("partner")
         productList.push({
-          ten_san_pham: may.ten_san_pham || may["Tên Sản Phẩm"] || '',
+          ten_san_pham: tenSanPham,
           loai_may: may.loai_may || may["Loại Máy"] || '',
           dung_luong: may.dung_luong || may["Dung Lượng"] || '',
           mau_sac: may.mau_sac || may["Màu Sắc"] || '',
-          imei: may.imei || may["IMEI"] || '',
+          imei,
+          serial,
           nguon: isPartner ? "Kho ngoài" : "Kho trong",
         })
       }
@@ -961,15 +1108,13 @@ export async function POST(request: NextRequest) {
         // Chi tiết thanh toán dạng mảng để formatter render rõ từng dòng
         payments: Array.isArray(body.payments) ? body.payments : [],
         // Phụ kiện kèm loại + số lượng
-        accessories: Array.isArray(body.accessories)
-          ? body.accessories
-          : (Array.isArray(body.phu_kien) ? body.phu_kien.map((pk: any)=> ({
-              id: pk.id,
-              ten_phu_kien: pk.ten_phu_kien || pk.ten || pk.name,
-              loai: pk.loai || pk.type || '',
-              so_luong: pk.so_luong || pk.sl || 1,
-              gia_ban: pk.gia_ban
-            })) : [])
+        accessories: normalizedAccessories.map((pk: any) => ({
+          id: pk.id,
+          ten_phu_kien: pk.ten_phu_kien || pk.ten || pk.name || "",
+          loai: pk.loai || pk.type || "",
+          so_luong: pk.so_luong || pk.sl || 1,
+          gia_ban: pk.gia_ban,
+        })),
       }
       console.log("[TELEGRAM DEBUG] orderInfo gửi đi:", orderInfo)
       // Chuẩn hóa loại đơn để nhận diện đúng đơn online/offline
@@ -984,9 +1129,13 @@ export async function POST(request: NextRequest) {
   ;(orderInfo as any).order_type = orderType
   // Only send Telegram notification here if FE didn't already send it (skipTelegram flag)
   if (!body || !body.skipTelegram) {
-    await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderType)
+    telegramStatus = await sendTelegramMessage(formatOrderMessage(orderInfo, "new"), orderType)
+    if (!telegramStatus.success) {
+      console.error("[TELEGRAM] Gửi thông báo đơn hàng thất bại:", telegramStatus.error)
+    }
   }
     } catch (err) {
+      telegramStatus = { success: false, error: err instanceof Error ? err.message : String(err) }
       console.error("Lỗi gửi thông báo Telegram:", err)
     }
 
@@ -1119,7 +1268,8 @@ export async function POST(request: NextRequest) {
       warrantyError,
       coreTotalServer,
       warrantyTotalServer: warrantyTotalFee,
-      finalTotalServer
+      finalTotalServer,
+      telegram: telegramStatus,
     }, { status: 201 })
   } catch (error) {
     console.error("Ban_Hang POST error:", error)

@@ -32,6 +32,7 @@ import {
   Wallet,
   Truck,
   StickyNote,
+  ChartNoAxesCombined,
 } from "lucide-react"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
@@ -64,6 +65,7 @@ const getNavigation = () => [
   {
     title: "Quản lý",
     items: [
+      { title: "Dòng tiền", href: "/dashboard/dongtien", icon: ChartNoAxesCombined, roles: ["quan_ly"] as Role[] },
       { title: "Ghi chú", href: "/dashboard/ghi-chu", icon: StickyNote, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Nhân viên", href: "/dashboard/nhan-vien", icon: UserCheck, roles: ["quan_ly"] as Role[] },
       { title: "Thông báo", href: "/dashboard/thong-bao", icon: Bell, roles: ["quan_ly", "nhan_vien"] as Role[] },
@@ -174,10 +176,16 @@ export function AppSidebar() {
     return base
       .map((section) => ({
         ...section,
-        items: section.items.filter((item) => item.roles.includes(role)),
+        items: section.items.filter((item) => {
+          if (!item.roles.includes(role)) return false
+          if (item.href === "/dashboard/dongtien") {
+            return role === "quan_ly" && me?.email === "dung8ahxh@gmail.com"
+          }
+          return true
+        }),
       }))
       .filter((s) => s.items.length > 0)
-  }, [role])
+  }, [role, me?.email])
 
   const handleLogout = async () => {
     try { await fetch("/api/logout", { method: "POST" }) } catch {}

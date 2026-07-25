@@ -1047,7 +1047,6 @@ export default function BanHangPage() {
             body: JSON.stringify({
               ...orderData,
               receipt_image: uploadedReceiptLocal || null,
-              skipTelegram: true,
               nguon_hang: products.some(p => String(p.nguon || p.source || '').toLowerCase().includes('kho ngoài')) ? 'Kho ngoài' : '',
               coreTotal: thanhToan,
               warrantyTotal: warrantyTotal,
@@ -1071,66 +1070,9 @@ export default function BanHangPage() {
           });
           if (!res.ok) throw new Error("API ban-hang lỗi: " + (await res.text()));
           const order = await res.json();
-          // Sau khi đã có mã đơn hàng, gửi thông báo Telegram với mã đơn hàng thực tế
           if (order && (order.id_don_hang || order.ma_don_hang) && loaiThanhToan !== "Đặt cọc") {
-            // Only declare these once
-            const orderInfoForMsg = {
-              ...orderData,
-              ma_don_hang: order.id_don_hang || order.ma_don_hang,
-              // Bổ sung các key phổ biến để formatOrderMessage luôn lấy đúng
-              employeeName: employeeId,
-              nhan_vien_ban: employeeId,
-              // Sửa: Hiện tổng tiền thật (đã cọc + còn lại) thay vì chỉ phần còn lại
-              final_total: tongTien + warrantyTotal - giamGiaToUse,
-              tong_tien: tongTien + warrantyTotal - giamGiaToUse,
-              total: tongTien + warrantyTotal - giamGiaToUse,
-              // Thêm chi tiết cọc để Telegram hiện breakdown
-              so_tien_coc: depositAmountAlreadyPaid,
-              so_tien_con_lai: finalThanhToan,
-              is_settlement: !!currentDepositOrderId,
-              dia_chi_nhan: loaiDon === 'Đơn onl' ? diaChiNhan : '',
-              address: loaiDon === 'Đơn onl' ? diaChiNhan : '',
-              shippingAddress: loaiDon === 'Đơn onl' ? diaChiNhan : '',
-              hinh_thuc_van_chuyen: buildShipMethod(),
-              shipping_method: loaiDon === 'Đơn onl' ? hinhThucVanChuyen : '',
-              phuong_thuc_thanh_toan: paymentSummary,
-              paymentMethod: paymentSummary,
-              payments: paymentsArray,
-              customerName: selectedCustomer?.ho_ten || 'Khách lẻ',
-              customerPhone: selectedCustomer?.so_dien_thoai || '',
-              // Đảm bảo khach_hang có đầy đủ thông tin
-                khach_hang: {
-                  ten: selectedCustomer?.ho_ten || 'Khách lẻ',
-                  ho_ten: selectedCustomer?.ho_ten || 'Khách lẻ',
-                  so_dien_thoai: selectedCustomer?.so_dien_thoai || '',
-                  sdt: selectedCustomer?.so_dien_thoai || '',
-                  dia_chi: loaiDon === 'Đơn onl' ? diaChiNhan : ''
-                },
-                products: cart.map(i => ({
-                  ten_san_pham: i.ten_san_pham || (i as any)["Tên Sản Phẩm"] || '',
-                  loai_may: i.loai_may || (i as any)["Loại Máy"] || '',
-                  dung_luong: i.dung_luong || (i as any)["Dung Lượng"] || '',
-                  mau_sac: i.mau_sac || (i as any)["Màu Sắc"] || '',
-                  imei: i.imei || '',
-                  serial: i.serial || '',
-                  pin: (i as any).pin ?? (i as any)["Pin (%)"] ?? '',
-                  tinh_trang: (i as any).tinh_trang || (i as any)["Tình Trạng Máy"] || '',
-                  gia_niemyet: i.gia_niemyet,
-                  gia_ban: i.gia_ban,
-                  so_luong: i.so_luong,
-                  nguon: String(i.nguon || i.source || '').toLowerCase().includes('kho ngoài') ? 'Kho ngoài' : 'Kho trong'
-                })),
-                warrantyPackages: (order.warranties || []).map((w: any) => w.ten_goi || w.ma_goi || w.packageCode)
-            };
             const derivedOrderType = loaiDon?.toLowerCase?.() ? (loaiDon.toLowerCase().includes('onl') ? 'online' : 'offline') : undefined;
             try {
-              // Gửi thông báo Telegram đầy đủ sau khi đã có mã đơn hàng
-              await fetch('/api/telegram/send-message', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderInfo: orderInfoForMsg, orderType: derivedOrderType })
-              });
-              // Gửi ảnh lên Telegram (nếu có) sau khi đã có mã đơn hàng
               if (receiptBlobs && receiptBlobs.length > 0) {
                 const form = new FormData();
                 receiptBlobs.forEach((b, idx) => {
@@ -1161,9 +1103,7 @@ export default function BanHangPage() {
                 setUploadedReceipt(uploadedReceiptLocal);
               }
             } catch (err: any) {
-              toast({ title: 'Lỗi gửi thông báo/ảnh Telegram', description: String(err), variant: 'destructive' as any });
-              setIsLoading(false);
-              return;
+              toast({ title: 'Lỗi gửi ảnh Telegram', description: String(err), variant: 'destructive' as any });
             }
           }
           setCart([]);
@@ -1190,6 +1130,13 @@ export default function BanHangPage() {
           setDepositAmountAlreadyPaid(0)
 
           toast({ title: 'Tạo đơn thành công', description: `Mã: ${order.id_don_hang || order.ma_don_hang || ''}` })
+          if (order?.telegram?.success === false) {
+            toast({
+              title: 'Cảnh báo Telegram',
+              description: `Đơn đã tạo nhưng Telegram lỗi: ${String(order.telegram.error || 'Không rõ lỗi')}`,
+              variant: 'destructive' as any,
+            })
+          }
           try { localStorage.removeItem('cart_draft_v1'); localStorage.removeItem('cart_warranty_sel_v1') } catch{}
           setReloadFlag(f => f + 1);
           try { setReceiptBlob(null); setReceiptBase64(null); setReceiptBlobs(null); setUploadedReceipt(null) } catch {}

@@ -2,11 +2,12 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQueries, useQuery } from "@tanstack/react-query"
 import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Truck, Wallet, ArrowUpCircle, ArrowDownCircle, Loader2 } from "lucide-react"
+import type { GhtkUiOrder } from "@/components/ghtk/ghtk-status-badge"
 
 const fmt = (n: number) => Number(n || 0).toLocaleString("vi-VN") + "₫"
 
@@ -70,20 +71,36 @@ function OnlineOrdersSummary() {
     },
     staleTime: 60_000,
   })
+  const orders = data ?? []
+  const trackingQueries = useQueries({
+    queries: orders.map((order) => ({
+      queryKey: ["ghtk-tracking", order.ma_ghtk || null],
+      enabled: !!order.ma_ghtk,
+      staleTime: 60_000,
+      queryFn: async () => {
+        const res = await fetch(`/api/ghtk/tracking/${encodeURIComponent(order.ma_ghtk as string)}`, { cache: "no-store" })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || !json?.success) {
+          throw new Error(json?.message || `Tra cứu GHTK thất bại (HTTP ${res.status})`)
+        }
+        return json.order as GhtkUiOrder
+      },
+    })),
+  })
 
   const { count, cod } = useMemo(() => {
     const cutoff = cutoffDate(Number(days))
     let count = 0
     let cod = 0
-    for (const o of data ?? []) {
+    for (const [index, o] of orders.entries()) {
       const d = parseVN(o.ngay_xuat)
       if (d && d >= cutoff) {
         count++
-        cod += Number(o.tong_tien || 0)
+        cod += Number(trackingQueries[index]?.data?.codMoney ?? o.tong_tien ?? 0)
       }
     }
     return { count, cod }
-  }, [data, days])
+  }, [orders, trackingQueries, days])
 
   return (
     <Card>

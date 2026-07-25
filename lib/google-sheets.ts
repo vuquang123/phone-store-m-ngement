@@ -25,6 +25,16 @@ export function colIndex(header: string[], ...names: string[]) {
   return -1
 }
 
+function toColumnLetter(colNum: number) {
+  let letter = ""
+  while (colNum > 0) {
+    const mod = (colNum - 1) % 26
+    letter = String.fromCharCode(65 + mod) + letter
+    colNum = Math.floor((colNum - mod) / 26)
+  }
+  return letter
+}
+
 // Cột kho trong/kho ngoài của sheet Kho_Hang. Ưu tiên các tên riêng; nếu không có,
 // sheet từng bị đổi header thành 2 cột trùng tên "Trạng Thái" → lấy cột "Trạng Thái" THỨ HAI.
 export function khoColIndex(header: string[]) {
@@ -122,7 +132,7 @@ try {
   }
 } catch {}
 
-const GOOGLE_SHEETS_SPREADSHEET_ID =
+export const GOOGLE_SHEETS_SPREADSHEET_ID =
   (process.env.GOOGLE_SHEETS_SPREADSHEET_ID || process.env.GOOGLE_SHEETS_ID || "") as string
 
 if (!GOOGLE_SHEETS_CLIENT_EMAIL || !GOOGLE_SHEETS_PRIVATE_KEY || !GOOGLE_SHEETS_SPREADSHEET_ID) {
@@ -153,7 +163,7 @@ function buildAuth() {
 // module bị đánh giá lại; nếu tạo mới google.auth.JWT + google.sheets() mỗi lần thì
 // phải xác thực lại (tốn vài giây). Dùng cache global để TÁI SỬ DỤNG qua các lần HMR.
 const g = globalThis as any
-function getSheetsClient() {
+export function getSheetsClient() {
   if (!g.__sheetsClient) {
     g.__sheetsClient = google.sheets({ version: "v4", auth: buildAuth() })
   }
@@ -472,6 +482,32 @@ export async function batchUpdateRangeValues(
   } catch {}
 
   return { success: true }
+}
+
+export async function ensureSheetExists(sheetName: string) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID })
+  const exists = meta.data.sheets?.some((sheet) => sheet.properties?.title === sheetName)
+  if (exists) return { success: true, created: false }
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+    requestBody: {
+      requests: [{ addSheet: { properties: { title: sheetName } } }],
+    },
+  })
+  invalidateSheetCache(sheetName)
+  return { success: true, created: true }
+}
+
+export async function ensureSheetHeader(sheetName: string, header: string[]) {
+  await ensureSheetExists(sheetName)
+  const current = await readFromGoogleSheets(sheetName, "A1:ZZ5", { silent: true, force: true })
+  const currentHeader = current.header || []
+  const same =
+    currentHeader.length === header.length &&
+    currentHeader.every((cell, idx) => String(cell || "").trim() === String(header[idx] || "").trim())
+  if (same) return { success: true, updated: false }
+  await updateRangeValues(`${escapeSheetName(sheetName)}!A1:${toColumnLetter(header.length)}1`, [header])
+  return { success: true, updated: true }
 }
 
 // Cập nhật trạng thái cho nhiều sản phẩm trong sheet Kho_Hang

@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/table"
 import { RefreshButton } from "@/components/ui/refresh-button"
 import { OrderDetailDialog } from "@/components/ban-hang/order-detail-dialog"
-import { useGhtkTracking } from "@/components/ghtk/ghtk-status-badge"
 import { STATUS_GROUP_COLOR } from "@/lib/ghtk-status"
 import { cn } from "@/lib/utils"
 import { Eye, Loader2, Check, Truck, Package } from "lucide-react"
@@ -32,11 +31,15 @@ interface OnlineOrder {
   tong_tien?: number
   ma_ghtk?: string
   ngay_xuat?: string
+  status_code?: string
+  status_label?: string
+  status_group?: keyof typeof STATUS_GROUP_COLOR
+  cod_money?: number
+  ship_money?: number
 }
 
 const fmt = (n: number) => Number(n || 0).toLocaleString("vi-VN") + "₫"
 
-// Suy ra trạng thái lấy/vận chuyển từ mã trạng thái GHTK.
 function deriveProgress(statusCode: string) {
   const n = Number(statusCode)
   return {
@@ -45,11 +48,9 @@ function deriveProgress(statusCode: string) {
   }
 }
 
-/** 1 dòng đơn online — tự tra cứu GHTK theo mã. */
 function GhtkOrderRow({ order, onView }: { order: OnlineOrder; onView: (id: string) => void }) {
-  const { data, isLoading, error } = useGhtkTracking(order.ma_ghtk || null)
-  const prog = data ? deriveProgress(data.statusCode) : { picked: false, shipped: false }
-  const cod = data?.codMoney || order.tong_tien || 0
+  const prog = deriveProgress(order.status_code || "")
+  const cod = order.cod_money ?? 0
 
   const Flag = ({ ok }: { ok: boolean }) =>
     ok ? <Check className="h-4 w-4 text-emerald-600" /> : <span className="text-muted-foreground">—</span>
@@ -69,20 +70,14 @@ function GhtkOrderRow({ order, onView }: { order: OnlineOrder; onView: (id: stri
       </TableCell>
       <TableCell className="font-mono text-xs whitespace-nowrap">{order.ma_ghtk}</TableCell>
       <TableCell>
-        {isLoading ? (
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin" /> Đang tra…
-          </span>
-        ) : error ? (
-          <span className="text-xs text-red-600 dark:text-red-400">{(error as Error).message}</span>
-        ) : data ? (
+        {order.status_label ? (
           <span
             className={cn(
               "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap",
-              STATUS_GROUP_COLOR[data.statusGroup],
+              STATUS_GROUP_COLOR[order.status_group || "other"],
             )}
           >
-            {data.statusLabel}
+            {order.status_label}
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
@@ -104,11 +99,10 @@ function GhtkOrderRow({ order, onView }: { order: OnlineOrder; onView: (id: stri
   )
 }
 
-/** Card đơn online cho mobile (< md) — cùng dữ liệu tra cứu GHTK (React Query dedup). */
 function GhtkOrderCard({ order, onView }: { order: OnlineOrder; onView: (id: string) => void }) {
-  const { data, isLoading, error } = useGhtkTracking(order.ma_ghtk || null)
-  const prog = data ? deriveProgress(data.statusCode) : { picked: false, shipped: false }
-  const cod = data?.codMoney || order.tong_tien || 0
+  const prog = deriveProgress(order.status_code || "")
+  const cod = order.cod_money ?? 0
+
   return (
     <div className="space-y-2 rounded-lg border p-3">
       <div className="flex items-start justify-between gap-2">
@@ -124,12 +118,8 @@ function GhtkOrderCard({ order, onView }: { order: OnlineOrder; onView: (id: str
       </div>
       <div className="text-sm">{order.ten_san_pham || "—"}{(order.items_count || 0) > 1 ? ` (${order.items_count} sp)` : ""}</div>
       <div className="flex items-center justify-between gap-2">
-        {isLoading ? (
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Đang tra…</span>
-        ) : error ? (
-          <span className="text-xs text-red-600 dark:text-red-400">{(error as Error).message}</span>
-        ) : data ? (
-          <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_GROUP_COLOR[data.statusGroup])}>{data.statusLabel}</span>
+        {order.status_label ? (
+          <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_GROUP_COLOR[order.status_group || "other"])}>{order.status_label}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
@@ -163,6 +153,7 @@ export default function DonOnlinePage() {
 
   const orders = data ?? []
   const totalPages = Math.max(1, Math.ceil(orders.length / pageSize))
+  const totalCod = useMemo(() => orders.reduce((sum, order) => sum + (order.cod_money ?? 0), 0), [orders])
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
@@ -208,7 +199,7 @@ export default function DonOnlinePage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-emerald-600">
-                {fmt(orders.reduce((s, o) => s + (o.tong_tien || 0), 0))}
+                {fmt(totalCod)}
               </div>
             </CardContent>
           </Card>
@@ -230,34 +221,32 @@ export default function DonOnlinePage() {
               </div>
             ) : (
               <>
-                {/* Mobile: card list */}
                 <div className="space-y-3 md:hidden">
                   {pagedOrders.map((o) => (
                     <GhtkOrderCard key={o.ma_don_hang || o.id} order={o} onView={handleView} />
                   ))}
                 </div>
-                {/* Desktop: bảng */}
                 <div className="hidden overflow-x-auto md:block">
-                <Table className="min-w-[860px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Mã đơn</TableHead>
-                      <TableHead>Khách hàng</TableHead>
-                      <TableHead>Sản phẩm</TableHead>
-                      <TableHead>Mã GHTK</TableHead>
-                      <TableHead>Trạng thái</TableHead>
-                      <TableHead className="text-center">Lấy hàng</TableHead>
-                      <TableHead className="text-center">Vận chuyển</TableHead>
-                      <TableHead className="text-right">COD</TableHead>
-                      <TableHead className="text-right">Chi tiết</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pagedOrders.map((o) => (
-                      <GhtkOrderRow key={o.ma_don_hang || o.id} order={o} onView={handleView} />
-                    ))}
-                  </TableBody>
-                </Table>
+                  <Table className="min-w-[860px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Mã đơn</TableHead>
+                        <TableHead>Khách hàng</TableHead>
+                        <TableHead>Sản phẩm</TableHead>
+                        <TableHead>Mã GHTK</TableHead>
+                        <TableHead>Trạng thái</TableHead>
+                        <TableHead className="text-center">Lấy hàng</TableHead>
+                        <TableHead className="text-center">Vận chuyển</TableHead>
+                        <TableHead className="text-right">COD</TableHead>
+                        <TableHead className="text-right">Chi tiết</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedOrders.map((o) => (
+                        <GhtkOrderRow key={o.ma_don_hang || o.id} order={o} onView={handleView} />
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
                 <TablePaginationFooter
                   page={page}
