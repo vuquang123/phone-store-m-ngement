@@ -29,6 +29,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { RefreshButton } from "@/components/ui/refresh-button"
+import { TablePaginationFooter } from "@/components/ui/table-pagination-footer"
 import { useToast } from "@/hooks/use-toast"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { ArrowDownCircle, ArrowUpCircle, Wallet, Loader2, ImagePlus, X } from "lucide-react"
@@ -419,29 +420,14 @@ export default function TienMatPage() {
               />
             )}
 
-            {filtered.length > PAGE_SIZE && (
-              <div className="mt-4 flex items-center justify-between gap-2">
-                <p className="text-sm text-muted-foreground">
-                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} / {filtered.length} giao dịch
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                    Trước
-                  </Button>
-                  <span className="text-sm tabular-nums">
-                    Trang {page}/{totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
-                    Sau
-                  </Button>
-                </div>
-              </div>
-            )}
+            <TablePaginationFooter
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              totalItems={filtered.length}
+              pageSize={PAGE_SIZE}
+              itemLabel="giao dịch"
+            />
           </CardContent>
         </Card>
 

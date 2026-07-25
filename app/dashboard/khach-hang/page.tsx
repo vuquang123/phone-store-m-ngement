@@ -13,6 +13,7 @@ import { Eye } from "lucide-react"
 import CustomerPurchasesDialog from "@/components/khach-hang/CustomerPurchasesDialog"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
+import { TablePaginationFooter } from "@/components/ui/table-pagination-footer"
 
 interface Customer {
   id: string
@@ -191,83 +192,14 @@ export default function KhachHangPage() {
                     </TableBody>
                   </Table>
                 </div>
-                {/* Single pagination bar at bottom for all views */}
-                {totalPages > 1 && (
-                  <Pagination className="mt-4">
-                    <PaginationContent>
-                      {/* Remove Previous button */}
-                      {/* Compact pagination logic: show first, last, current, neighbors, ellipsis */}
-                      {(() => {
-                        const items = [];
-                        const maxPages = 7;
-                        if (totalPages <= maxPages) {
-                          for (let i = 1; i <= totalPages; i++) {
-                            items.push(
-                              <PaginationItem key={i}>
-                                <PaginationLink
-                                  href="#"
-                                  isActive={page === i}
-                                  onClick={e => { e.preventDefault(); setPage(i); }}
-                                >{i}</PaginationLink>
-                              </PaginationItem>
-                            );
-                          }
-                        } else {
-                          // Always show first page
-                          items.push(
-                            <PaginationItem key={1}>
-                              <PaginationLink
-                                href="#"
-                                isActive={page === 1}
-                                onClick={e => { e.preventDefault(); setPage(1); }}
-                              >1</PaginationLink>
-                            </PaginationItem>
-                          );
-                          // Show left ellipsis if needed
-                          if (page > 4) {
-                            items.push(
-                              <PaginationItem key="left-ellipsis">
-                                <span className="px-2">...</span>
-                              </PaginationItem>
-                            );
-                          }
-                          // Show up to 3 pages before/after current
-                          for (let i = Math.max(2, page - 2); i <= Math.min(totalPages - 1, page + 2); i++) {
-                            items.push(
-                              <PaginationItem key={i}>
-                                <PaginationLink
-                                  href="#"
-                                  isActive={page === i}
-                                  onClick={e => { e.preventDefault(); setPage(i); }}
-                                >{i}</PaginationLink>
-                              </PaginationItem>
-                            );
-                          }
-                          // Show right ellipsis if needed
-                          if (page < totalPages - 3) {
-                            items.push(
-                              <PaginationItem key="right-ellipsis">
-                                <span className="px-2">...</span>
-                              </PaginationItem>
-                            );
-                          }
-                          // Always show last page
-                          items.push(
-                            <PaginationItem key={totalPages}>
-                              <PaginationLink
-                                href="#"
-                                isActive={page === totalPages}
-                                onClick={e => { e.preventDefault(); setPage(totalPages); }}
-                              >{totalPages}</PaginationLink>
-                            </PaginationItem>
-                          );
-                        }
-                        return items;
-                      })()}
-                      {/* Remove Next button */}
-                    </PaginationContent>
-                  </Pagination>
-                )}
+                <TablePaginationFooter
+                  page={page}
+                  totalPages={Math.max(1, totalPages)}
+                  onPageChange={setPage}
+                  totalItems={customers.length}
+                  pageSize={pageSize}
+                  itemLabel="khách hàng"
+                />
               </>
             )}
           </CardContent>

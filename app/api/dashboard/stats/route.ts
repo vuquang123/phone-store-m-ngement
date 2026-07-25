@@ -1,4 +1,3 @@
-// app/api/dashboard/route.ts
 import { NextResponse, type NextRequest } from "next/server"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
 
@@ -10,23 +9,21 @@ const SHEETS = {
   KHACH_HANG: "Khach_Hang",
 } as const
 
-/* ================= Helpers ================= */
-
 const norm = (s: string) =>
   (s || "")
     .normalize("NFD")
     // @ts-ignore
     .replace(/\p{Diacritic}/gu, "")
+    .replace(/đ/gi, "d")
     .replace(/\s+/g, "_")
     .toLowerCase()
+    .trim()
 
 function colIndex(header: string[], ...names: string[]) {
-  // match chính xác trước
   for (const n of names) {
     const i = header.indexOf(n)
     if (i !== -1) return i
   }
-  // fallback: chuẩn hoá không dấu
   const hh = header.map((h) => norm(h))
   for (const n of names) {
     const i = hh.indexOf(norm(n))
@@ -35,223 +32,253 @@ function colIndex(header: string[], ...names: string[]) {
   return -1
 }
 
-// Parse đa dạng: ISO, hoặc dd/mm/yyyy [hh:mm[:ss]]
-function parseToEpoch(s: any): number {
-  if (!s) return 0
-  const str = String(s)
-  const t = Date.parse(str)
-  if (!Number.isNaN(t)) return t
-  const m = str.match(
-    /(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[^\d]*(\d{1,2}):(\d{2})(?::(\d{2}))?)?/
-  )
-  if (m) {
-    const [_, dd, mm, yyyy, hh = "0", mi = "0", ss = "0"] = m
-    return new Date(+yyyy, +mm - 1, +dd, +hh, +mi, +ss).getTime()
-  }
-  return 0
-}
-
-// Lấy "bắt đầu hôm nay" và "bắt đầu tháng" theo múi giờ VN (xấp xỉ tốt)
-function getVNTimeAnchors() {
-  const now = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" })
-  )
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  return { startOfTodayTs: startOfToday.getTime(), startOfMonthTs: startOfMonth.getTime() }
-}
-
-function inSameDay(ts: number, startOfDayTs: number) {
-  return ts >= startOfDayTs && ts < startOfDayTs + 24 * 60 * 60 * 1000
-}
-function inSameMonth(ts: number, startOfMonthTs: number) {
-  const d = new Date(startOfMonthTs)
-  const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime()
-  return ts >= startOfMonthTs && ts < nextMonth
-}
-
-// Chuyển giá VN "1.234.567" -> number
 function toNumber(x: any): number {
-  if (typeof x === "number") return x
-  const digits = String(x || "").replace(/[^\d]/g, "")
+  if (typeof x === "number" && Number.isFinite(x)) return x
+  const digits = String(x || "").replace(/[^\d-]/g, "")
   return digits ? Number(digits) : 0
 }
 
-/* ================= Route ================= */
+function parseVNDateParts(s: any) {
+  const str = String(s ?? "").trim()
+  if (!str) return null
+
+  const m = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (m) {
+    return { day: Number(m[1]), month: Number(m[2]), year: Number(m[3]) }
+  }
+
+  const iso = new Date(str)
+  if (!Number.isNaN(iso.getTime())) {
+    return {
+      day: iso.getDate(),
+      month: iso.getMonth() + 1,
+      year: iso.getFullYear(),
+    }
+  }
+
+  return null
+}
+
+function statusExcluded(raw: any) {
+  const s = norm(String(raw || ""))
+  return s.includes("hoan_tra") || s.includes("huy")
+}
+
+function isOnlineOrder(raw: any) {
+  const s = norm(String(raw || ""))
+  return s.includes("onl")
+}
+
+function isInventoryInStock(raw: any) {
+  const s = norm(String(raw || ""))
+  return s === "con_hang" || s === "available" || s === ""
+}
+
+type DayAgg = {
+  revenue: number
+  profit: number
+  orders: Set<string>
+  ordersOnl: Set<string>
+  ordersOff: Set<string>
+}
+
+type MonthAgg = DayAgg
+
+function makeAgg(): DayAgg {
+  return {
+    revenue: 0,
+    profit: 0,
+    orders: new Set<string>(),
+    ordersOnl: new Set<string>(),
+    ordersOff: new Set<string>(),
+  }
+}
 
 export async function GET(req: NextRequest) {
   try {
-    // Đọc sheet Thong_Ke
-    const { header, rows } = await readFromGoogleSheets("Thong_Ke")
-    const now = new Date()
-    // Tham số kỳ: year (mặc định năm hiện tại), month (0 = xem cả năm)
-    const reqYear = Number(req.nextUrl.searchParams.get("year")) || now.getFullYear()
-    const reqMonth = Number(req.nextUrl.searchParams.get("month")) || (now.getMonth() + 1)
-    const todayStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`
-    const monthStr = `${now.getMonth() + 1}/${now.getFullYear()}`
+    const nowVN = new Date(
+      new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }),
+    )
+    const reqYear = Number(req.nextUrl.searchParams.get("year")) || nowVN.getFullYear()
+    const reqMonth = Number(req.nextUrl.searchParams.get("month")) || (nowVN.getMonth() + 1)
+    const monthForView = reqMonth > 0 ? reqMonth : nowVN.getMonth() + 1
+    const todayKey = `${nowVN.getDate()}/${nowVN.getMonth() + 1}/${nowVN.getFullYear()}`
 
-    // Đọc nhanh tồn kho & giá vốn từ sheet Kho_Hang (tính tất cả hàng trong sheet, không lọc trạng thái)
     let inventoryInStock = 0
     let inventoryCost = 0
     try {
       const { header: khoHeader, rows: khoRows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
       const idxGiaNhap = colIndex(khoHeader, "Giá Nhập", "Gia Nhap", "GiaNhap")
+      const idxTrangThai = colIndex(khoHeader, "Trạng Thái", "Trang Thai")
       for (const row of khoRows) {
+        const status = idxTrangThai !== -1 ? row[idxTrangThai] : ""
+        if (!isInventoryInStock(status)) continue
         inventoryInStock += 1
-        if (idxGiaNhap !== -1) {
-          inventoryCost += toNumber(row[idxGiaNhap])
-        }
+        if (idxGiaNhap !== -1) inventoryCost += toNumber(row[idxGiaNhap])
       }
     } catch (e) {
       console.warn("[dashboard] Không đọc được tồn kho:", e)
     }
 
-    // Vùng ngày: cột A-K (0-10)
-    const idxNgay = 0
-    const idxDonHangOnl = 1
-    const idxDoanhThuOnl = 2
-    const idxLoiNhuanOnl = 3
-    const idxDonHangOff = 4
-    const idxDoanhThuOff = 5
-    const idxLoiNhuanOff = 6
-    const idxTongDon = 7
-    const idxTongDoanhThu = 8
-    const idxTongLoiNhuan = 9
-    const idxTongKhachHangMoi = 10
+    const dayAgg = new Map<string, DayAgg>()
+    const monthAgg = new Map<string, MonthAgg>()
 
-    // Vùng tháng: cột M-W (12-22)
-    const idxThang = 12
-    const idxDonHangOnlThang = 13
-    const idxDoanhThuOnlThang = 14
-    const idxLoiNhuanOnlThang = 15
-    const idxDonHangOffThang = 16
-    const idxDoanhThuOffThang = 17
-    const idxLoiNhuanOffThang = 18
-    const idxTongDonThang = 19
-    const idxTongDoanhThuThang = 20
-    const idxTongLoiNhuanThang = 21
-    const idxTongKhachHangMoiThang = 22
-
-    // Tách vùng ngày
-    const rowsNgay = rows.filter(r => r[idxNgay] && String(r[idxNgay]).trim() !== "")
-    // Tách vùng tháng
-    const rowsThang = rows.filter(r => r[idxThang] && String(r[idxThang]).trim() !== "")
-
-    // Giả sử bạn đã có biến header là mảng tiêu đề cột của sheet
-    const idxKhachHangMoi = colIndex(header, "Tổng khách hàng mới", "Khách hàng mới", "newCustomers");
-
-    // ===== Tính DOANH THU & LỢI NHUẬN trực tiếp từ Ban_Hang =====
-    // (sheet Thong_Ke chỉ đếm đơn, cột doanh thu/lợi nhuận luôn = 0 đ nên không dùng được)
-    const revByMonth = new Map<string, number>()
-    const profByMonth = new Map<string, number>()
-    const revByDate = new Map<string, number>()
-    const profByDate = new Map<string, number>()
-    const dateKey = (s: any) => {
-      const m = String(s ?? "").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
-      return m ? { day: Number(m[1]), mon: Number(m[2]), yr: Number(m[3]) } : null
-    }
     try {
-      const { header: bh, rows: br } = await readFromGoogleSheets("Ban_Hang")
-      const bNgay = colIndex(bh, "Ngày Xuất")
-      const bGia = colIndex(bh, "Giá Bán")
-      const bLai = colIndex(bh, "Lãi")
-      const bTrang = colIndex(bh, "Trạng Thái")
-      for (const r of br) {
-        if (bTrang !== -1 && String(r[bTrang] || "").trim() === "Hoàn trả") continue // bỏ đơn đã hoàn
-        const dk = dateKey(r[bNgay])
-        if (!dk) continue
-        const rev = bGia !== -1 ? toNumber(r[bGia]) : 0
-        const prof = bLai !== -1 ? toNumber(r[bLai]) : 0
-        const mKey = `${dk.mon}/${dk.yr}`
-        const dKey = `${dk.day}/${dk.mon}/${dk.yr}`
-        revByMonth.set(mKey, (revByMonth.get(mKey) || 0) + rev)
-        profByMonth.set(mKey, (profByMonth.get(mKey) || 0) + prof)
-        revByDate.set(dKey, (revByDate.get(dKey) || 0) + rev)
-        profByDate.set(dKey, (profByDate.get(dKey) || 0) + prof)
+      const { header: bhHeader, rows: bhRows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
+      const idxIdDon = colIndex(bhHeader, "ID Đơn Hàng", "Mã Đơn Hàng", "ID", "Id", "id")
+      const idxNgay = colIndex(bhHeader, "Ngày Bán", "Ngày bán", "Ngày Xuất", "ngay_ban")
+      const idxTongThu = colIndex(bhHeader, "Tổng Thu", "Tong Thu")
+      const idxGiaBan = colIndex(bhHeader, "Giá Bán", "Gia Ban")
+      const idxLai = colIndex(bhHeader, "Lãi", "Lai")
+      const idxLoaiDon = colIndex(bhHeader, "Loại Đơn", "Loai Don")
+      const idxTrangThai = colIndex(bhHeader, "Trạng Thái", "Trang Thai", "trang_thai")
+
+      for (const row of bhRows) {
+        if (idxIdDon === -1 || idxNgay === -1) break
+        if (idxTrangThai !== -1 && statusExcluded(row[idxTrangThai])) continue
+
+        const orderId = String(row[idxIdDon] || "").trim()
+        if (!orderId) continue
+
+        const dateParts = parseVNDateParts(row[idxNgay])
+        if (!dateParts) continue
+
+        const dayKey = `${dateParts.day}/${dateParts.month}/${dateParts.year}`
+        const monthKey = `${dateParts.month}/${dateParts.year}`
+        const revenue =
+          idxTongThu !== -1 && String(row[idxTongThu] || "").trim() !== ""
+            ? toNumber(row[idxTongThu])
+            : toNumber(row[idxGiaBan])
+        const profit = idxLai !== -1 ? toNumber(row[idxLai]) : 0
+        const isOnline = idxLoaiDon !== -1 ? isOnlineOrder(row[idxLoaiDon]) : false
+
+        if (!dayAgg.has(dayKey)) dayAgg.set(dayKey, makeAgg())
+        if (!monthAgg.has(monthKey)) monthAgg.set(monthKey, makeAgg())
+
+        const dayEntry = dayAgg.get(dayKey)!
+        const monthEntry = monthAgg.get(monthKey)!
+
+        dayEntry.revenue += revenue
+        dayEntry.profit += profit
+        monthEntry.revenue += revenue
+        monthEntry.profit += profit
+
+        dayEntry.orders.add(orderId)
+        monthEntry.orders.add(orderId)
+
+        if (isOnline) {
+          dayEntry.ordersOnl.add(orderId)
+          monthEntry.ordersOnl.add(orderId)
+        } else {
+          dayEntry.ordersOff.add(orderId)
+          monthEntry.ordersOff.add(orderId)
+        }
       }
     } catch (e) {
-      console.warn("[dashboard] Tính doanh thu từ Ban_Hang thất bại:", e)
-    }
-    const normDateKey = (s: any) => {
-      const dk = dateKey(s)
-      return dk ? `${dk.day}/${dk.mon}/${dk.yr}` : String(s ?? "")
+      console.warn("[dashboard] Không đọc được Ban_Hang:", e)
     }
 
-    // Tạo dailyStats từ vùng ngày
-    const dailyStats = rowsNgay.map(row => ({
-      date: row[idxNgay],
-      revenue: revByDate.get(normDateKey(row[idxNgay])) ?? toNumber(row[idxTongDoanhThu]),
-      profit: profByDate.get(normDateKey(row[idxNgay])) ?? toNumber(row[idxTongLoiNhuan]),
-      orders: Number(row[idxTongDon] || 0),
-      ordersOnl: Number(row[idxDonHangOnl] || 0),
-      ordersOff: Number(row[idxDonHangOff] || 0),
-      revenueOnl: toNumber(row[idxDoanhThuOnl] || 0),
-      profitOnl: toNumber(row[idxLoiNhuanOnl] || 0),
-      revenueOff: toNumber(row[idxDoanhThuOff] || 0),
-      profitOff: toNumber(row[idxLoiNhuanOff] || 0),
-      newCustomers: Number(row[idxKhachHangMoi] || 0), // <-- Tự động bổ sung trường khách hàng mới
-    }))
+    const dailyNewCustomers = new Map<string, number>()
+    const monthlyNewCustomers = new Map<string, number>()
+    let totalCustomersAllTime = 0
 
-    // Tạo mảng thống kê theo tháng cho NĂM ĐƯỢC CHỌN
-    const year = reqYear
-    const months = Array.from({ length: 12 }, (_, i) => i + 1)
-    let totalCustomersYear = 0
-    let totalOrdersOnlYear = 0
-    let totalOrdersOffYear = 0
-    const monthlyStats = months.map(m => {
-      const monthStr = `${m}/${year}`;
-      const row = rowsThang.find(r => {
-        const cell = String(r[idxThang]).trim();
-        const [mm, yyyy] = cell.split("/");
-        return Number(mm) === m && Number(yyyy) === year;
-      });
-      const customers = Number(row?.[idxTongKhachHangMoiThang] ?? 0)
-      const ordersOnl = Number(row?.[idxDonHangOnlThang] ?? 0)
-      const ordersOff = Number(row?.[idxDonHangOffThang] ?? 0)
-      totalCustomersYear += customers
-      totalOrdersOnlYear += ordersOnl
-      totalOrdersOffYear += ordersOff
+    try {
+      const { header: khHeader, rows: khRows } = await readFromGoogleSheets(SHEETS.KHACH_HANG)
+      const idxNgayTao = colIndex(
+        khHeader,
+        "Ngày tạo",
+        "Ngày Tạo",
+        "Ngay Tao",
+        "Ngay_Tao",
+        "Created At",
+        "created_at",
+      )
+
+      totalCustomersAllTime = khRows.filter((row) =>
+        row.some((cell) => String(cell || "").trim() !== ""),
+      ).length
+
+      if (idxNgayTao !== -1) {
+        for (const row of khRows) {
+          const dateParts = parseVNDateParts(row[idxNgayTao])
+          if (!dateParts) continue
+          const dayKey = `${dateParts.day}/${dateParts.month}/${dateParts.year}`
+          const monthKey = `${dateParts.month}/${dateParts.year}`
+          dailyNewCustomers.set(dayKey, (dailyNewCustomers.get(dayKey) || 0) + 1)
+          monthlyNewCustomers.set(monthKey, (monthlyNewCustomers.get(monthKey) || 0) + 1)
+        }
+      }
+    } catch (e) {
+      console.warn("[dashboard] Không đọc được Khach_Hang:", e)
+    }
+
+    const monthlyStats = Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1
+      const key = `${month}/${reqYear}`
+      const agg = monthAgg.get(key) || makeAgg()
       return {
-        month: monthStr,
-        revenue: revByMonth.get(monthStr) ?? toNumber(row?.[idxTongDoanhThuThang] ?? 0),
-        profit: profByMonth.get(monthStr) ?? toNumber(row?.[idxTongLoiNhuanThang] ?? 0),
-        orders: Number(row?.[idxTongDonThang] ?? 0),
-        customers,
-        ordersOnl,
-        ordersOff
+        month: key,
+        revenue: agg.revenue,
+        profit: agg.profit,
+        orders: agg.orders.size,
+        customers: monthlyNewCustomers.get(key) || 0,
+        ordersOnl: agg.ordersOnl.size,
+        ordersOff: agg.ordersOff.size,
       }
     })
 
-    // Dòng thống kê THÁNG ĐƯỢC CHỌN (month=0 -> dùng tháng hiện tại)
-    const monthForRow = reqMonth > 0 ? reqMonth : now.getMonth() + 1
-    let monthlyRow = rowsThang.find(r => r[idxThang] && String(r[idxThang]).trim() === `${monthForRow}/${year}`)
-    if (!monthlyRow) monthlyRow = []
+    const daysInMonth = new Date(reqYear, monthForView, 0).getDate()
+    const dailyStats = Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1
+      const key = `${day}/${monthForView}/${reqYear}`
+      const agg = dayAgg.get(key) || makeAgg()
+      return {
+        date: key,
+        revenue: agg.revenue,
+        profit: agg.profit,
+        orders: agg.orders.size,
+        ordersOnl: agg.ordersOnl.size,
+        ordersOff: agg.ordersOff.size,
+        revenueOnl: 0,
+        profitOnl: 0,
+        revenueOff: 0,
+        profitOff: 0,
+        newCustomers: dailyNewCustomers.get(key) || 0,
+      }
+    })
 
-    // Trả về đúng shape cho dashboard
-    const revMonthSel = revByMonth.get(`${monthForRow}/${year}`) ?? toNumber(monthlyRow[idxTongDoanhThuThang])
-    const profMonthSel = profByMonth.get(`${monthForRow}/${year}`) ?? toNumber(monthlyRow[idxTongLoiNhuanThang])
+    const selectedMonthKey = `${monthForView}/${reqYear}`
+    const selectedMonthAgg = monthAgg.get(selectedMonthKey) || makeAgg()
+    const todayAgg = dayAgg.get(todayKey) || makeAgg()
+    const revenueYear = monthlyStats.reduce((sum, item) => sum + item.revenue, 0)
+    const profitYear = monthlyStats.reduce((sum, item) => sum + item.profit, 0)
+    const ordersYear = monthlyStats.reduce((sum, item) => sum + item.orders, 0)
+    const customersYear = monthlyStats.reduce((sum, item) => sum + item.customers, 0)
+    const onlYear = monthlyStats.reduce((sum, item) => sum + item.ordersOnl, 0)
+    const offYear = monthlyStats.reduce((sum, item) => sum + item.ordersOff, 0)
+
     const result = {
       revenue: {
-        monthly: revMonthSel,
-        today: revByDate.get(todayStr) ?? (dailyStats.find(d => d.date === todayStr)?.revenue || 0),
-        yearly: monthlyStats.reduce((s, m) => s + (m.revenue || 0), 0),
+        monthly: selectedMonthAgg.revenue,
+        today: todayAgg.revenue,
+        yearly: revenueYear,
       },
       profit: {
-        monthly: profMonthSel,
-        today: profByDate.get(todayStr) ?? (dailyStats.find(d => d.date === todayStr)?.profit || 0),
-        yearly: monthlyStats.reduce((s, m) => s + (m.profit || 0), 0),
+        monthly: selectedMonthAgg.profit,
+        today: todayAgg.profit,
+        yearly: profitYear,
         lastYear: 0,
       },
       margin: {
-        monthly: revMonthSel > 0 ? Math.round((profMonthSel / revMonthSel) * 100) : 0,
-        yearly: 0,
+        monthly: selectedMonthAgg.revenue > 0 ? Math.round((selectedMonthAgg.profit / selectedMonthAgg.revenue) * 100) : 0,
+        yearly: revenueYear > 0 ? Math.round((profitYear / revenueYear) * 100) : 0,
       },
       orders: {
-        monthly: Number(monthlyRow[idxTongDonThang] || 0),
-        today: dailyStats.find(d => d.date === todayStr)?.orders || 0,
-        yearly: monthlyStats.reduce((s, m) => s + (m.orders || 0), 0),
-        onlYear: totalOrdersOnlYear,
-        offYear: totalOrdersOffYear,
+        monthly: selectedMonthAgg.orders.size,
+        today: todayAgg.orders.size,
+        yearly: ordersYear,
+        onlYear,
+        offYear,
       },
       products: {
         total: inventoryInStock,
@@ -263,14 +290,15 @@ export async function GET(req: NextRequest) {
         totalCost: inventoryCost,
       },
       customers: {
-        total: totalCustomersYear,
-        new: Number(monthlyRow[idxTongKhachHangMoiThang] || 0),
+        total: totalCustomersAllTime,
+        new: dailyNewCustomers.get(todayKey) || 0,
+        yearly: customersYear,
       },
       dailyStats,
       monthlyStats,
     }
+
     const res = NextResponse.json(result)
-    // Cache nhẹ trong 60s cho Vercel Edge (s-maxage) nhưng vẫn cho revalidate thủ công nếu cần
     res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=30")
     return res
   } catch (error) {

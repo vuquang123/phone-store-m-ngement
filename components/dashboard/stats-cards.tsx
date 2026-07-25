@@ -49,14 +49,14 @@ export function StatsCards({ stats }: StatsCardsProps) {
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-border text-center">
           {items.map(({ label, icon: Icon, tint, value }) => (
-            <div key={label} className="min-w-0 px-2 py-3 sm:py-4 flex flex-col items-center justify-center">
-              <span className="min-w-0 break-words text-xs sm:text-sm text-muted-foreground flex items-center justify-center gap-1.5 leading-tight">
+            <div key={label} className="min-w-0 px-2 py-2.5 sm:py-3 flex flex-col items-center justify-center">
+              <span className="min-w-0 break-words text-[11px] sm:text-xs text-muted-foreground flex items-center justify-center gap-1 leading-tight">
                 <span className="shrink-0">{label}</span>
                 <span className={`shrink-0 p-1 rounded ${TINT[tint].chip}`}>
-                  <Icon className={`h-4 w-4 ${TINT[tint].icon}`} />
+                  <Icon className={`h-3.5 w-3.5 ${TINT[tint].icon}`} />
                 </span>
               </span>
-              <span className={`text-lg sm:text-2xl font-bold mt-1.5 sm:mt-2 ${TINT[tint].value}`}>{value}</span>
+              <span className={`text-base sm:text-xl lg:text-[22px] font-bold mt-1 sm:mt-1.5 ${TINT[tint].value}`}>{value}</span>
             </div>
           ))}
         </div>

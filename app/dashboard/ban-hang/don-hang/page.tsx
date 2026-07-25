@@ -16,6 +16,8 @@ import { OrderDetailDialog } from "@/components/ban-hang/order-detail-dialog"
 import OrderProductsCell from "@/app/dashboard/ban-hang/OrderProductsCell"
 import { GhtkStatusBadge } from "@/components/ghtk/ghtk-status-badge"
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout"
+import { useAuthMe } from "@/hooks/use-auth-me"
+import { TablePaginationFooter } from "@/components/ui/table-pagination-footer"
 
 interface Order {
   id: string
@@ -39,6 +41,8 @@ interface Order {
 
 export default function DonHangPage() {
   const isMobile = useIsMobile()
+  const { me } = useAuthMe()
+  const isManager = me?.role === "quan_ly"
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -347,7 +351,7 @@ export default function DonHangPage() {
                           <div className="min-w-0">
                             <div className="text-[12px] font-medium uppercase tracking-wider text-muted-foreground">Sản phẩm</div>
                             <div className="mt-1">
-                              <OrderProductsCell orderId={order.ma_don_hang || order.id} />
+                              <OrderProductsCell orderId={order.ma_don_hang || order.id} editableCosts={isManager} />
                             </div>
                           </div>
                           <Button variant="secondary" size="sm" className="shrink-0 gap-1.5" onClick={() => handleViewOrder(order.ma_don_hang || order.id)}>
@@ -430,7 +434,7 @@ export default function DonHangPage() {
                             </TableCell>
                             {/* Sản phẩm máy đã mua */}
                             <TableCell>
-                              <OrderProductsCell orderId={order.ma_don_hang || order.id} />
+                              <OrderProductsCell orderId={order.ma_don_hang || order.id} editableCosts={isManager} />
                             </TableCell>
                             <TableCell>
                               {order.nhan_vien?.name || order.nhan_vien?.id ? (
@@ -493,26 +497,12 @@ export default function DonHangPage() {
               </div>
             )}
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-muted-foreground">
-                  Trang {page} / {totalPages}
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}>
-                    Trước
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(page + 1)}
-                    disabled={page === totalPages}
-                  >
-                    Sau
-                  </Button>
-                </div>
-              </div>
-            )}
+            <TablePaginationFooter
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              itemLabel="đơn hàng"
+            />
           </CardContent>
         </Card>
       </div>

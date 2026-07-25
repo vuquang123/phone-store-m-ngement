@@ -99,6 +99,7 @@ function idxBanHang(header: string[]) {
     dungLuong: colIndex(header, "Dung Lượng"),
     pin: colIndex(header, "Pin (%)"),
     mauSac: colIndex(header, "Màu Sắc"),
+    doSim: colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim"),
     imei: colIndex(header, "IMEI"),
     tinhTrang: colIndex(header, "Tình Trạng Máy"),
     phuKien: colIndex(header, "Phụ Kiện"),
@@ -122,6 +123,7 @@ function idxKhoHang(header: string[]) {
     dungLuong: colIndex(header, "Dung Lượng"),
     pin: colIndex(header, "Pin (%)"),
     mauSac: colIndex(header, "Màu Sắc"),
+    doSim: colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim"),
     imei: colIndex(header, "IMEI"),
     tinhTrang: colIndex(header, "Tình Trạng Máy"),
     giaNhap: colIndex(header, "Giá Nhập"),
@@ -375,6 +377,7 @@ export async function POST(request: NextRequest) {
   const warrantySelectionsInput = Array.isArray(body.warrantySelections) ? body.warrantySelections : []
   const coreTotalFromClient = typeof body.coreTotal === 'number' ? body.coreTotal : null
   const warrantyTotalFromClient = typeof body.warrantyTotal === 'number' ? body.warrantyTotal : null
+  const grossTotalFromClient = typeof body.grossTotal === 'number' ? body.grossTotal : null
   const finalTotalFromClient = typeof body.finalThanhToan === 'number' ? body.finalThanhToan : null
     // Extract phone early for reuse (customer update + warranty contracts)
     const rawPhone = body.customerPhone || body.so_dien_thoai || body.sdt || body["Số Điện Thoại"] || (body.khach_hang && (body.khach_hang.so_dien_thoai || body.khach_hang.sdt))
@@ -556,6 +559,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const grossOrderTotal =
+      grossTotalFromClient
+      ?? (coreTotalFromClient !== null || warrantyTotalFromClient !== null
+        ? Number(coreTotalFromClient || 0) + Number(warrantyTotalFromClient || 0)
+        : finalTotalFromClient)
+      ?? 0
+
     // Thu thập tổng core (server tính) để phản hồi FE
     let coreTotalServer = 0
     for (let i = 0; i < mayList.length; i++) {
@@ -635,10 +645,10 @@ export async function POST(request: NextRequest) {
           return base > 0 ? base : "";
         }
         if (k === "Tổng Thu") {
-          // Máy đầu tiên ghi tổng thu, các máy sau ghi 0
+          // Tổng thu phải phản ánh GIÁ TRỊ ĐƠN thực tế sau giảm giá,
+          // không phải chỉ phần còn thu thêm khi tất toán đơn cọc.
           if (i === 0) {
-            const baseThanhToan = finalTotalFromClient || body["Thanh Toan"] || body["finalThanhToan"];
-            return baseThanhToan || 0;
+            return grossOrderTotal || 0;
           } else {
             return 0;
           }
@@ -648,7 +658,7 @@ export async function POST(request: NextRequest) {
           // Máy sau: lãi = 0 - giá nhập máy tương ứng
           let tongThu = 0;
           if (i === 0) {
-            tongThu = Number(finalTotalFromClient || body["Thanh Toan"] || body["finalThanhToan"] || 0);
+            tongThu = Number(grossOrderTotal || 0);
           }
           const lai = tongThu - Math.round(tongGiaNhap);
           return lai;
@@ -666,6 +676,9 @@ export async function POST(request: NextRequest) {
         if (k === "Tên Sản Phẩm") return may.ten_san_pham || may["Tên Sản Phẩm"] || ""
         if (k === "Loại Máy") return may.loai_may || may["Loại Máy"] || ""
         if (k === "Dung Lượng") return may.dung_luong || may["Dung Lượng"] || ""
+        if (k === "Dạng Sim" || k === "Dạng sim" || k === "Kiểu dạng sim") {
+          return may.do_sim || may["Dạng Sim"] || may["Dạng sim"] || may["Kiểu dạng sim"] || ""
+        }
         if (k === "IMEI") return may.imei || may["IMEI"] || ""
         if (k === "Màu Sắc") return may.mau_sac || may["Màu Sắc"] || ""
         if (k === "Pin (%)") return may.pin || may["Pin (%)"] || ""
@@ -684,9 +697,7 @@ export async function POST(request: NextRequest) {
       if (i === 0) {
         if (idxPhiBH !== -1) newRow[idxPhiBH] = warrantyTotalFee > 0 ? warrantyTotalFee : ''
         if (idxTongThu !== -1) {
-          // Tổng Thu = (Giá Bán core tổng) + phí BH => tạm: lấy body.finalThanhToan nếu có
-          const baseThanhToan = finalTotalFromClient || body["Thanh Toan"] || body["finalThanhToan"]
-          if (baseThanhToan) newRow[idxTongThu] = baseThanhToan
+          if (grossOrderTotal) newRow[idxTongThu] = grossOrderTotal
         }
         if (idxGoiBH !== -1) newRow[idxGoiBH] = warrantyPkgCodes.join(', ')
         if (idxChiTietPK !== -1 && normalizedAccessories.length > 0) {
@@ -1085,7 +1096,7 @@ export async function POST(request: NextRequest) {
       warrantyError = e?.message || String(e)
       console.error("[WARRANTY] Lỗi xử lý bảo hành:", warrantyError)
     }
-    const finalTotalServer = finalTotalFromClient || (coreTotalServer + warrantyTotalFee)
+    const finalTotalServer = grossOrderTotal || (coreTotalServer + warrantyTotalFee)
     // Ghi thông báo hệ thống: Đơn hàng mới
     try {
       const customerName = body.customerName || body.ten_khach_hang || body.ho_ten || (body.khach_hang && (body.khach_hang.ten || body.khach_hang.ten_khach_hang)) || "Khách lẻ"

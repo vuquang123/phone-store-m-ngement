@@ -83,7 +83,7 @@ export default function DashboardPage() {
   return (
     <ProtectedRoute>
       <TooltipProvider>
-        <div className="space-y-6 lg:space-y-8 p-4 lg:p-0">
+        <div className="mx-auto w-full max-w-[calc(100vw-2rem)] space-y-4 overflow-x-hidden px-1 pb-2 lg:space-y-5">
           {error ? (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -105,8 +105,8 @@ export default function DashboardPage() {
           {hasNoData ? (
             <Card className="border-dashed border-2 border-muted-foreground/25">
               <CardHeader className="text-center pb-4">
-                <CardTitle className="text-xl lg:text-2xl">Bắt đầu với cửa hàng của bạn</CardTitle>
-                <CardDescription className="text-base lg:text-lg">
+                <CardTitle className="text-lg lg:text-xl">Bắt đầu với cửa hàng của bạn</CardTitle>
+                <CardDescription className="text-sm lg:text-base">
                   Hệ thống chưa có dữ liệu. Thêm sản phẩm hoặc khách hàng để kích hoạt thống kê.
                 </CardDescription>
               </CardHeader>
@@ -133,7 +133,7 @@ type BarChartSectionProps = {
 function BarChartSection({ selectedMonth, setSelectedMonth, selectedYear, setSelectedYear }: BarChartSectionProps) {
   const { stats: rawStats } = useDashboardStats(selectedMonth, selectedYear) || {}
   return (
-    <div className="mb-4">
+    <div className="mb-2">
       <BarChart
         data={
           selectedMonth === 0

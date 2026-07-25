@@ -1,7 +1,7 @@
 // app/dashboard/don-online/page.tsx
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
@@ -20,6 +20,7 @@ import { useGhtkTracking } from "@/components/ghtk/ghtk-status-badge"
 import { STATUS_GROUP_COLOR } from "@/lib/ghtk-status"
 import { cn } from "@/lib/utils"
 import { Eye, Loader2, Check, Truck, Package } from "lucide-react"
+import { TablePaginationFooter } from "@/components/ui/table-pagination-footer"
 
 interface OnlineOrder {
   id: string
@@ -146,6 +147,8 @@ function GhtkOrderCard({ order, onView }: { order: OnlineOrder; onView: (id: str
 export default function DonOnlinePage() {
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [page, setPage] = useState(1)
+  const pageSize = 10
 
   const { data, isLoading, isFetching, refetch } = useQuery<OnlineOrder[]>({
     queryKey: ["don-online"],
@@ -159,6 +162,16 @@ export default function DonOnlinePage() {
   })
 
   const orders = data ?? []
+  const totalPages = Math.max(1, Math.ceil(orders.length / pageSize))
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+
+  const pagedOrders = useMemo(
+    () => orders.slice((page - 1) * pageSize, page * pageSize),
+    [orders, page],
+  )
 
   const handleView = (id: string) => {
     setSelectedOrder(id)
@@ -219,7 +232,7 @@ export default function DonOnlinePage() {
               <>
                 {/* Mobile: card list */}
                 <div className="space-y-3 md:hidden">
-                  {orders.map((o) => (
+                  {pagedOrders.map((o) => (
                     <GhtkOrderCard key={o.ma_don_hang || o.id} order={o} onView={handleView} />
                   ))}
                 </div>
@@ -240,12 +253,20 @@ export default function DonOnlinePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orders.map((o) => (
+                    {pagedOrders.map((o) => (
                       <GhtkOrderRow key={o.ma_don_hang || o.id} order={o} onView={handleView} />
                     ))}
                   </TableBody>
                 </Table>
                 </div>
+                <TablePaginationFooter
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                  totalItems={orders.length}
+                  pageSize={pageSize}
+                  itemLabel="đơn online"
+                />
               </>
             )}
           </CardContent>

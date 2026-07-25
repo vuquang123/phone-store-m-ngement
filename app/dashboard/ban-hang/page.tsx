@@ -44,7 +44,7 @@ export default function BanHangPage() {
   const [mobileView, setMobileView] = useState<"san-pham" | "gio-hang" | "thanh-toan">("san-pham")
   // Bộ lọc nhanh cho mobile-first
   const [filterSource, setFilterSource] = useState<"all" | "inhouse" | "partner">("all")
-  const [filterType, setFilterType] = useState<"all" | "iphone" | "ipad" | "sim_ghep">("all")
+  const [filterType, setFilterType] = useState<"all" | "iphone" | "ipad" | "phu_kien" | "sim_ghep">("all")
   // Bộ lọc nâng cao (đồng bộ với trang Kho hàng)
   const BH_MAX_PRICE = 50000000
   const [productNameFilter, setProductNameFilter] = useState("all")
@@ -236,8 +236,8 @@ export default function BanHangPage() {
   const savedType = localStorage.getItem('bh_filter_type') as any
       if (savedQ !== null) setSearchQuery(savedQ)
       if (savedSrc === 'all' || savedSrc === 'inhouse' || savedSrc === 'partner') setFilterSource(savedSrc)
-  if (savedType === 'iphone' || savedType === 'ipad' || savedType === 'sim_ghep') setFilterType(savedType)
-  else if (savedType === 'all' || savedType === 'accessory') setFilterType('all')
+  if (savedType === 'iphone' || savedType === 'ipad' || savedType === 'sim_ghep' || savedType === 'phu_kien') setFilterType(savedType)
+  else if (savedType === 'all' || savedType === 'accessory') setFilterType(savedType === 'accessory' ? 'phu_kien' : 'all')
       // Bộ lọc nâng cao
       const savedName = localStorage.getItem('bh_filter_name')
       const savedLoai = localStorage.getItem('bh_filter_loai_may')
@@ -582,6 +582,15 @@ export default function BanHangPage() {
     return searchResults.filter((p: any) => {
       const src = String(p.nguon || p.source || "").toLowerCase()
       const isPartner = !!src.match(/kho ngoài|kho ngoài/i)
+      // Tab "Phụ kiện": hiện tất cả phụ kiện bán riêng
+      if (filterType === 'phu_kien') {
+        if (!isAccessoryItem(p)) return false
+        const gia = Number(p.gia_ban || 0)
+        if (productNameFilter !== "all" && p.ten_san_pham !== productNameFilter) return false
+        if (minP > 0 && gia < minP) return false
+        if (maxP > 0 && maxP < BH_MAX_PRICE && gia > maxP) return false
+        return true
+      }
       // Tab "Sim ghép": chỉ hiện phụ kiện sim ghép, bỏ qua các bộ lọc dành cho máy
       if (filterType === 'sim_ghep') return isAccessoryItem(p) && isSimGhep(p)
       // Các tab còn lại: phụ kiện không hiển thị (đã chuyển sang tích kèm máy trong giỏ)
@@ -1042,7 +1051,10 @@ export default function BanHangPage() {
               nguon_hang: products.some(p => String(p.nguon || p.source || '').toLowerCase().includes('kho ngoài')) ? 'Kho ngoài' : '',
               coreTotal: thanhToan,
               warrantyTotal: warrantyTotal,
+              grossTotal: tongTien + warrantyTotal - giamGiaToUse,
               finalThanhToan: finalThanhToan,
+              so_tien_coc: depositAmountAlreadyPaid,
+              is_settlement: !!currentDepositOrderId,
               hinh_thuc_thanh_toan: paymentSummary,
               payments: paymentsArray,
               dia_chi_nhan: loaiDon === 'Đơn onl' ? diaChiNhan : '',
@@ -1330,27 +1342,29 @@ export default function BanHangPage() {
                   setCart={setCart}
                   toast={toast}
                   cartProductKeys={cartProductKeys}
-                  advancedFilter={
-                    <AdvancedFilterBar
-                      productNames={advancedFilterOptions.productNames}
-                      colors={advancedFilterOptions.colors}
-                      capacities={advancedFilterOptions.capacities}
-                      maxPrice={BH_MAX_PRICE}
-                      productNameFilter={productNameFilter}
-                      setProductNameFilter={setProductNameFilter}
-                      loaiMayFilter={loaiMayFilter}
-                      setLoaiMayFilter={setLoaiMayFilter}
-                      colorFilter={colorFilter}
-                      setColorFilter={setColorFilter}
-                      capacityFilter={capacityFilter}
-                      setCapacityFilter={setCapacityFilter}
-                      pinFilter={pinFilter}
-                      setPinFilter={setPinFilter}
-                      priceRange={priceRange}
-                      setPriceRange={setPriceRange}
-                      resetFilters={resetAdvancedFilters}
-                    />
-                  }
+                  advancedFilter={filterType === "phu_kien" || filterType === "sim_ghep"
+                    ? null
+                    : (
+                      <AdvancedFilterBar
+                        productNames={advancedFilterOptions.productNames}
+                        colors={advancedFilterOptions.colors}
+                        capacities={advancedFilterOptions.capacities}
+                        maxPrice={BH_MAX_PRICE}
+                        productNameFilter={productNameFilter}
+                        setProductNameFilter={setProductNameFilter}
+                        loaiMayFilter={loaiMayFilter}
+                        setLoaiMayFilter={setLoaiMayFilter}
+                        colorFilter={colorFilter}
+                        setColorFilter={setColorFilter}
+                        capacityFilter={capacityFilter}
+                        setCapacityFilter={setCapacityFilter}
+                        pinFilter={pinFilter}
+                        setPinFilter={setPinFilter}
+                        priceRange={priceRange}
+                        setPriceRange={setPriceRange}
+                        resetFilters={resetAdvancedFilters}
+                      />
+                    )}
                 />
 
                 {(!isMobile || mobileView === 'gio-hang') && (

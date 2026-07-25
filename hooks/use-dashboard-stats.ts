@@ -41,6 +41,7 @@ interface DashboardStats {
   customers: {
     total: number
     new?: number
+    yearly?: number
   }
   labels?: string[]
   revenueByMonth?: number[]
@@ -80,8 +81,6 @@ export function useDashboardStats(selectedMonth?: number, selectedYear?: number)
         const statsResponse = await fetchWithTimeout(`/api/dashboard/stats?year=${qYear}&month=${qMonth}`)
         if (!statsResponse.ok) throw new Error("Failed to fetch stats")
         const statsData = await statsResponse.json()
-
-        console.log(statsData.dailyStats);
 
         // Nếu API trả về monthlyStats thì dùng cho biểu đồ năm, dailyStats cho biểu đồ tháng
         let labels: string[] = []
@@ -128,7 +127,7 @@ export function useDashboardStats(selectedMonth?: number, selectedYear?: number)
           ordersOffByMonth,
           dailyCustomers: statsData.dailyCustomers,
           // Bổ sung tổng khách hàng năm và tổng đơn onl/off năm cho FE
-          totalCustomersYear: statsData.customers?.total ?? 0,
+          totalCustomersYear: statsData.customers?.yearly ?? 0,
           totalOrdersOnlYear: statsData.orders?.onlYear ?? 0,
           totalOrdersOffYear: statsData.orders?.offYear ?? 0,
         })

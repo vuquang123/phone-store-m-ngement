@@ -49,12 +49,12 @@ const StatCard = ({
   accentClass: string
   children?: React.ReactNode
 }) => (
-  <div className="min-w-0 rounded-xl border bg-card px-3 py-3 shadow-sm sm:px-4">
+  <div className="min-w-0 rounded-xl border bg-card px-3 py-2.5 shadow-sm sm:px-3.5">
     <div className="flex items-center gap-2">
       <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${accentClass}`} />
-      <span className="text-sm font-medium text-muted-foreground">{label}</span>
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
     </div>
-    <div className={`mt-1 break-words tabular-nums text-base font-extrabold leading-tight sm:text-lg lg:text-xl ${valueClass}`}>{value}</div>
+    <div className={`mt-1 break-words tabular-nums text-sm font-extrabold leading-tight sm:text-base lg:text-lg ${valueClass}`}>{value}</div>
     {children}
   </div>
 )
@@ -284,11 +284,11 @@ const BarChartComponent = ({
   return (
     <Card className="w-full rounded-2xl border shadow-sm">
       <CardHeader className="pb-2">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <CardTitle className="text-2xl">Biểu đồ thống kê</CardTitle>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <CardTitle className="text-xl">Biểu đồ thống kê</CardTitle>
 
           {/* Hàng filter: năm / tháng / khoảng ngày — gọn trên 1 hàng ngang */}
-          <div className="flex items-center gap-2 overflow-x-auto">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:pb-0">
             <Select value={String(selectedYear)} onValueChange={(v) => onYearChange?.(Number(v))}>
               <SelectTrigger className={SELECT_TRIGGER_CLS} aria-label="Chọn năm">
                 <SelectValue />
@@ -364,11 +364,11 @@ const BarChartComponent = ({
 
       <CardContent className="pt-0">
         {/* 2 cột: chart bên trái + stats bên phải. Không dùng absolute, không margin “ảo” */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
           {/* Chart */}
-          <div className="lg:col-span-8">
+          <div className="lg:col-span-8 xl:col-span-9">
             {/* khung cố định chiều cao để Chart.js fill vào (nhờ maintainAspectRatio:false) */}
-            <div className="h-[280px] sm:h-[320px] lg:h-[360px] w-full">
+            <div className="h-[250px] sm:h-[290px] lg:h-[320px] xl:h-[340px] w-full">
               {!isMonthView ? (
                 <MixedChart type="bar" data={barData as any} options={barOptions} />
               ) : (
@@ -378,8 +378,8 @@ const BarChartComponent = ({
           </div>
 
           {/* Stats nhỏ bên phải — 4 thẻ đồng nhất */}
-          <div className="lg:col-span-4">
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-1 lg:sticky lg:top-3">
+          <div className="lg:col-span-4 xl:col-span-3">
+            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-1 lg:sticky lg:top-3">
               <StatCard
                 label={`Doanh thu ${scopeLabel}`}
                 value={formatCurrency(summary.totalRevenue)}
@@ -398,7 +398,7 @@ const BarChartComponent = ({
                 valueClass="text-blue-600"
                 accentClass="bg-blue-500"
               >
-                <div className="mt-1 flex items-center gap-2 text-xs font-semibold">
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
                   <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400">Off: {summary.totalOrdersOff}</span>
                   <span className="rounded-md bg-green-50 px-1.5 py-0.5 text-green-700 dark:bg-green-500/15 dark:text-green-400">Onl: {summary.totalOrdersOnl}</span>
                 </div>

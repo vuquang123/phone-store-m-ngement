@@ -4,11 +4,17 @@
 import type { CartItem } from "@/lib/types/ban-hang"
 
 export type QuickAccCategory = "cuong_luc" | "cu_sac" | "day_lightning" | "day_type_c" | "op_lung"
+export type AccessoryBrowseCategory = "cuong_luc" | "op_lung" | "sac_cap" | "sim_ghep" | "khac"
 
 export interface QuickAccDef {
   key: QuickAccCategory
   label: string
   keywords: string[] // đã chuẩn hoá không dấu
+}
+
+export interface AccessoryBrowseDef {
+  key: AccessoryBrowseCategory
+  label: string
 }
 
 // Thứ tự ưu tiên match: nhóm có từ khoá đặc trưng đứng trước.
@@ -18,6 +24,14 @@ export const QUICK_ACC_CATEGORIES: QuickAccDef[] = [
   { key: "day_lightning", label: "Dây Lightning", keywords: ["lightning", "day lightning", "cap lightning"] },
   { key: "day_type_c", label: "Dây Type-C", keywords: ["type-c", "type c", "typec", "day type", "cap type"] },
   { key: "op_lung", label: "Ốp lưng", keywords: ["op lung", "oplung", "case", "bao da", "op "] },
+]
+
+export const ACCESSORY_BROWSE_CATEGORIES: AccessoryBrowseDef[] = [
+  { key: "cuong_luc", label: "Cường lực" },
+  { key: "op_lung", label: "Ốp lưng" },
+  { key: "sac_cap", label: "Sạc / Cáp" },
+  { key: "sim_ghep", label: "Sim ghép" },
+  { key: "khac", label: "Khác" },
 ]
 
 export function normalizeVi(s: string): string {
@@ -98,6 +112,25 @@ export function categorizeAccessory(loaiPhuKien: string): QuickAccCategory | nul
   return null
 }
 
+export function categorizeBrowseAccessory(text: string): AccessoryBrowseCategory {
+  const n = ` ${normalizeVi(text)} `
+  if (n.includes("sim ghep") || n.includes("simghep")) return "sim_ghep"
+  if (n.includes("cuong luc") || n.includes("kinh cuong") || n.includes("dan man")) return "cuong_luc"
+  if (n.includes("op lung") || n.includes("oplung") || n.includes("case") || n.includes("bao da")) return "op_lung"
+  if (
+    n.includes("sac") ||
+    n.includes("cap ") ||
+    n.includes(" cap") ||
+    n.includes("lightning") ||
+    n.includes("type c") ||
+    n.includes("type-c") ||
+    n.includes("typec") ||
+    n.includes("adapter") ||
+    n.includes("usb")
+  ) return "sac_cap"
+  return "khac"
+}
+
 export function parseNum(v: any): number {
   if (typeof v === "number") return v
   if (typeof v === "string") return parseInt(v.replace(/[^\d]/g, ""), 10) || 0
@@ -150,6 +183,24 @@ export function groupAccessoriesByCategory(
     const cat = categorizeAccessory(text)
     if (!cat) continue
     out[cat].push(buildQuickAccProduct(raw))
+  }
+  return out
+}
+
+export function groupAccessoriesForBrowse(
+  rawAccessories: any[],
+): Record<AccessoryBrowseCategory, QuickAccProduct[]> {
+  const out: Record<AccessoryBrowseCategory, QuickAccProduct[]> = {
+    cuong_luc: [],
+    op_lung: [],
+    sac_cap: [],
+    sim_ghep: [],
+    khac: [],
+  }
+  for (const raw of rawAccessories || []) {
+    const prod = buildQuickAccProduct(raw)
+    const text = `${raw.loai_phu_kien || ""} ${raw.ten_san_pham || raw.ten_phu_kien || ""}`
+    out[categorizeBrowseAccessory(text)].push(prod)
   }
   return out
 }

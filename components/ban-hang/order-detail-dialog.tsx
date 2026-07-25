@@ -38,9 +38,12 @@ interface OrderDetail {
   nhan_vien?: { ho_ten: string }
   chi_tiet: Array<{
     id: string
+    row_number?: number
     so_luong: number
     gia_ban: number
     thanh_tien: number
+    gia_nhap?: number
+    lai?: number
     tinh_trang_may?: string
     san_pham?: {
       ten_san_pham: string

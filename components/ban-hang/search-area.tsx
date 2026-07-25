@@ -23,8 +23,8 @@ interface SearchAreaProps {
   addToCart: (p: any) => void
   filterSource: "all" | "inhouse" | "partner"
   setFilterSource: React.Dispatch<React.SetStateAction<"all" | "inhouse" | "partner">>
-  filterType: "all" | "iphone" | "ipad" | "sim_ghep"
-  setFilterType: React.Dispatch<React.SetStateAction<"all" | "iphone" | "ipad" | "sim_ghep">>
+  filterType: "all" | "iphone" | "ipad" | "phu_kien" | "sim_ghep"
+  setFilterType: React.Dispatch<React.SetStateAction<"all" | "iphone" | "ipad" | "phu_kien" | "sim_ghep">>
   toggleSort: (k: any) => void
   sortKey: string
   sortOrder: "asc" | "desc"
@@ -145,6 +145,9 @@ export function SearchArea({
             <Button size="sm" variant={filterType === 'ipad' ? 'default' : 'outline'}
               className={filterType === 'ipad' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
               onClick={() => setFilterType('ipad')}>iPad</Button>
+            <Button size="sm" variant={filterType === 'phu_kien' ? 'default' : 'outline'}
+              className={filterType === 'phu_kien' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
+              onClick={() => setFilterType('phu_kien')}>Phụ kiện</Button>
             <Button size="sm" variant={filterType === 'sim_ghep' ? 'default' : 'outline'}
               className={filterType === 'sim_ghep' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
               onClick={() => setFilterType('sim_ghep')}>Sim ghép</Button>

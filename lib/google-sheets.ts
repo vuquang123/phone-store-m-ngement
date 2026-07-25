@@ -446,6 +446,34 @@ export async function updateRangeValues(range: string, values: any[][]) {
   return { success: true }
 }
 
+export async function batchUpdateRangeValues(
+  items: Array<{ range: string; values: any[][] }>
+) {
+  if (!items.length) return { success: true }
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+    requestBody: {
+      valueInputOption: "RAW",
+      data: items.map((item) => ({
+        range: item.range,
+        values: item.values,
+      })),
+    },
+  })
+
+  try {
+    const touchedSheets = new Set<string>()
+    for (const item of items) {
+      const m = item.range.match(/^'?(.*?)'?!/)
+      if (m && m[1]) touchedSheets.add(m[1].replace(/''/g, "'"))
+    }
+    for (const sheetName of touchedSheets) invalidateSheetCache(sheetName)
+  } catch {}
+
+  return { success: true }
+}
+
 // Cập nhật trạng thái cho nhiều sản phẩm trong sheet Kho_Hang
 export async function updateProductsStatus(productIds: string[], newStatus: string) {
   const { header, rows } = await readFromGoogleSheets("Kho_Hang")

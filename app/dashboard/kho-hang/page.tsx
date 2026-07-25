@@ -10,6 +10,7 @@ import { PullToRefresh } from "@/components/ui/pull-to-refresh"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { TablePaginationFooter } from "@/components/ui/table-pagination-footer"
 import { Plus, ListChecks } from "lucide-react"
 
 // Components
@@ -673,27 +674,15 @@ export default function KhoHangPage() {
                   totalCount={filteredProducts.length}
                 />
 
-                {filteredProducts.length > pageSize && (
-                  <div className="flex items-center justify-center p-4 bg-muted/50 gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page === 1}
-                      onClick={() => setPage(page - 1)}
-                    >
-                      Trạm trước
-                    </Button>
-                    <span className="text-sm font-medium">Trang {page} / {Math.ceil(filteredProducts.length / pageSize)}</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page * pageSize >= filteredProducts.length}
-                      onClick={() => setPage(page + 1)}
-                    >
-                      Trạm sau
-                    </Button>
-                  </div>
-                )}
+                <TablePaginationFooter
+                  page={page}
+                  totalPages={Math.max(1, Math.ceil(filteredProducts.length / pageSize))}
+                  onPageChange={setPage}
+                  totalItems={filteredProducts.length}
+                  pageSize={pageSize}
+                  itemLabel="sản phẩm"
+                  className="bg-muted/50 px-4"
+                />
               </Card>
             )}
           </div>
@@ -765,33 +754,14 @@ export default function KhoHangPage() {
                     onComplete={(p) => completeCNC({ productIds: [p.imei || p.id], employeeId: me?.employeeId || "NV-UNKNOWN" })}
                     totalCount={processingCNC.length}
                   />
-                  {processingCNC.length > pageSize && (
-                    <div className="flex items-center justify-between mt-2 px-2">
-                      <div className="text-[12px] text-muted-foreground">
-                        Trang {cncProcessingPage} / {Math.ceil(processingCNC.length / pageSize)}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-[11px]"
-                          disabled={cncProcessingPage === 1}
-                          onClick={() => setCncProcessingPage(cncProcessingPage - 1)}
-                        >
-                          Trạm trước
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-[11px]"
-                          disabled={cncProcessingPage * pageSize >= processingCNC.length}
-                          onClick={() => setCncProcessingPage(cncProcessingPage + 1)}
-                        >
-                          Trạm sau
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  <TablePaginationFooter
+                    page={cncProcessingPage}
+                    totalPages={Math.max(1, Math.ceil(processingCNC.length / pageSize))}
+                    onPageChange={setCncProcessingPage}
+                    totalItems={processingCNC.length}
+                    pageSize={pageSize}
+                    itemLabel="máy CNC"
+                  />
                 </>
               )}
             </div>
@@ -822,33 +792,14 @@ export default function KhoHangPage() {
                     isEditMode={false}
                     totalCount={completedCNC.length}
                   />
-                  {completedCNC.length > pageSize && (
-                    <div className="flex items-center justify-between mt-2 px-2">
-                      <div className="text-[12px] text-muted-foreground">
-                        Trang {cncCompletedPage} / {Math.ceil(completedCNC.length / pageSize)}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-[11px]"
-                          disabled={cncCompletedPage === 1}
-                          onClick={() => setCncCompletedPage(cncCompletedPage - 1)}
-                        >
-                          Trạm trước
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-[11px]"
-                          disabled={cncCompletedPage * pageSize >= completedCNC.length}
-                          onClick={() => setCncCompletedPage(cncCompletedPage + 1)}
-                        >
-                          Trạm sau
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  <TablePaginationFooter
+                    page={cncCompletedPage}
+                    totalPages={Math.max(1, Math.ceil(completedCNC.length / pageSize))}
+                    onPageChange={setCncCompletedPage}
+                    totalItems={completedCNC.length}
+                    pageSize={pageSize}
+                    itemLabel="máy CNC"
+                  />
                 </>
               )}
             </div>
@@ -966,27 +917,15 @@ export default function KhoHangPage() {
                   totalCount={filteredHangDoiTac.length}
                 />
 
-                {filteredHangDoiTac.length > pageSize && (
-                  <div className="flex items-center justify-center p-4 bg-muted/50 gap-2 rounded-md">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={hangDoiTacPage === 1}
-                      onClick={() => setHangDoiTacPage(hangDoiTacPage - 1)}
-                    >
-                      Trang trước
-                    </Button>
-                    <span className="text-sm font-medium">Trang {hangDoiTacPage} / {Math.ceil(filteredHangDoiTac.length / pageSize)}</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={hangDoiTacPage * pageSize >= filteredHangDoiTac.length}
-                      onClick={() => setHangDoiTacPage(hangDoiTacPage + 1)}
-                    >
-                      Trang sau
-                    </Button>
-                  </div>
-                )}
+                <TablePaginationFooter
+                  page={hangDoiTacPage}
+                  totalPages={Math.max(1, Math.ceil(filteredHangDoiTac.length / pageSize))}
+                  onPageChange={setHangDoiTacPage}
+                  totalItems={filteredHangDoiTac.length}
+                  pageSize={pageSize}
+                  itemLabel="máy đối tác"
+                  className="bg-muted/50 px-4 rounded-md"
+                />
               </>
             )}
           </div>
@@ -1039,31 +978,15 @@ export default function KhoHangPage() {
                   totalCount={filteredAccessories.length}
                 />
 
-                {filteredAccessories.length > pageSize && (
-                  <div className="flex items-center justify-between mt-4 pb-4">
-                    <div className="text-sm text-muted-foreground">
-                      Hiển thị {Math.min(filteredAccessories.length, (accessoryPage - 1) * pageSize + 1)} - {Math.min(filteredAccessories.length, accessoryPage * pageSize)} trong tổng số {filteredAccessories.length} phụ kiện
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={accessoryPage === 1}
-                        onClick={() => setAccessoryPage(accessoryPage - 1)}
-                      >
-                        Trang trước
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={accessoryPage * pageSize >= filteredAccessories.length}
-                        onClick={() => setAccessoryPage(accessoryPage + 1)}
-                      >
-                        Trang sau
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <TablePaginationFooter
+                  page={accessoryPage}
+                  totalPages={Math.max(1, Math.ceil(filteredAccessories.length / pageSize))}
+                  onPageChange={setAccessoryPage}
+                  totalItems={filteredAccessories.length}
+                  pageSize={pageSize}
+                  itemLabel="phụ kiện"
+                  className="pb-4"
+                />
               </>
             )}
           </div>
