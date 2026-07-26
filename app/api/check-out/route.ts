@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { buildCheckoutMessage, addCheckout, getCheckouts, type Ca, type TrangThai, type KhoCounts } from "@/lib/check-out"
 import { sendTelegramMessage, sendTelegramPhotoBase64, sendTelegramMediaGroup } from "@/lib/telegram"
 import { getServerUser } from "@/lib/auth"
+import { parseVietnameseNumber } from "@/lib/number"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -17,8 +18,7 @@ const TG_OPTS = CHECKOUT_CHAT
   : { message_thread_id: CHECKOUT_THREAD }
 
 const num = (v: any): number => {
-  const n = Number(String(v ?? "").replace(/[^\d.-]/g, ""))
-  return Number.isFinite(n) ? n : 0
+  return parseVietnameseNumber(v)
 }
 const normCounts = (k: any): KhoCounts => ({
   website: num(k?.website), thucTe: num(k?.thucTe),

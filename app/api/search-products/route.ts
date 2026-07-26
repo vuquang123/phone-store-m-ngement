@@ -1,6 +1,7 @@
 // app/api/search/route.ts
 import { google } from "googleapis"
 import { type NextRequest, NextResponse } from "next/server"
+import { parseVietnameseNumber } from "@/lib/number"
 
 export const dynamic = "force-dynamic"
 
@@ -176,7 +177,7 @@ export async function GET(request: NextRequest) {
         .filter((row) => {
           // chỉ lấy > 0 nếu có cột số lượng
           if (soLuongCol >= 0) {
-            const n = Number(String(row[soLuongCol]).replace(/[^\d.-]/g, "")) || 0
+            const n = parseVietnameseNumber(row[soLuongCol])
             if (n <= 0) return false
           }
           const ten = tenCol >= 0 ? norm(row[tenCol]) : ""

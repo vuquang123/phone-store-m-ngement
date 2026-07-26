@@ -96,6 +96,15 @@ export function buildOverview(safeReserve = DEFAULT_SAFE_RESERVE): CashFlowOverv
     projectedEndingBalance,
     safeReserve,
     spendableCash,
+    realizedProfitSinceStart: 0,
+    profitFundBalance: 0,
+    longTermDebtTotal: 0,
+    longTermDebtPaid: 0,
+    longTermDebtRemaining: 0,
+    activeDepositOrders: 0,
+    activeDepositCollected: 0,
+    activeDepositInventoryValue: 0,
+    activeDepositRemaining: 0,
   }
 }
 
@@ -313,6 +322,9 @@ export function buildDashboardData(): CashFlowDashboardData {
     overview,
     accounts: cashAccountsSample,
     transactions: [],
+    profitFundEntries: [],
+    longTermDebts: [],
+    depositOrders: [],
     inventoryItems: inventoryItemsSample,
     receivables: receivablesSample,
     payables: payablesSample,

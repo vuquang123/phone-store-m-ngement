@@ -5,6 +5,7 @@
 
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
 import { addNotification } from "@/lib/notifications"
+import { parseVietnameseNumber } from "@/lib/number"
 import { sendCashTelegram, sendCashPhoto } from "./telegram-cash"
 
 const SHEET_NAME = "Tien_mat"
@@ -52,8 +53,7 @@ export interface RecordCashInput {
 
 /** Bỏ mọi ký tự không phải số để parse tiền (chuỗi vi-VN "1.000.000 đ" -> 1000000). */
 function toNumber(v: any): number {
-  const n = Number(String(v ?? "").replace(/[^\d.-]/g, "").replace(/(?!^)-/g, ""))
-  return Number.isFinite(n) ? n : 0
+  return parseVietnameseNumber(v)
 }
 
 /** Tạo ID: ưu tiên crypto.randomUUID, fallback timestamp. */

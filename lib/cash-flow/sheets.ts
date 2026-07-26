@@ -2,6 +2,7 @@ import { DateTime } from "luxon"
 import { ensureSheetHeader, readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, batchUpdateRangeValues, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { extractGhtkCode, mapGhtkStatus } from "@/lib/ghtk-status"
 import { getGhtkTracking } from "@/lib/ghtk"
+import { parseVietnameseNumber } from "@/lib/number"
 import { generateCashFlowAiReport } from "@/services/ai/generate-cash-flow-report"
 import { DEFAULT_SAFE_RESERVE } from "./sample-data"
 import type {
@@ -13,10 +14,13 @@ import type {
   CashFlowOverview,
   CashFlowPlanRow,
   CashFlowScenarioInput,
+  DepositOrderSummary,
   InventoryItem,
   LedgerTransaction,
+  LongTermDebt,
   Payable,
   PaymentSuggestion,
+  ProfitFundEntry,
   PriorityLevel,
   Receivable,
 } from "./types"
@@ -26,10 +30,13 @@ const SHEETS = {
   RECEIVABLES: "DongTien_CongNoThu",
   PAYABLES: "DongTien_PhaiTra",
   TRANSACTIONS: "DongTien_GiaoDich",
+  PROFIT_FUND: "DongTien_QuyLai",
+  LONG_TERM_DEBTS: "DongTien_NoDaiHan",
   SETTINGS: "DongTien_CaiDat",
   REPORTS: "DongTien_BaoCao",
   BAN_HANG: "Ban_Hang",
   KHO_HANG: "Kho_Hang",
+  DAT_COC: "Dat_Coc",
 } as const
 
 const ACCOUNT_HEADER = [
@@ -103,6 +110,36 @@ const TRANSACTION_HEADER = [
   "Created At",
 ]
 
+const PROFIT_FUND_HEADER = [
+  "ID",
+  "Ngày",
+  "Số Tiền",
+  "Loại",
+  "Ref Loại",
+  "Ref ID",
+  "ID Đơn Hàng",
+  "Đối Tượng",
+  "Ghi Chú",
+  "Tự Động",
+  "Created By",
+  "Created At",
+]
+
+const LONG_TERM_DEBT_HEADER = [
+  "ID",
+  "Chủ Nợ",
+  "Nội Dung",
+  "Số Tiền Gốc",
+  "Đã Thanh Toán",
+  "Ngày Phát Sinh",
+  "Hạn Thanh Toán",
+  "Mức Độ Ưu Tiên",
+  "Trạng Thái",
+  "Ghi Chú",
+  "Created At",
+  "Updated At",
+]
+
 const SETTINGS_HEADER = [
   "Khóa",
   "Giá Trị",
@@ -134,6 +171,7 @@ const SETTING_KEYS = {
 } as const
 
 const AUTO_REPORT_HOUR = 18
+const PROFIT_TRACKING_START = "2026-07-16"
 
 function nowIso() {
   return DateTime.now().setZone("Asia/Ho_Chi_Minh").toISO() || new Date().toISOString()
@@ -160,9 +198,7 @@ function parseReportSlug(slug: string) {
 }
 
 function toNumber(v: any): number {
-  if (typeof v === "number") return v
-  const n = Number(String(v ?? "").replace(/[^\d.-]/g, ""))
-  return Number.isFinite(n) ? n : 0
+  return parseVietnameseNumber(v)
 }
 
 function genId(prefix: string) {
@@ -187,6 +223,8 @@ export async function ensureCashFlowSheets() {
   await ensureSheetHeader(SHEETS.RECEIVABLES, RECEIVABLE_HEADER)
   await ensureSheetHeader(SHEETS.PAYABLES, PAYABLE_HEADER)
   await ensureSheetHeader(SHEETS.TRANSACTIONS, TRANSACTION_HEADER)
+  await ensureSheetHeader(SHEETS.PROFIT_FUND, PROFIT_FUND_HEADER)
+  await ensureSheetHeader(SHEETS.LONG_TERM_DEBTS, LONG_TERM_DEBT_HEADER)
   await ensureSheetHeader(SHEETS.SETTINGS, SETTINGS_HEADER)
   await ensureSheetHeader(SHEETS.REPORTS, REPORTS_HEADER)
 
@@ -239,6 +277,9 @@ async function readReceivables(): Promise<Receivable[]> {
       dueDate: String(row[colIndex(header, "Ngày Hẹn Thanh Toán")] || ""),
       collectability: (String(row[colIndex(header, "Khả Năng Thu")] || "medium") as any),
       status: String(row[colIndex(header, "Trạng Thái")] || "NOT_DUE") as any,
+      accountId: String(row[colIndex(header, "Tài Khoản Nhận ID")] || ""),
+      autoRefType: String(row[colIndex(header, "Auto Ref Type")] || ""),
+      autoRefId: String(row[colIndex(header, "Auto Ref ID")] || ""),
       note: String(row[colIndex(header, "Ghi Chú")] || ""),
     }))
 }
@@ -286,6 +327,162 @@ async function readTransactions(): Promise<LedgerTransaction[]> {
       createdBy: String(row[colIndex(header, "Created By")] || ""),
       createdAt: String(row[colIndex(header, "Created At")] || ""),
     }))
+}
+
+async function readProfitFundEntries(): Promise<ProfitFundEntry[]> {
+  const { header, rows } = await readFromGoogleSheets(SHEETS.PROFIT_FUND, undefined, { force: true })
+  return rows
+    .filter((row) => String(row[0] || "").trim())
+    .map((row) => ({
+      id: String(row[colIndex(header, "ID")] || ""),
+      date: String(row[colIndex(header, "Ngày")] || ""),
+      amount: toNumber(row[colIndex(header, "Số Tiền")]),
+      type: String(row[colIndex(header, "Loại")] || "sale_profit") as ProfitFundEntry["type"],
+      refType: String(row[colIndex(header, "Ref Loại")] || ""),
+      refId: String(row[colIndex(header, "Ref ID")] || ""),
+      orderId: String(row[colIndex(header, "ID Đơn Hàng")] || ""),
+      counterparty: String(row[colIndex(header, "Đối Tượng")] || ""),
+      note: String(row[colIndex(header, "Ghi Chú")] || ""),
+      automatic: parseBool(row[colIndex(header, "Tự Động")]),
+      createdBy: String(row[colIndex(header, "Created By")] || ""),
+      createdAt: String(row[colIndex(header, "Created At")] || ""),
+    }))
+}
+
+async function readLongTermDebts(): Promise<LongTermDebt[]> {
+  const { header, rows } = await readFromGoogleSheets(SHEETS.LONG_TERM_DEBTS, undefined, { force: true })
+  return rows
+    .filter((row) => String(row[0] || "").trim())
+    .map((row) => ({
+      id: String(row[colIndex(header, "ID")] || ""),
+      creditor: String(row[colIndex(header, "Chủ Nợ")] || ""),
+      description: String(row[colIndex(header, "Nội Dung")] || ""),
+      principalAmount: toNumber(row[colIndex(header, "Số Tiền Gốc")]),
+      paidAmount: toNumber(row[colIndex(header, "Đã Thanh Toán")]),
+      incurredAt: String(row[colIndex(header, "Ngày Phát Sinh")] || ""),
+      dueDate: String(row[colIndex(header, "Hạn Thanh Toán")] || ""),
+      priority: String(row[colIndex(header, "Mức Độ Ưu Tiên")] || "medium") as PriorityLevel,
+      status: String(row[colIndex(header, "Trạng Thái")] || "OPEN") as LongTermDebt["status"],
+      note: String(row[colIndex(header, "Ghi Chú")] || ""),
+    }))
+}
+
+async function readActiveDepositOrders(): Promise<DepositOrderSummary[]> {
+  const { header, rows } = await readFromGoogleSheets(SHEETS.DAT_COC, undefined, { force: true })
+  const idxOrderId = colIndex(header, "ID Đơn Hàng", "Mã Đơn Hàng")
+  const idxCustomer = colIndex(header, "Tên Khách Hàng")
+  const idxPhone = colIndex(header, "Số Điện Thoại")
+  const idxStatus = colIndex(header, "Trạng Thái")
+  const idxDepositDate = colIndex(header, "Ngày Đặt Cọc")
+  const idxDueDate = colIndex(header, "Hạn Thanh Toán")
+  const idxDeposit = colIndex(header, "Số Tiền Cọc")
+  const idxRemaining = colIndex(header, "Số Tiền Còn Lại", "Còn Lại")
+  const idxNote = colIndex(header, "Ghi Chú")
+  const idxModel = colIndex(header, "Tên Sản Phẩm")
+  const idxCapacity = colIndex(header, "Dung Lượng")
+  const idxColor = colIndex(header, "Màu Sắc")
+  const idxImei = colIndex(header, "IMEI")
+  const idxSerial = colIndex(header, "Serial")
+  const idxCondition = colIndex(header, "Tình Trạng Máy")
+  const idxCost = colIndex(header, "Giá Nhập")
+  const idxSale = colIndex(header, "Giá Bán")
+
+  const groups = new Map<string, DepositOrderSummary>()
+  for (const row of rows) {
+    const orderId = String((idxOrderId !== -1 ? row[idxOrderId] : "") || "").trim()
+    if (!orderId) continue
+    const status = String((idxStatus !== -1 ? row[idxStatus] : "") || "").trim()
+    const normalizedStatus = norm(status)
+    if (normalizedStatus === "huy_dat_coc" || normalizedStatus === "da_thanh_toan" || normalizedStatus === "da_tat_toan") continue
+    const existing = groups.get(orderId) || {
+      id: orderId,
+      customer: String((idxCustomer !== -1 ? row[idxCustomer] : "") || "Khách lẻ"),
+      phone: String((idxPhone !== -1 ? row[idxPhone] : "") || ""),
+      status: status || "Đặt cọc",
+      depositDate: toSheetDateVN(String((idxDepositDate !== -1 ? row[idxDepositDate] : "") || todayYmd())),
+      dueDate: String((idxDueDate !== -1 ? row[idxDueDate] : "") || ""),
+      depositAmount: toNumber(idxDeposit !== -1 ? row[idxDeposit] : 0),
+      remainingAmount: toNumber(idxRemaining !== -1 ? row[idxRemaining] : 0),
+      inventoryValue: 0,
+      saleValue: 0,
+      note: String((idxNote !== -1 ? row[idxNote] : "") || ""),
+      products: [],
+    }
+    const product = {
+      model: String((idxModel !== -1 ? row[idxModel] : "") || ""),
+      capacity: String((idxCapacity !== -1 ? row[idxCapacity] : "") || ""),
+      color: String((idxColor !== -1 ? row[idxColor] : "") || ""),
+      imei: String((idxImei !== -1 ? row[idxImei] : "") || ""),
+      serial: String((idxSerial !== -1 ? row[idxSerial] : "") || ""),
+      condition: String((idxCondition !== -1 ? row[idxCondition] : "") || ""),
+      costPrice: toNumber(idxCost !== -1 ? row[idxCost] : 0),
+      salePrice: toNumber(idxSale !== -1 ? row[idxSale] : 0),
+    }
+    existing.inventoryValue += product.costPrice
+    existing.saleValue += product.salePrice
+    if (product.model || product.imei || product.serial) {
+      existing.products.push(product)
+    }
+    groups.set(orderId, existing)
+  }
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const aTime = new Date(a.depositDate || 0).getTime()
+    const bTime = new Date(b.depositDate || 0).getTime()
+    return bTime - aTime
+  })
+}
+
+function buildProfitFundRow(input: {
+  date: string
+  amount: number
+  type: ProfitFundEntry["type"]
+  refType: string
+  refId: string
+  orderId?: string
+  counterparty?: string
+  note?: string
+  automatic?: boolean
+  createdBy?: string
+}) {
+  return [
+    genId("profit"),
+    input.date,
+    input.amount,
+    input.type,
+    input.refType,
+    input.refId,
+    input.orderId || "",
+    input.counterparty || "",
+    input.note || "",
+    input.automatic ? "true" : "false",
+    input.createdBy || "system",
+    nowIso(),
+  ]
+}
+
+function buildLongTermDebtRow(input: {
+  creditor: string
+  description: string
+  principalAmount: number
+  dueDate: string
+  priority?: string
+  note?: string
+}) {
+  return [
+    genId("ltd"),
+    input.creditor,
+    input.description,
+    input.principalAmount,
+    0,
+    todayYmd(),
+    input.dueDate,
+    input.priority || "medium",
+    "OPEN",
+    input.note || "",
+    nowIso(),
+    nowIso(),
+  ]
 }
 
 async function readSafeReserve() {
@@ -357,6 +554,24 @@ function findPreferredAccount(accounts: CashAccount[], kind: "cash" | "bank") {
       : norm(item.name).includes("tai_khoan") || norm(item.name).includes("ngan_hang")),
   )
   return byName || accounts.find((item) => item.availability === "AVAILABLE") || accounts[0]
+}
+
+function applyActiveDepositsToAccounts(accounts: CashAccount[], depositOrders: DepositOrderSummary[]) {
+  const totalDepositCollected = depositOrders.reduce((sum, item) => sum + Math.max(0, item.depositAmount || 0), 0)
+  if (totalDepositCollected <= 0) return accounts
+  const bankAccount = findPreferredAccount(accounts, "bank")
+  if (!bankAccount) return accounts
+  return accounts.map((item) =>
+    item.id === bankAccount.id
+      ? {
+          ...item,
+          balance: item.balance + totalDepositCollected,
+          note: [item.note, `Đã cộng tiền cọc máy đang mở: ${totalDepositCollected.toLocaleString("vi-VN")} ₫`]
+            .filter(Boolean)
+            .join(" | "),
+        }
+      : item,
+  )
 }
 
 function parsePaymentSummary(summary: string) {
@@ -514,6 +729,63 @@ function toSheetDateVN(raw: string) {
   const iso = DateTime.fromISO(raw, { zone: "Asia/Ho_Chi_Minh" })
   if (iso.isValid) return iso.toFormat("yyyy-MM-dd")
   return todayYmd()
+}
+
+function statusForLongTermDebt(item: LongTermDebt): LongTermDebt["status"] {
+  const remaining = Math.max(0, item.principalAmount - item.paidAmount)
+  if (remaining <= 0) return "PAID"
+  if (item.paidAmount > 0) return "PARTIALLY_PAID"
+  return "OPEN"
+}
+
+async function syncProfitFundFromSales() {
+  const existing = await readProfitFundEntries()
+  const existingRefs = new Set(existing.filter((item) => item.type === "sale_profit").map((item) => `${item.refType}::${item.refId}`))
+  const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force: true })
+  const idxId = colIndex(header, "ID Đơn Hàng")
+  const idxDate = colIndex(header, "Ngày Bán", "Ngày Xuất")
+  const idxCustomer = colIndex(header, "Tên Khách Hàng")
+  const idxProfit = colIndex(header, "Lãi")
+  if (idxId === -1 || idxDate === -1 || idxProfit === -1) return
+
+  const grouped = new Map<string, { date: string; customer: string; profit: number }>()
+  for (const row of rows) {
+    const orderId = String(row[idxId] || "").trim()
+    if (!orderId) continue
+    const orderDate = toSheetDateVN(String(row[idxDate] || todayYmd()))
+    if (orderDate < PROFIT_TRACKING_START) continue
+    const current = grouped.get(orderId) || {
+      date: orderDate,
+      customer: String(row[idxCustomer] || "Khách lẻ"),
+      profit: 0,
+    }
+    current.profit += toNumber(row[idxProfit])
+    grouped.set(orderId, current)
+  }
+
+  const rowsToAppend: any[][] = []
+  for (const [orderId, item] of grouped.entries()) {
+    const refType = "sale_profit"
+    const refId = orderId
+    if (existingRefs.has(`${refType}::${refId}`)) continue
+    if (!Number.isFinite(item.profit) || item.profit === 0) continue
+    rowsToAppend.push(buildProfitFundRow({
+      date: item.date,
+      amount: item.profit,
+      type: "sale_profit",
+      refType,
+      refId,
+      orderId,
+      counterparty: item.customer,
+      note: `Lãi đơn ${orderId}`,
+      automatic: true,
+      createdBy: "system",
+    }))
+  }
+
+  if (rowsToAppend.length) {
+    await appendMultipleToGoogleSheets(SHEETS.PROFIT_FUND, rowsToAppend)
+  }
 }
 
 async function applyAccountDeltas(accountDeltas: Map<string, number>) {
@@ -1211,6 +1483,9 @@ function buildOverview(args: {
   inventoryItems: InventoryItem[]
   receivables: Receivable[]
   payables: Payable[]
+  profitFundEntries: ProfitFundEntry[]
+  longTermDebts: LongTermDebt[]
+  depositOrders: DepositOrderSummary[]
   safeReserve: number
   ghtkCodSummary: GhtkCodSummary
 }): CashFlowOverview {
@@ -1221,6 +1496,17 @@ function buildOverview(args: {
   const inventoryQuickSaleValue = currentInventory.reduce((sum, item) => sum + item.quickSalePrice, 0)
   const totalReceivables = args.receivables.reduce((sum, item) => sum + remainingReceivable(item), 0)
   const totalPayables = args.payables.reduce((sum, item) => sum + remainingPayable(item), 0)
+  const realizedProfitSinceStart = args.profitFundEntries
+    .filter((item) => item.type === "sale_profit")
+    .reduce((sum, item) => sum + item.amount, 0)
+  const profitFundBalance = args.profitFundEntries.reduce((sum, item) => sum + item.amount, 0)
+  const longTermDebtTotal = args.longTermDebts.reduce((sum, item) => sum + item.principalAmount, 0)
+  const longTermDebtPaid = args.longTermDebts.reduce((sum, item) => sum + item.paidAmount, 0)
+  const longTermDebtRemaining = args.longTermDebts.reduce((sum, item) => sum + Math.max(0, item.principalAmount - item.paidAmount), 0)
+  const activeDepositOrders = args.depositOrders.length
+  const activeDepositCollected = args.depositOrders.reduce((sum, item) => sum + item.depositAmount, 0)
+  const activeDepositInventoryValue = args.depositOrders.reduce((sum, item) => sum + item.inventoryValue, 0)
+  const activeDepositRemaining = args.depositOrders.reduce((sum, item) => sum + item.remainingAmount, 0)
   const dueToday = args.payables.reduce((sum, item) => statusForPayable(item) === "DUE_TODAY" ? sum + remainingPayable(item) : sum, 0)
   const dueIn3Days = args.payables.reduce((sum, item) => {
     const d = daysUntil(item.dueDate)
@@ -1273,6 +1559,15 @@ function buildOverview(args: {
     projectedEndingBalance,
     safeReserve: args.safeReserve,
     spendableCash,
+    realizedProfitSinceStart,
+    profitFundBalance,
+    longTermDebtTotal,
+    longTermDebtPaid,
+    longTermDebtRemaining,
+    activeDepositOrders,
+    activeDepositCollected,
+    activeDepositInventoryValue,
+    activeDepositRemaining,
   }
 }
 
@@ -1648,8 +1943,13 @@ export async function getCashFlowDashboardDataFromSheets(): Promise<CashFlowDash
   await ensureCashFlowSheets()
   const accounts = await readAccounts()
   await syncOrdersIntoCashFlow(accounts)
+  await syncProfitFundFromSales()
   const freshAccounts = await readAccounts()
   const transactions = await readTransactions()
+  const profitFundEntries = await readProfitFundEntries()
+  const longTermDebts = (await readLongTermDebts()).map((item) => ({ ...item, status: statusForLongTermDebt(item) }))
+  const depositOrders = await readActiveDepositOrders()
+  const displayAccounts = applyActiveDepositsToAccounts(freshAccounts, depositOrders)
   const inventoryItems = await readInventorySnapshot()
   const receivables = await readReceivables()
   const payables = await readPayables()
@@ -1658,15 +1958,18 @@ export async function getCashFlowDashboardDataFromSheets(): Promise<CashFlowDash
   const receivablesWithStatus = receivables.map((item) => ({ ...item, status: statusForReceivable(item) as any }))
   const payablesWithStatus = payables.map((item) => ({ ...item, status: statusForPayable(item) as any }))
   const overview = buildOverview({
-    accounts: freshAccounts,
+    accounts: displayAccounts,
     inventoryItems,
     receivables: receivablesWithStatus,
     payables: payablesWithStatus,
+    profitFundEntries,
+    longTermDebts,
+    depositOrders,
     safeReserve,
     ghtkCodSummary,
   })
   const plan = buildPlan(overview, receivablesWithStatus, payablesWithStatus)
-  const paymentSuggestions = buildPaymentSuggestions(payablesWithStatus, overview, freshAccounts)
+  const paymentSuggestions = buildPaymentSuggestions(payablesWithStatus, overview, displayAccounts)
   const alerts = buildAlerts(overview, plan)
   const scenarios = [
     { id: "none", name: "Không bán được hàng", sellThroughRate: 0, receivableCollectRate: 0, safeReserve },
@@ -1677,12 +1980,19 @@ export async function getCashFlowDashboardDataFromSheets(): Promise<CashFlowDash
   ].map((scenario) => ({ ...scenario, ...buildScenario(overview, scenario) }))
   return {
     overview,
-    accounts: freshAccounts,
+    accounts: displayAccounts,
     transactions: [...transactions].sort((a, b) => {
       const aTime = new Date(a.createdAt || a.occurredAt || 0).getTime()
       const bTime = new Date(b.createdAt || b.occurredAt || 0).getTime()
       return bTime - aTime
     }),
+    profitFundEntries: [...profitFundEntries].sort((a, b) => {
+      const aTime = new Date(a.createdAt || a.date || 0).getTime()
+      const bTime = new Date(b.createdAt || b.date || 0).getTime()
+      return bTime - aTime
+    }),
+    longTermDebts,
+    depositOrders,
     inventoryItems,
     receivables: receivablesWithStatus,
     payables: payablesWithStatus,
@@ -1744,6 +2054,8 @@ export async function resetCashFlowData() {
   await syncToGoogleSheets(SHEETS.RECEIVABLES, [])
   await syncToGoogleSheets(SHEETS.PAYABLES, [])
   await syncToGoogleSheets(SHEETS.TRANSACTIONS, [])
+  await syncToGoogleSheets(SHEETS.PROFIT_FUND, [])
+  await syncToGoogleSheets(SHEETS.LONG_TERM_DEBTS, [])
   await upsertSettingRows([
     { key: SETTING_KEYS.SAFE_RESERVE, value: 0, note: "Reset về 0 để nhập lại thủ công" },
     { key: SETTING_KEYS.RESET_ORDER_SEQ, value: maxOrderSeq, note: "Chỉ đồng bộ các đơn phát sinh sau lần reset gần nhất" },
@@ -1870,6 +2182,18 @@ export async function createCashFlowPayable(input: {
   ])
 }
 
+export async function createLongTermDebt(input: {
+  creditor: string
+  description: string
+  principalAmount: number
+  dueDate: string
+  priority?: string
+  note?: string
+}) {
+  await ensureCashFlowSheets()
+  await appendToGoogleSheets(SHEETS.LONG_TERM_DEBTS, buildLongTermDebtRow(input))
+}
+
 export async function updateCashFlowPayable(input: {
   id: string
   creditor?: string
@@ -1883,8 +2207,53 @@ export async function updateCashFlowPayable(input: {
   await updatePayableRow(input)
 }
 
+export async function updateLongTermDebt(input: {
+  id: string
+  creditor?: string
+  description?: string
+  principalAmount?: number
+  dueDate?: string
+  priority?: string
+  note?: string
+}) {
+  const { header, rows } = await readFromGoogleSheets(SHEETS.LONG_TERM_DEBTS, undefined, { force: true })
+  const idxId = colIndex(header, "ID")
+  const rowIndex = rows.findIndex((row) => String(row[idxId] || "") === input.id)
+  if (rowIndex === -1) throw new Error("Không tìm thấy nợ dài hạn")
+  const row = [...rows[rowIndex]]
+  const set = (name: string, value: any) => {
+    const idx = colIndex(header, name)
+    if (idx !== -1 && value !== undefined) row[idx] = value
+  }
+  set("Chủ Nợ", input.creditor)
+  set("Nội Dung", input.description)
+  set("Số Tiền Gốc", input.principalAmount)
+  set("Hạn Thanh Toán", input.dueDate)
+  set("Mức Độ Ưu Tiên", input.priority)
+  set("Ghi Chú", input.note)
+  const simulated: LongTermDebt = {
+    id: input.id,
+    creditor: String(row[colIndex(header, "Chủ Nợ")] || ""),
+    description: String(row[colIndex(header, "Nội Dung")] || ""),
+    principalAmount: toNumber(row[colIndex(header, "Số Tiền Gốc")]),
+    paidAmount: toNumber(row[colIndex(header, "Đã Thanh Toán")]),
+    incurredAt: String(row[colIndex(header, "Ngày Phát Sinh")] || todayYmd()),
+    dueDate: String(row[colIndex(header, "Hạn Thanh Toán")] || todayYmd()),
+    priority: String(row[colIndex(header, "Mức Độ Ưu Tiên")] || "medium") as PriorityLevel,
+    status: "OPEN",
+    note: String(row[colIndex(header, "Ghi Chú")] || ""),
+  }
+  set("Trạng Thái", statusForLongTermDebt(simulated))
+  set("Updated At", nowIso())
+  await updateRangeValues(`'${SHEETS.LONG_TERM_DEBTS}'!A${rowIndex + 2}:L${rowIndex + 2}`, [row])
+}
+
 export async function deleteCashFlowPayable(id: string) {
   await removeRowById(SHEETS.PAYABLES, id)
+}
+
+export async function deleteLongTermDebt(id: string) {
+  await removeRowById(SHEETS.LONG_TERM_DEBTS, id)
 }
 
 export async function collectCashFlowReceivable(input: {
@@ -1905,6 +2274,50 @@ export async function payCashFlowPayable(input: {
   actor?: string
 }) {
   await payPayablePayment(input)
+}
+
+export async function payLongTermDebt(input: {
+  id: string
+  amount: number
+  note?: string
+  actor?: string
+}) {
+  const debts = await readLongTermDebts()
+  const entries = await readProfitFundEntries()
+  const item = debts.find((row) => row.id === input.id)
+  if (!item) throw new Error("Không tìm thấy nợ dài hạn")
+  const amount = Math.max(0, Math.floor(input.amount || 0))
+  const remaining = Math.max(0, item.principalAmount - item.paidAmount)
+  const fundBalance = entries.reduce((sum, row) => sum + row.amount, 0)
+  if (amount <= 0) throw new Error("Số tiền trả phải lớn hơn 0")
+  if (amount > remaining) throw new Error("Số tiền trả vượt quá số còn phải trả")
+  if (amount > fundBalance) throw new Error("Quỹ lãi hiện không đủ để trả khoản này")
+
+  const { header, rows } = await readFromGoogleSheets(SHEETS.LONG_TERM_DEBTS, undefined, { force: true })
+  const idxId = colIndex(header, "ID")
+  const idxPaid = colIndex(header, "Đã Thanh Toán")
+  const idxNote = colIndex(header, "Ghi Chú")
+  const rowIndex = rows.findIndex((row) => String(row[idxId] || "") === input.id)
+  if (rowIndex === -1) throw new Error("Không tìm thấy nợ dài hạn")
+  const newPaid = toNumber(rows[rowIndex][idxPaid]) + amount
+  const simulated = { ...item, paidAmount: newPaid }
+  await batchUpdateRangeValues([
+    { range: `'${SHEETS.LONG_TERM_DEBTS}'!E${rowIndex + 2}`, values: [[newPaid]] },
+    { range: `'${SHEETS.LONG_TERM_DEBTS}'!I${rowIndex + 2}`, values: [[statusForLongTermDebt(simulated)]] },
+    { range: `'${SHEETS.LONG_TERM_DEBTS}'!J${rowIndex + 2}`, values: [[`${String(rows[rowIndex][idxNote] || "")}${input.note ? ` | Trả quỹ lãi: ${input.note}` : ""}`.trim()]] },
+    { range: `'${SHEETS.LONG_TERM_DEBTS}'!L${rowIndex + 2}`, values: [[nowIso()]] },
+  ])
+  await appendToGoogleSheets(SHEETS.PROFIT_FUND, buildProfitFundRow({
+    date: todayYmd(),
+    amount: -amount,
+    type: "long_term_debt_payment",
+    refType: "long_term_debt_payment",
+    refId: input.id,
+    counterparty: item.creditor,
+    note: input.note || `Trả nợ dài hạn ${item.description}`,
+    automatic: false,
+    createdBy: input.actor || "manager",
+  }))
 }
 
 export async function syncCashFlowFromSale(input: {

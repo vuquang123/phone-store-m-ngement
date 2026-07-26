@@ -1,4 +1,5 @@
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues } from "./google-sheets"
+import { parseVietnameseNumber } from "./number"
 
 export interface WarrantyPackage {
   code: string
@@ -45,7 +46,7 @@ export interface WarrantyContractRow {
 const PACKAGE_SHEET = "GOI_BAO_HANH"
 const CONTRACT_SHEET = "HOP_DONG_BAO_HANH"
 
-function parseNumber(v: any): number { if (v === undefined || v === null || v === '') return 0; const n = Number(String(v).replace(/[^\d.-]/g, '')); return Number.isFinite(n) ? n : 0 }
+function parseNumber(v: any): number { return parseVietnameseNumber(v) }
 
 export async function loadWarrantyPackages(): Promise<Record<string, WarrantyPackage>> {
   const { header, rows } = await readFromGoogleSheets(PACKAGE_SHEET)

@@ -16,16 +16,14 @@ import {
   Wallet,
 } from "lucide-react"
 import {
+  LineChart,
+  Line,
   ResponsiveContainer,
-  BarChart,
-  Bar,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
   Legend,
-  LineChart,
-  Line,
 } from "recharts"
 import { ProtectedRoute, getAuthHeaders } from "@/components/auth/protected-route"
 import { useAuthMe } from "@/hooks/use-auth-me"
@@ -41,7 +39,7 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import type { CashFlowDashboardData, LedgerTransaction } from "@/lib/cash-flow/types"
+import type { CashFlowDashboardData, DepositOrderSummary, LedgerTransaction, Receivable } from "@/lib/cash-flow/types"
 
 const ALLOWED_EMAIL = "dung8ahxh@gmail.com"
 const OTP_STORAGE_KEY = "dongtien_otp_verified_v1"
@@ -78,6 +76,17 @@ type PayableDraft = {
   payNote: string
 }
 
+type LongTermDebtDraft = {
+  creditor: string
+  description: string
+  principalAmount: string
+  dueDate: string
+  priority: string
+  note: string
+  payAmount: string
+  payNote: string
+}
+
 function readOtpSession(email?: string) {
   if (typeof window === "undefined" || !email) return false
   try {
@@ -104,6 +113,7 @@ export default function DongTienPage() {
   const [accountForm, setAccountForm] = useState({ name: "", type: "cash", balance: "0", availability: "AVAILABLE", note: "" })
   const [receivableForm, setReceivableForm] = useState({ counterparty: "", phone: "", description: "", totalAmount: "", dueDate: "", collectability: "medium", note: "" })
   const [payableForm, setPayableForm] = useState({ creditor: "", type: "external_debt", description: "", principalAmount: "", dueDate: "", priority: "medium", note: "" })
+  const [longTermDebtForm, setLongTermDebtForm] = useState({ creditor: "", description: "", principalAmount: "", dueDate: "", priority: "medium", note: "" })
 
   const loadData = async () => {
     try {
@@ -175,6 +185,7 @@ export default function DongTienPage() {
       setAccountForm({ name: "", type: "cash", balance: "0", availability: "AVAILABLE", note: "" })
       setReceivableForm({ counterparty: "", phone: "", description: "", totalAmount: "", dueDate: "", collectability: "medium", note: "" })
       setPayableForm({ creditor: "", type: "external_debt", description: "", principalAmount: "", dueDate: "", priority: "medium", note: "" })
+      setLongTermDebtForm({ creditor: "", description: "", principalAmount: "", dueDate: "", priority: "medium", note: "" })
       const actionLabels: Record<string, string> = {
         create_account: "Đã thêm nguồn tiền",
         update_account: "Đã cập nhật số dư",
@@ -186,6 +197,10 @@ export default function DongTienPage() {
         update_payable: "Đã cập nhật khoản phải trả",
         delete_payable: "Đã xóa khoản phải trả",
         pay_payable: "Đã ghi nhận trả nợ",
+        create_long_term_debt: "Đã thêm nợ dài hạn",
+        update_long_term_debt: "Đã cập nhật nợ dài hạn",
+        delete_long_term_debt: "Đã xóa nợ dài hạn",
+        pay_long_term_debt: "Đã ghi nhận trả nợ dài hạn từ quỹ lãi",
       }
       toast({
         title: "Thành công",
@@ -277,6 +292,8 @@ export default function DongTienPage() {
           setReceivableForm={setReceivableForm}
           payableForm={payableForm}
           setPayableForm={setPayableForm}
+          longTermDebtForm={longTermDebtForm}
+          setLongTermDebtForm={setLongTermDebtForm}
           onSubmitAction={submitAction}
           onCreateReportNow={createReportNow}
         />
@@ -337,6 +354,8 @@ function CashFlowDashboard({
   setReceivableForm,
   payableForm,
   setPayableForm,
+  longTermDebtForm,
+  setLongTermDebtForm,
   onSubmitAction,
   onCreateReportNow,
 }: {
@@ -353,20 +372,59 @@ function CashFlowDashboard({
   setReceivableForm: Dispatch<SetStateAction<{ counterparty: string; phone: string; description: string; totalAmount: string; dueDate: string; collectability: string; note: string }>>
   payableForm: { creditor: string; type: string; description: string; principalAmount: string; dueDate: string; priority: string; note: string }
   setPayableForm: Dispatch<SetStateAction<{ creditor: string; type: string; description: string; principalAmount: string; dueDate: string; priority: string; note: string }>>
+  longTermDebtForm: { creditor: string; description: string; principalAmount: string; dueDate: string; priority: string; note: string }
+  setLongTermDebtForm: Dispatch<SetStateAction<{ creditor: string; description: string; principalAmount: string; dueDate: string; priority: string; note: string }>>
   onSubmitAction: (payload: Record<string, any>) => Promise<void>
   onCreateReportNow: () => Promise<void>
 }) {
-  const { overview, alerts, accounts, transactions, inventoryItems, receivables, payables, plan, paymentSuggestions, scenarios } = data
+  const { overview, alerts, accounts, transactions, profitFundEntries, longTermDebts, depositOrders, inventoryItems, receivables, payables, plan, paymentSuggestions, scenarios } = data
   const countedInventory = inventoryItems.filter((item) => item.status === "IN_STOCK" || item.status === "IN_STOCK_RETURNED")
   const availableAccounts = useMemo(() => accounts.filter((item) => item.availability === "AVAILABLE"), [accounts])
-  const visibleReceivables = useMemo(() => receivables.filter((item) => item.totalAmount - item.collectedAmount > 0), [receivables])
+  const bankAccount = useMemo(() => accounts.find((item) => item.type === "bank") || availableAccounts[0] || null, [accounts, availableAccounts])
+  const pendingSettlementReceivables = useMemo(
+    () => receivables.filter((item) => {
+      const remaining = item.totalAmount - item.collectedAmount
+      return remaining > 0 && (item.autoRefType === "order_card" || item.autoRefType === "order_installment")
+    }),
+    [receivables],
+  )
+  const businessReceivables = useMemo(
+    () => receivables.filter((item) => item.autoRefType !== "order_card" && item.autoRefType !== "order_installment"),
+    [receivables],
+  )
+  const visibleReceivables = useMemo(
+    () => businessReceivables.filter((item) => item.totalAmount - item.collectedAmount > 0),
+    [businessReceivables],
+  )
+  const businessReceivablesTotal = useMemo(
+    () => visibleReceivables.reduce((sum, item) => sum + Math.max(0, item.totalAmount - item.collectedAmount), 0),
+    [visibleReceivables],
+  )
+  const pendingCardReceivables = useMemo(
+    () => pendingSettlementReceivables.filter((item) => item.autoRefType === "order_card"),
+    [pendingSettlementReceivables],
+  )
+  const pendingInstallmentReceivables = useMemo(
+    () => pendingSettlementReceivables.filter((item) => item.autoRefType === "order_installment"),
+    [pendingSettlementReceivables],
+  )
+  const pendingCardTotal = useMemo(
+    () => pendingCardReceivables.reduce((sum, item) => sum + Math.max(0, item.totalAmount - item.collectedAmount), 0),
+    [pendingCardReceivables],
+  )
+  const pendingInstallmentTotal = useMemo(
+    () => pendingInstallmentReceivables.reduce((sum, item) => sum + Math.max(0, item.totalAmount - item.collectedAmount), 0),
+    [pendingInstallmentReceivables],
+  )
   const due3Total = overview.dueToday + overview.dueIn3Days
   const visiblePayables = useMemo(() => payables.filter((item) => item.principalAmount - item.paidAmount > 0), [payables])
   const suggestionMap = useMemo(() => new Map(paymentSuggestions.map((item) => [item.payableId, item])), [paymentSuggestions])
   const [receivableDrafts, setReceivableDrafts] = useState<Record<string, ReceivableDraft>>({})
   const [payableDrafts, setPayableDrafts] = useState<Record<string, PayableDraft>>({})
+  const [longTermDebtDrafts, setLongTermDebtDrafts] = useState<Record<string, LongTermDebtDraft>>({})
   const [selectedPayableId, setSelectedPayableId] = useState("")
-  const [detailView, setDetailView] = useState<"cash" | "inventory" | "receivable" | "payable" | null>(null)
+  const [selectedLongTermDebtId, setSelectedLongTermDebtId] = useState("")
+  const [detailView, setDetailView] = useState<"cash" | "inventory" | "deposit" | "receivable" | "payable" | null>(null)
 
   useEffect(() => {
     const defaultAccountId = availableAccounts[0]?.id || ""
@@ -411,6 +469,24 @@ function CashFlowDashboard({
   }, [payables, availableAccounts])
 
   useEffect(() => {
+    setLongTermDebtDrafts(
+      Object.fromEntries(longTermDebts.map((item) => [
+        item.id,
+        {
+          creditor: item.creditor,
+          description: item.description,
+          principalAmount: String(item.principalAmount || 0),
+          dueDate: item.dueDate,
+          priority: item.priority,
+          note: item.note || "",
+          payAmount: String(Math.max(0, item.principalAmount - item.paidAmount) || ""),
+          payNote: "",
+        },
+      ])),
+    )
+  }, [longTermDebts])
+
+  useEffect(() => {
     if (!visiblePayables.length) {
       setSelectedPayableId("")
       return
@@ -420,15 +496,26 @@ function CashFlowDashboard({
     }
   }, [visiblePayables, selectedPayableId])
 
-  const flowChartData = useMemo(() => (
-    plan.map((row) => ({
-      date: row.date.slice(5),
-      "Thu công nợ": row.receivableInflow,
-      "Thu bán hàng": row.salesInflow,
-      "Chi nghĩa vụ": row.externalDebtOutflow + row.inventoryOutflow + row.operatingOutflow + row.interestOutflow,
-      "Cuối ngày": row.closingBalance,
-    }))
-  ), [plan])
+  useEffect(() => {
+    const visible = longTermDebts.filter((item) => item.principalAmount - item.paidAmount > 0)
+    if (!visible.length) {
+      setSelectedLongTermDebtId("")
+      return
+    }
+    if (!visible.some((item) => item.id === selectedLongTermDebtId)) {
+      setSelectedLongTermDebtId(visible[0]?.id || "")
+    }
+  }, [longTermDebts, selectedLongTermDebtId])
+
+  const earliestNegativeRow = useMemo(() => plan.find((row) => row.isNegative) || null, [plan])
+  const totalUpcomingInflows = useMemo(
+    () => plan.reduce((sum, row) => sum + row.receivableInflow + row.salesInflow + row.otherInflow, 0),
+    [plan],
+  )
+  const totalUpcomingOutflows = useMemo(
+    () => plan.reduce((sum, row) => sum + row.externalDebtOutflow + row.inventoryOutflow + row.loanOutflow + row.interestOutflow + row.operatingOutflow, 0),
+    [plan],
+  )
 
   const cashTransactions = useMemo(
     () => transactions.filter((item) =>
@@ -468,9 +555,16 @@ function CashFlowDashboard({
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Tiền mặt và tài khoản" value={fmt(overview.cashOnHand)} description="Chỉ tính nguồn AVAILABLE" icon={Wallet} onViewDetail={() => setDetailView("cash")} />
-        <StatCard title="Giá trị hàng tồn" value={fmt(overview.inventoryValue)} description={`Bán nhanh có thể thu ${fmt(overview.inventoryQuickSaleValue)}`} icon={Boxes} onViewDetail={() => setDetailView("inventory")} />
-        <StatCard title="Công nợ phải thu" value={fmt(overview.totalReceivables)} description={`Sau thu nợ + COD chờ về: ${fmt(overview.projectedCashAfterReceivables)}`} icon={ArrowDownCircle} onViewDetail={() => setDetailView("receivable")} />
+        <StatCard title="Giá trị hàng tồn" value={fmt(overview.inventoryValue)} description={`Chưa gồm máy đang cọc • Bán nhanh ${fmt(overview.inventoryQuickSaleValue)}`} icon={Boxes} onViewDetail={() => setDetailView("inventory")} />
+        <StatCard title="Máy đang đặt cọc" value={fmt(overview.activeDepositCollected)} description={`${overview.activeDepositOrders} đơn • Giá nhập giữ chỗ ${fmt(overview.activeDepositInventoryValue)}`} icon={Boxes} onViewDetail={() => setDetailView("deposit")} />
+        <StatCard title="Công nợ phải thu" value={fmt(businessReceivablesTotal)} description={`Sau thu nợ + COD chờ về: ${fmt(overview.cashOnHand + businessReceivablesTotal + overview.codPending3Days)}`} icon={ArrowDownCircle} onViewDetail={() => setDetailView("receivable")} />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Tổng nợ phải trả" value={fmt(overview.totalPayables)} description={`Tổng tài sản ngắn hạn: ${fmt(overview.totalShortTermAssets)}`} icon={ArrowUpCircle} onViewDetail={() => setDetailView("payable")} />
+        <StatCard title="Phải trả hôm nay" value={fmt(overview.dueToday)} description="Khoản đến hạn ngày 25/07/2026" icon={CalendarClock} />
+        <StatCard title="Phải trả 3 ngày tới" value={fmt(overview.dueIn3Days)} description="Các khoản từ 26/07 đến 28/07/2026" icon={AlertTriangle} />
+        <StatCard title="COD chờ 3 ngày" value={fmt(overview.codPending3Days)} description={`${overview.codPendingOrders} đơn GHTK chưa đối soát`} icon={Landmark} />
       </div>
 
       <Dialog open={detailView !== null} onOpenChange={(open) => !open ? setDetailView(null) : null}>
@@ -479,12 +573,14 @@ function CashFlowDashboard({
             <DialogTitle>
               {detailView === "cash" ? "Chi tiết tiền mặt và tài khoản" : null}
               {detailView === "inventory" ? "Chi tiết giá trị hàng tồn" : null}
+              {detailView === "deposit" ? "Chi tiết máy đang đặt cọc" : null}
               {detailView === "receivable" ? "Chi tiết công nợ phải thu" : null}
               {detailView === "payable" ? "Chi tiết nợ phải trả" : null}
             </DialogTitle>
             <DialogDescription>
               {detailView === "cash" ? "Xem nhanh nguồn tiền khả dụng và lịch sử giao dịch thu chi gần nhất." : null}
-              {detailView === "inventory" ? "Danh sách máy đang góp vào giá trị hàng tồn hiện tại." : null}
+              {detailView === "inventory" ? "Danh sách máy đang góp vào giá trị hàng tồn hiện tại, không gồm máy đang ở Dat_Coc." : null}
+              {detailView === "deposit" ? "Máy đang nằm trong Dat_Coc, chưa được xem là đã bán hẳn vì có thể hoàn cọc hoặc thanh toán đủ sau." : null}
               {detailView === "receivable" ? "Các khoản còn phải thu và lịch sử ghi nhận thu nợ." : null}
               {detailView === "payable" ? "Các khoản còn phải trả và lịch sử ghi nhận chi trả." : null}
             </DialogDescription>
@@ -522,6 +618,32 @@ function CashFlowDashboard({
               )) : (
                 <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Không có hàng tồn đang tham gia tính giá trị.</div>
               )}
+            </div>
+          ) : null}
+
+          {detailView === "deposit" ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border p-4">
+                  <p className="text-sm text-muted-foreground">Đã nhận cọc</p>
+                  <p className="mt-2 text-2xl font-bold">{fmt(overview.activeDepositCollected)}</p>
+                </div>
+                <div className="rounded-xl border p-4">
+                  <p className="text-sm text-muted-foreground">Còn phải thu nếu chốt bán</p>
+                  <p className="mt-2 text-2xl font-bold">{fmt(overview.activeDepositRemaining)}</p>
+                </div>
+                <div className="rounded-xl border p-4">
+                  <p className="text-sm text-muted-foreground">Giá nhập máy đang cọc</p>
+                  <p className="mt-2 text-2xl font-bold">{fmt(overview.activeDepositInventoryValue)}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {depositOrders.length ? depositOrders.map((order) => (
+                  <DepositOrderCard key={order.id} order={order} />
+                )) : (
+                  <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Hiện không có đơn đặt cọc nào đang mở.</div>
+                )}
+              </div>
             </div>
           ) : null}
 
@@ -576,35 +698,75 @@ function CashFlowDashboard({
       </Dialog>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Phải trả hôm nay" value={fmt(overview.dueToday)} description="Khoản đến hạn ngày 25/07/2026" icon={CalendarClock} />
-        <StatCard title="Phải trả 3 ngày tới" value={fmt(overview.dueIn3Days)} description="Các khoản từ 26/07 đến 28/07/2026" icon={AlertTriangle} />
-        <StatCard title="COD chờ 3 ngày" value={fmt(overview.codPending3Days)} description={`${overview.codPendingOrders} đơn GHTK chưa đối soát`} icon={Landmark} />
         <StatCard title="Số dư dự kiến cuối kỳ" value={fmt(overview.projectedEndingBalance)} description={`COD đã đối soát trong tài khoản: ${fmt(overview.codReconciledInCash)}`} icon={Coins} />
+        <StatCard title="Lãi tích lũy từ 16/07" value={fmt(overview.realizedProfitSinceStart)} description="Tự đồng bộ từ cột Lãi của Ban_Hang" icon={Coins} />
+        <StatCard title="Quỹ lãi còn lại" value={fmt(overview.profitFundBalance)} description="Dùng riêng để trả nợ dài hạn" icon={Wallet} />
+        <StatCard title="Nợ dài hạn còn lại" value={fmt(overview.longTermDebtRemaining)} description={`Tổng nợ dài hạn ${fmt(overview.longTermDebtTotal)}`} icon={CalendarClock} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card>
+      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card className="order-2 xl:order-1">
           <CardHeader>
-            <CardTitle>Biểu đồ dòng tiền 7 ngày</CardTitle>
-            <CardDescription>So sánh thu công nợ, thu bán hàng, chi nghĩa vụ và số dư cuối ngày.</CardDescription>
+            <CardTitle>Nhịp dòng tiền 7 ngày</CardTitle>
+            <CardDescription>Ưu tiên nhìn nhanh trạng thái thu vào, chi ra và ngày bắt đầu thiếu hụt nếu có.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={flowChartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" />
-                <YAxis tickFormatter={fmtShort} />
-                <Tooltip formatter={(value: number) => fmt(value)} />
-                <Legend />
-                <Bar dataKey="Thu công nợ" fill="#16a34a" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="Thu bán hàng" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="Chi nghĩa vụ" fill="#ef4444" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tổng thu dự kiến</p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-400">{fmt(totalUpcomingInflows)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Gồm công nợ, bán hàng và các khoản thu khác trong 7 ngày tới.</p>
+              </div>
+              <div className="rounded-xl border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tổng chi dự kiến</p>
+                <p className="mt-2 text-2xl font-semibold text-red-400">{fmt(totalUpcomingOutflows)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Gồm nợ ngoài, nợ hàng, chi phí vận hành và lãi phải trả.</p>
+              </div>
+            </div>
+            <div className={`rounded-2xl border p-4 ${earliestNegativeRow ? "border-red-500/30 bg-red-500/10" : "border-emerald-500/30 bg-emerald-500/10"}`}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium">{earliestNegativeRow ? "Mốc thiếu hụt đầu tiên" : "Trạng thái 7 ngày tới"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {earliestNegativeRow
+                      ? "Nếu không có thêm thu vào hoặc giãn lịch trả, đây là ngày số dư bắt đầu âm."
+                      : "Hiện mô phỏng chưa xuất hiện ngày âm trong 7 ngày tới."}
+                  </p>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className={`text-2xl font-semibold ${earliestNegativeRow ? "text-red-400" : "text-emerald-400"}`}>
+                    {earliestNegativeRow ? earliestNegativeRow.date : "Ổn định"}
+                  </p>
+                  {earliestNegativeRow ? (
+                    <p className="text-xs text-muted-foreground">Âm {fmt(Math.abs(earliestNegativeRow.closingBalance))}</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {plan.slice(0, 4).map((row) => (
+                <div key={row.date} className="grid grid-cols-[88px_1fr_auto] items-center gap-3 rounded-xl border px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium">{row.date.slice(5)}</p>
+                    <p className="text-[11px] text-muted-foreground">Đầu kỳ {fmtShort(row.openingBalance)}</p>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full ${row.isNegative ? "bg-red-500" : row.netCashFlow >= 0 ? "bg-emerald-500" : "bg-amber-500"}`}
+                      style={{ width: `${Math.max(12, Math.min(100, Math.round((Math.abs(row.netCashFlow) / Math.max(1, totalUpcomingOutflows || totalUpcomingInflows || 1)) * 100)))}%` }}
+                    />
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-semibold ${row.netCashFlow >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmt(row.netCashFlow)}</p>
+                    <p className="text-[11px] text-muted-foreground">Cuối {fmtShort(row.closingBalance)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="order-1 xl:order-2">
           <CardHeader>
             <CardTitle>Thanh khoản và quỹ an toàn</CardTitle>
             <CardDescription>
@@ -629,6 +791,85 @@ function CashFlowDashboard({
                 <p className="text-xs text-sky-100/80">COD có thể thu trong 3 ngày</p>
                 <p className="mt-1 text-lg font-semibold text-sky-100">{fmt(overview.codPending3Days)}</p>
                 <p className="mt-1 text-xs text-sky-100/70">{overview.codPendingOrders} đơn GHTK chưa đối soát</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-amber-100">Đơn cọc đang mở</p>
+                  <p className="mt-1 text-xs text-amber-100/75">
+                    Máy trong `Dat_Coc` chưa được xem là đã bán hẳn. Chỉ khi thanh toán đủ và đi vào `Ban_Hang` mới tính là bán.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-300/30 bg-transparent text-amber-50 hover:bg-amber-50/10 hover:text-amber-50"
+                  onClick={() => setDetailView("deposit")}
+                >
+                  Xem máy cọc
+                </Button>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-amber-300/20 bg-black/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-amber-100/70">Đã nhận cọc</p>
+                  <p className="mt-2 text-2xl font-semibold text-amber-50">{fmt(overview.activeDepositCollected)}</p>
+                  <p className="mt-1 text-xs text-amber-100/70">{overview.activeDepositOrders} đơn đang giữ chỗ</p>
+                </div>
+                <div className="rounded-xl border border-amber-300/20 bg-black/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-amber-100/70">Còn phải thu nếu chốt bán</p>
+                  <p className="mt-2 text-2xl font-semibold text-amber-50">{fmt(overview.activeDepositRemaining)}</p>
+                  <p className="mt-1 text-xs text-amber-100/70">Không cộng vào doanh thu bán cho tới khi thanh toán đủ</p>
+                </div>
+                <div className="rounded-xl border border-amber-300/20 bg-black/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-amber-100/70">Giá nhập máy đang giữ chỗ</p>
+                  <p className="mt-2 text-2xl font-semibold text-amber-50">{fmt(overview.activeDepositInventoryValue)}</p>
+                  <p className="mt-1 text-xs text-amber-100/70">Đang theo dõi riêng, không gộp vào card hàng tồn</p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-violet-500/20 bg-violet-500/10 p-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-violet-100">Pending thẻ và trả góp</p>
+                  <p className="mt-1 text-xs text-violet-100/75">
+                    Khi tiền thực nhận về tài khoản, bấm `Đã nhận` để cộng vào nguồn tiền `Tiền tài khoản`.
+                  </p>
+                </div>
+                <div className="shrink-0 text-left sm:text-right">
+                  <p className="text-xs text-violet-100/75">Tổng pending</p>
+                  <p className="text-xl font-semibold text-violet-100 sm:text-2xl">{fmt(pendingCardTotal + pendingInstallmentTotal)}</p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                <PendingSettlementBlock
+                  title="Thẻ"
+                  total={pendingCardTotal}
+                  items={pendingCardReceivables}
+                  submitting={submitting}
+                  bankAccountName={bankAccount?.name || "Tiền tài khoản"}
+                  onConfirm={(item) => onSubmitAction({
+                    action: "collect_receivable",
+                    id: item.id,
+                    amount: Math.max(0, item.totalAmount - item.collectedAmount),
+                    accountId: item.accountId || bankAccount?.id || "",
+                    note: `Đã nhận tiền thẻ ${item.description}`,
+                  })}
+                />
+                <PendingSettlementBlock
+                  title="Trả góp"
+                  total={pendingInstallmentTotal}
+                  items={pendingInstallmentReceivables}
+                  submitting={submitting}
+                  bankAccountName={bankAccount?.name || "Tiền tài khoản"}
+                  onConfirm={(item) => onSubmitAction({
+                    action: "collect_receivable",
+                    id: item.id,
+                    amount: Math.max(0, item.totalAmount - item.collectedAmount),
+                    accountId: item.accountId || bankAccount?.id || "",
+                    note: `Đã nhận tiền trả góp ${item.description}`,
+                  })}
+                />
               </div>
             </div>
             <div className={`rounded-xl border p-4 ${overview.shortageForUpcomingDues > 0 ? "border-amber-500/20 bg-amber-500/10" : "border-emerald-500/20 bg-emerald-500/10"}`}>
@@ -688,8 +929,10 @@ function CashFlowDashboard({
         <TabsList className="flex h-auto flex-wrap justify-start gap-2 bg-transparent p-0">
           <TabsTrigger value="tong-quan">Tổng quan</TabsTrigger>
           <TabsTrigger value="nguon-tien">Nguồn tiền</TabsTrigger>
+          <TabsTrigger value="quy-lai">Quỹ lãi</TabsTrigger>
           <TabsTrigger value="cong-no">Phải thu</TabsTrigger>
           <TabsTrigger value="phai-tra">Phải trả</TabsTrigger>
+          <TabsTrigger value="no-dai-han">Nợ dài hạn</TabsTrigger>
           <TabsTrigger value="ke-hoach">Kế hoạch</TabsTrigger>
           <TabsTrigger value="mo-phong">Mô phỏng</TabsTrigger>
         </TabsList>
@@ -839,11 +1082,57 @@ function CashFlowDashboard({
           </Card>
         </TabsContent>
 
+        <TabsContent value="quy-lai" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Quỹ lãi tích lũy</CardTitle>
+              <CardDescription>
+                Theo dõi từ ngày 16/07/2026. Mỗi khi đơn bán được ghi vào tab `Ban_Hang`, cột `Lãi` sẽ tự đồng bộ vào đây.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border p-4">
+                  <p className="text-sm text-muted-foreground">Tổng lãi đã ghi nhận</p>
+                  <p className="mt-2 text-2xl font-bold">{fmt(overview.realizedProfitSinceStart)}</p>
+                </div>
+                <div className="rounded-xl border p-4">
+                  <p className="text-sm text-muted-foreground">Đã dùng trả nợ dài hạn</p>
+                  <p className="mt-2 text-2xl font-bold">{fmt(Math.max(0, overview.realizedProfitSinceStart - overview.profitFundBalance))}</p>
+                </div>
+                <div className="rounded-xl border p-4">
+                  <p className="text-sm text-muted-foreground">Quỹ lãi còn lại</p>
+                  <p className="mt-2 text-2xl font-bold text-emerald-400">{fmt(overview.profitFundBalance)}</p>
+                </div>
+              </div>
+              <TransactionList
+                transactions={profitFundEntries.map((item) => ({
+                  id: item.id,
+                  type: item.type,
+                  amount: item.amount,
+                  occurredAt: item.date,
+                  accountId: "",
+                  accountName: "Quỹ lãi",
+                  refType: item.refType,
+                  refId: item.refId,
+                  counterparty: item.counterparty,
+                  source: item.type === "sale_profit" ? "Ban_Hang" : "DongTien",
+                  note: item.note,
+                  automatic: item.automatic,
+                  createdBy: item.createdBy,
+                  createdAt: item.createdAt,
+                }))}
+                emptyText="Chưa có dòng lãi nào được đồng bộ."
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="cong-no" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Công nợ phải thu</CardTitle>
-              <CardDescription>Tổng còn phải thu hiện tại: {fmt(overview.totalReceivables)}</CardDescription>
+              <CardDescription>Tổng còn phải thu hiện tại: {fmt(businessReceivablesTotal)}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 rounded-xl border p-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1081,6 +1370,191 @@ function CashFlowDashboard({
                   Hiện không còn khoản phải thu nào chưa thu đủ.
                 </div>
               ) : null}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="no-dai-han" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Nợ dài hạn</CardTitle>
+              <CardDescription>Quỹ lãi sẽ được ưu tiên dùng để trả các khoản nợ dài hạn này, tách riêng khỏi dòng tiền ngắn hạn.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 rounded-xl border p-4 md:grid-cols-2">
+                <div>
+                  <Label>Chủ nợ</Label>
+                  <Input value={longTermDebtForm.creditor} onChange={(e) => setLongTermDebtForm((prev) => ({ ...prev, creditor: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Ưu tiên</Label>
+                  <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={longTermDebtForm.priority} onChange={(e) => setLongTermDebtForm((prev) => ({ ...prev, priority: e.target.value }))}>
+                    <option value="critical">critical</option>
+                    <option value="high">high</option>
+                    <option value="medium">medium</option>
+                    <option value="low">low</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Nội dung</Label>
+                  <Input value={longTermDebtForm.description} onChange={(e) => setLongTermDebtForm((prev) => ({ ...prev, description: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Số tiền gốc</Label>
+                  <Input value={longTermDebtForm.principalAmount} onChange={(e) => setLongTermDebtForm((prev) => ({ ...prev, principalAmount: e.target.value.replace(/[^\d]/g, "") }))} />
+                </div>
+                <div>
+                  <Label>Hạn thanh toán</Label>
+                  <Input type="date" value={longTermDebtForm.dueDate} onChange={(e) => setLongTermDebtForm((prev) => ({ ...prev, dueDate: e.target.value }))} />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Ghi chú</Label>
+                  <Input value={longTermDebtForm.note} onChange={(e) => setLongTermDebtForm((prev) => ({ ...prev, note: e.target.value }))} />
+                </div>
+                <div className="md:col-span-2">
+                  <Button
+                    disabled={submitting || !longTermDebtForm.creditor.trim() || !longTermDebtForm.dueDate}
+                    onClick={() => onSubmitAction({
+                      action: "create_long_term_debt",
+                      creditor: longTermDebtForm.creditor,
+                      description: longTermDebtForm.description,
+                      principalAmount: Number(longTermDebtForm.principalAmount || 0),
+                      dueDate: longTermDebtForm.dueDate,
+                      priority: longTermDebtForm.priority,
+                      note: longTermDebtForm.note,
+                    })}
+                  >
+                    Thêm nợ dài hạn
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {!longTermDebts.filter((item) => item.principalAmount - item.paidAmount > 0).length ? (
+                  <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+                    Hiện không còn khoản nợ dài hạn nào đang mở.
+                  </div>
+                ) : null}
+                {longTermDebts.filter((item) => item.principalAmount - item.paidAmount > 0).map((item) => {
+                  const remaining = item.principalAmount - item.paidAmount
+                  const isSelected = selectedLongTermDebtId === item.id
+                  const enoughProfitFund = overview.profitFundBalance >= remaining
+                  return (
+                    <div
+                      key={item.id}
+                      className={`rounded-[28px] border p-6 transition-colors ${
+                        enoughProfitFund ? "border-emerald-700/60 bg-emerald-950/20" : "border-amber-700/60 bg-amber-950/20"
+                      } ${isSelected ? "ring-1 ring-primary/40" : ""}`}
+                    >
+                      <button type="button" className="w-full text-left" onClick={() => setSelectedLongTermDebtId((prev) => prev === item.id ? "" : item.id)}>
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="space-y-2">
+                            <p className="text-2xl font-bold">{item.creditor}</p>
+                            <p className="text-xl text-muted-foreground">{item.description}</p>
+                            <p className="text-lg font-semibold">Hạn {item.dueDate}</p>
+                            <p className="text-sm text-muted-foreground">Quỹ lãi hiện có: {fmt(overview.profitFundBalance)}</p>
+                          </div>
+                          <div className="flex flex-col items-start gap-3 lg:items-end">
+                            <Badge className={enoughProfitFund ? "bg-white text-black hover:bg-white/90" : "bg-amber-500 text-black hover:bg-amber-400"}>
+                              {enoughProfitFund ? "Quỹ lãi đủ trả" : "Quỹ lãi chưa đủ"}
+                            </Badge>
+                            <p className="text-3xl font-bold">{fmt(remaining)}</p>
+                            <p className="text-sm text-muted-foreground">Đã trả: {fmt(item.paidAmount)}</p>
+                          </div>
+                        </div>
+                      </button>
+                      {isSelected ? (
+                        <div className="mt-5 space-y-4 rounded-2xl border border-dashed p-5">
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <div>
+                              <Label>Chủ nợ</Label>
+                              <Input value={longTermDebtDrafts[item.id]?.creditor || ""} onChange={(e) => setLongTermDebtDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], creditor: e.target.value } }))} />
+                            </div>
+                            <div>
+                              <Label>Ưu tiên</Label>
+                              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={longTermDebtDrafts[item.id]?.priority || "medium"} onChange={(e) => setLongTermDebtDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], priority: e.target.value } }))}>
+                                <option value="critical">critical</option>
+                                <option value="high">high</option>
+                                <option value="medium">medium</option>
+                                <option value="low">low</option>
+                              </select>
+                            </div>
+                            <div className="xl:col-span-2">
+                              <Label>Nội dung</Label>
+                              <Input value={longTermDebtDrafts[item.id]?.description || ""} onChange={(e) => setLongTermDebtDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], description: e.target.value } }))} />
+                            </div>
+                            <div>
+                              <Label>Số tiền gốc</Label>
+                              <Input value={longTermDebtDrafts[item.id]?.principalAmount || ""} onChange={(e) => setLongTermDebtDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], principalAmount: e.target.value.replace(/[^\d]/g, "") } }))} />
+                            </div>
+                            <div>
+                              <Label>Hạn thanh toán</Label>
+                              <Input type="date" value={longTermDebtDrafts[item.id]?.dueDate || ""} onChange={(e) => setLongTermDebtDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], dueDate: e.target.value } }))} />
+                            </div>
+                            <div className="xl:col-span-2">
+                              <Label>Ghi chú</Label>
+                              <Input value={longTermDebtDrafts[item.id]?.note || ""} onChange={(e) => setLongTermDebtDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], note: e.target.value } }))} />
+                            </div>
+                            <div className="flex flex-wrap items-end gap-2 xl:col-span-4">
+                              <Button
+                                size="sm"
+                                disabled={submitting}
+                                onClick={() => onSubmitAction({
+                                  action: "update_long_term_debt",
+                                  id: item.id,
+                                  creditor: longTermDebtDrafts[item.id]?.creditor || "",
+                                  description: longTermDebtDrafts[item.id]?.description || "",
+                                  principalAmount: Number(longTermDebtDrafts[item.id]?.principalAmount || 0),
+                                  dueDate: longTermDebtDrafts[item.id]?.dueDate || "",
+                                  priority: longTermDebtDrafts[item.id]?.priority || "medium",
+                                  note: longTermDebtDrafts[item.id]?.note || "",
+                                })}
+                              >
+                                Lưu chỉnh sửa
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                disabled={submitting}
+                                onClick={() => {
+                                  if (!window.confirm(`Xóa nợ dài hạn của ${item.creditor}?`)) return
+                                  onSubmitAction({ action: "delete_long_term_debt", id: item.id })
+                                }}
+                              >
+                                Xóa
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="grid gap-3 rounded-2xl bg-muted/30 p-4 md:grid-cols-2 xl:grid-cols-4">
+                            <div>
+                              <Label>Số tiền trả từ quỹ lãi</Label>
+                              <Input value={longTermDebtDrafts[item.id]?.payAmount || ""} onChange={(e) => setLongTermDebtDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], payAmount: e.target.value.replace(/[^\d]/g, "") } }))} />
+                            </div>
+                            <div className="xl:col-span-2">
+                              <Label>Ghi chú thanh toán</Label>
+                              <Input value={longTermDebtDrafts[item.id]?.payNote || ""} onChange={(e) => setLongTermDebtDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], payNote: e.target.value } }))} placeholder="VD: trả bằng quỹ lãi tuần này" />
+                            </div>
+                            <div className="xl:col-span-4">
+                              <Button
+                                size="sm"
+                                disabled={submitting || !Number(longTermDebtDrafts[item.id]?.payAmount || 0)}
+                                onClick={() => onSubmitAction({
+                                  action: "pay_long_term_debt",
+                                  id: item.id,
+                                  amount: Number(longTermDebtDrafts[item.id]?.payAmount || 0),
+                                  note: longTermDebtDrafts[item.id]?.payNote || "",
+                                })}
+                              >
+                                Trả nợ bằng quỹ lãi
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1527,6 +2001,129 @@ function TransactionList({ transactions, emptyText }: { transactions: LedgerTran
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function PendingSettlementBlock({
+  title,
+  total,
+  items,
+  submitting,
+  bankAccountName,
+  onConfirm,
+}: {
+  title: string
+  total: number
+  items: Receivable[]
+  submitting: boolean
+  bankAccountName: string
+  onConfirm: (item: Receivable) => void
+}) {
+  return (
+    <div className="rounded-2xl border border-violet-500/20 bg-black/10 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-lg font-semibold">{title}</p>
+          <p className="text-xs text-muted-foreground">Sẽ cộng vào {bankAccountName} khi xác nhận đã nhận tiền.</p>
+        </div>
+        <p className="shrink-0 text-xl font-semibold text-violet-100 sm:text-2xl">{fmt(total)}</p>
+      </div>
+      <div className="mt-3 space-y-3">
+        {!items.length ? (
+          <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Hiện không có khoản pending nào.</div>
+        ) : items.map((item) => {
+          const remaining = Math.max(0, item.totalAmount - item.collectedAmount)
+          const shortDescription = item.description
+            .replace(/^Thẻ từ đơn\s*/i, "")
+            .replace(/^Trả góp từ đơn\s*/i, "")
+            .trim()
+          return (
+            <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="border-violet-400/30 bg-violet-500/10 text-violet-100">
+                      {title}
+                    </Badge>
+                    <span className="text-sm font-medium text-muted-foreground">{shortDescription || item.description}</span>
+                  </div>
+                  <p className="mt-3 text-lg font-semibold">{item.autoRefId?.split("::")[0] || item.description}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{item.counterparty || "Khách lẻ"}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span className="rounded-full border px-2 py-1">Dự kiến về {item.dueDate}</span>
+                    <span className="rounded-full border px-2 py-1">Cộng vào {bankAccountName}</span>
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col gap-3 lg:items-end">
+                  <div className="text-left lg:text-right">
+                    <p className="text-2xl font-semibold text-violet-100">{fmt(remaining)}</p>
+                    <p className="text-xs text-muted-foreground">{title} pending</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={submitting || !remaining || (!item.accountId && !bankAccountName)}
+                    className="w-full bg-white text-black hover:bg-white/90 lg:w-auto"
+                    onClick={() => onConfirm(item)}
+                  >
+                    Đã nhận
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function DepositOrderCard({ order }: { order: DepositOrderSummary }) {
+  return (
+    <div className="rounded-2xl border p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">{order.id}</Badge>
+            <Badge className="bg-orange-500/15 text-orange-200 hover:bg-orange-500/15">{order.status || "Đặt cọc"}</Badge>
+          </div>
+          <p className="mt-3 text-lg font-semibold">{order.customer || "Khách lẻ"}</p>
+          <p className="text-sm text-muted-foreground">{order.phone || "Không có số điện thoại"}</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full border px-2 py-1">Ngày cọc {order.depositDate}</span>
+            {order.dueDate ? <span className="rounded-full border px-2 py-1">Hạn trả đủ {order.dueDate}</span> : null}
+          </div>
+          {order.note ? <p className="mt-3 text-sm text-muted-foreground">{order.note}</p> : null}
+        </div>
+        <div className="grid gap-2 text-left lg:min-w-[220px] lg:text-right">
+          <div>
+            <p className="text-xs text-muted-foreground">Đã nhận cọc</p>
+            <p className="text-xl font-semibold text-emerald-400">{fmt(order.depositAmount)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Còn lại nếu chốt bán</p>
+            <p className="text-xl font-semibold">{fmt(order.remainingAmount)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Giá nhập đang giữ chỗ</p>
+            <p className="text-sm font-semibold">{fmt(order.inventoryValue)}</p>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {order.products.length ? order.products.map((product, index) => (
+          <div key={`${order.id}-${product.imei || product.serial || index}`} className="rounded-xl border bg-white/[0.02] p-3">
+            <p className="font-medium">{product.model || "Chưa rõ tên máy"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {[product.color, product.capacity].filter(Boolean).join(" • ") || "Không có màu / dung lượng"}
+            </p>
+            <p className="mt-1 break-all text-xs text-muted-foreground">{product.imei || product.serial || "Không có IMEI/Serial"}</p>
+            {product.condition ? <p className="mt-2 text-xs text-muted-foreground">{product.condition}</p> : null}
+          </div>
+        )) : (
+          <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Không có danh sách máy trong đơn cọc này.</div>
+        )}
+      </div>
     </div>
   )
 }

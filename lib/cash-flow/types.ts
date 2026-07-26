@@ -83,6 +83,9 @@ export interface Receivable {
   dueDate: string
   collectability: "high" | "medium" | "low"
   status: ReceivableStatus
+  accountId?: string
+  autoRefType?: string
+  autoRefId?: string
   note?: string
 }
 
@@ -165,6 +168,60 @@ export interface LedgerTransaction {
   createdAt: string
 }
 
+export interface ProfitFundEntry {
+  id: string
+  date: string
+  amount: number
+  type: "sale_profit" | "long_term_debt_payment"
+  refType: string
+  refId: string
+  orderId?: string
+  counterparty: string
+  note: string
+  automatic: boolean
+  createdBy: string
+  createdAt: string
+}
+
+export interface DepositOrderProduct {
+  model: string
+  capacity: string
+  color: string
+  imei: string
+  serial: string
+  condition: string
+  costPrice: number
+  salePrice: number
+}
+
+export interface DepositOrderSummary {
+  id: string
+  customer: string
+  phone: string
+  status: string
+  depositDate: string
+  dueDate: string
+  depositAmount: number
+  remainingAmount: number
+  inventoryValue: number
+  saleValue: number
+  note: string
+  products: DepositOrderProduct[]
+}
+
+export interface LongTermDebt {
+  id: string
+  creditor: string
+  description: string
+  principalAmount: number
+  paidAmount: number
+  incurredAt: string
+  dueDate: string
+  priority: PriorityLevel
+  status: "OPEN" | "PARTIALLY_PAID" | "PAID"
+  note?: string
+}
+
 export interface CashFlowOverview {
   asOfDate: string
   cashOnHand: number
@@ -192,12 +249,24 @@ export interface CashFlowOverview {
   projectedEndingBalance: number
   safeReserve: number
   spendableCash: number
+  realizedProfitSinceStart: number
+  profitFundBalance: number
+  longTermDebtTotal: number
+  longTermDebtPaid: number
+  longTermDebtRemaining: number
+  activeDepositOrders: number
+  activeDepositCollected: number
+  activeDepositInventoryValue: number
+  activeDepositRemaining: number
 }
 
 export interface CashFlowDashboardData {
   overview: CashFlowOverview
   accounts: CashAccount[]
   transactions: LedgerTransaction[]
+  profitFundEntries: ProfitFundEntry[]
+  longTermDebts: LongTermDebt[]
+  depositOrders: DepositOrderSummary[]
   inventoryItems: InventoryItem[]
   receivables: Receivable[]
   payables: Payable[]

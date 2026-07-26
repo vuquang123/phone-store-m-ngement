@@ -3,6 +3,7 @@
 
 import { DateTime } from "luxon"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
+import { parseVietnameseNumber } from "@/lib/number"
 
 export type Ca = "1" | "2" | "3"
 export type TrangThai = "khop" | "khong_khop"
@@ -93,8 +94,7 @@ function genId(): string {
 }
 
 const toNum = (v: any): number => {
-  const n = Number(String(v ?? "").replace(/[^\d.-]/g, ""))
-  return Number.isFinite(n) ? n : 0
+  return parseVietnameseNumber(v)
 }
 
 async function ensureHeader() {

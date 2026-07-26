@@ -1,3 +1,9 @@
+function parseAmount(value: unknown) {
+  const { parseVietnameseNumber } = require("@/lib/number")
+  const numeric = parseVietnameseNumber(value)
+  return Number.isFinite(numeric) ? numeric : 0
+}
+
 // API route: PATCH /api/dat-coc
 export async function PATCH(req: Request) {
   try {
@@ -34,7 +40,8 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Không tìm thấy cột IMEI hoặc Trạng Thái" }, { status: 400 });
     }
 
-    // Đổi trạng thái thành 'Đã hoàn thành' cho các dòng có IMEI nằm trong productIds
+    // Dat_Coc chỉ giữ các dòng đang ở trạng thái "Đặt cọc".
+    // Khi hủy cọc hoặc thanh toán đủ, xóa luôn khỏi sheet này.
     const desired = String(newStatus || 'Đã hoàn thành');
     const imeiSet = new Set((productIds || []).map((i: any) => String(i).trim()));
     const matchedRows = rows.filter((row) => {
@@ -42,24 +49,25 @@ export async function PATCH(req: Request) {
       const matchOrder = !!orderId && (idxMaDon !== -1) && (String(row[idxMaDon] || '').trim() === String(orderId).trim());
       return matchImei || matchOrder;
     });
-    const updatedRows = rows.map(row => {
-      const matchImei = imeiSet.size > 0 && imeiSet.has(String(row[idxIMEI]).trim());
-      const matchOrder = !!orderId && (idxMaDon !== -1) && (String(row[idxMaDon] || '').trim() === String(orderId).trim());
-      if (matchImei || matchOrder) {
-        row[idxTrangThai] = desired;
-      }
-      return row;
-    });
-    // Ghi lại sheet: giữ header, ghi lại header + updatedRows
-    const allRows = [header, ...updatedRows];
-    await updateRangeValues("Dat_Coc!A1", allRows);
+    const shouldKeepMatched = isActiveDepositStatus(desired)
+    const nextRows = rows
+      .map((row) => {
+        const matchImei = imeiSet.size > 0 && imeiSet.has(String(row[idxIMEI]).trim());
+        const matchOrder = !!orderId && (idxMaDon !== -1) && (String(row[idxMaDon] || '').trim() === String(orderId).trim());
+        if (matchImei || matchOrder) {
+          if (shouldKeepMatched) {
+            row[idxTrangThai] = "Đặt cọc";
+            return row;
+          }
+          return null
+        }
+        return isActiveDepositStatus(row[idxTrangThai]) ? row : null
+      })
+      .filter(Boolean) as any[][]
+    await updateRangeValues("Dat_Coc!A1", [header, ...nextRows]);
 
     if (matchedRows.length > 0 && desired.toLowerCase() === "hủy đặt cọc") {
       try {
-        const parseAmount = (value: any) => {
-          const numeric = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
-          return Number.isFinite(numeric) ? numeric : 0;
-        };
         const orderInfo: any = {
           ma_don_hang: (idxMaDon !== -1 ? matchedRows[0]?.[idxMaDon] : "") || orderId || "(chưa có)",
           nhan_vien_ban: idxNguoiBan !== -1 ? matchedRows[0]?.[idxNguoiBan] || "N/A" : "N/A",
@@ -92,7 +100,7 @@ export async function PATCH(req: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, updated: productIds?.length || 0 }, { status: 200 });
+    return NextResponse.json({ ok: true, updated: matchedRows.length || 0, removed: shouldKeepMatched ? 0 : matchedRows.length }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -111,7 +119,6 @@ export async function DELETE(req: Request) {
     if (idxIMEI === -1) {
       return NextResponse.json({ error: "Không tìm thấy cột IMEI" }, { status: 400 });
     }
-    // Đổi trạng thái thành 'Hủy đặt cọc' cho các dòng có IMEI nằm trong productIds
     const idxTrangThai = colIndex(header, "Trạng Thái");
     const idxTrangThaiMay = colIndex(header, "Trạng Thái Máy", "Tình Trạng Máy");
 
@@ -124,15 +131,8 @@ export async function DELETE(req: Request) {
         imeiToStatus[imei] = row[idxTrangThaiMay] || "Còn hàng";
       }
     });
-    const updatedRows = rows.map(row => {
-      if (imeiSet.has(String(row[idxIMEI]).trim())) {
-        if (idxTrangThai !== -1) row[idxTrangThai] = "Hủy đặt cọc";
-      }
-      return row;
-    });
-    // Ghi lại sheet: giữ header, ghi lại header + updatedRows
-    const allRows = [header, ...updatedRows];
-    await updateRangeValues("Dat_Coc!A1", allRows);
+    const nextRows = rows.filter((row) => !imeiSet.has(String(row[idxIMEI]).trim()) && (idxTrangThai === -1 || isActiveDepositStatus(row[idxTrangThai])))
+    await updateRangeValues("Dat_Coc!A1", [header, ...nextRows]);
 
     // --- Cập nhật trạng thái máy về kho ---
     // Đọc sheet Kho_Hang
@@ -160,18 +160,27 @@ import { NextResponse } from "next/server"
 import { appendToGoogleSheets, readFromGoogleSheets, updateRangeValues, colIndex, norm } from "@/lib/google-sheets"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
 
+function isActiveDepositStatus(value: unknown) {
+  return norm(String(value || "")) === "dat_coc"
+}
+
+async function compactDatCocSheet() {
+  const { header, rows } = await readFromGoogleSheets("Dat_Coc")
+  const idxTrangThai = colIndex(header, "Trạng Thái")
+  if (idxTrangThai === -1) return { header, rows }
+  const activeRows = rows.filter((row) => isActiveDepositStatus(row[idxTrangThai]))
+  if (activeRows.length !== rows.length) {
+    await updateRangeValues("Dat_Coc!A1", [header, ...activeRows])
+  }
+  return { header, rows: activeRows }
+}
+
 
 // API route: GET /api/dat-coc
 export async function GET() {
   try {
-    const { header, rows } = await readFromGoogleSheets("Dat_Coc")
-    // Bỏ qua các dòng có trạng thái 'Hủy đặt cọc'
-    const idxTrangThai = colIndex(header, "Trạng Thái");
-    const filteredRows = idxTrangThai === -1
-      ? rows
-      : rows.filter(row => String(row[idxTrangThai] || "").trim().toLowerCase() !== "hủy đặt cọc");
-
-    return NextResponse.json({ data: [header, ...filteredRows] }, { status: 200 })
+    const { header, rows } = await compactDatCocSheet()
+    return NextResponse.json({ data: [header, ...rows] }, { status: 200 })
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
@@ -181,6 +190,7 @@ export async function GET() {
 // API route: POST /api/dat-coc
 export async function POST(req: Request) {
   try {
+    await compactDatCocSheet()
     const body = await req.json()
     // Nếu truyền vào là nhiều sản phẩm, ghi nhiều dòng
     const {

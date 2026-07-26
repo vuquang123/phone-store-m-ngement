@@ -5,15 +5,19 @@ import {
   createCashFlowAccount,
   createCashFlowPayable,
   createCashFlowReceivable,
+  createLongTermDebt,
   deleteCashFlowPayable,
   deleteCashFlowReceivable,
+  deleteLongTermDebt,
   getCashFlowReportBySlug,
   getCashFlowDashboardDataFromSheets,
   maybeCreateDailyCashFlowReport,
   payCashFlowPayable,
+  payLongTermDebt,
   updateCashFlowAccount,
   updateCashFlowPayable,
   updateCashFlowReceivable,
+  updateLongTermDebt,
 } from "@/lib/cash-flow/sheets"
 import { getServerUser } from "@/lib/auth"
 
@@ -164,6 +168,34 @@ export async function POST(request: NextRequest) {
         id: String(body.id || "").trim(),
         amount: Number(body.amount || 0),
         accountId: String(body.accountId || "").trim(),
+        note: String(body.note || "").trim(),
+        actor: user.email,
+      })
+    } else if (action === "create_long_term_debt") {
+      await createLongTermDebt({
+        creditor: String(body.creditor || "").trim(),
+        description: String(body.description || "").trim(),
+        principalAmount: Number(body.principalAmount || 0),
+        dueDate: String(body.dueDate || "").trim(),
+        priority: String(body.priority || "medium").trim(),
+        note: String(body.note || "").trim(),
+      })
+    } else if (action === "update_long_term_debt") {
+      await updateLongTermDebt({
+        id: String(body.id || "").trim(),
+        creditor: body.creditor,
+        description: body.description,
+        principalAmount: body.principalAmount !== undefined ? Number(body.principalAmount) : undefined,
+        dueDate: body.dueDate,
+        priority: body.priority,
+        note: body.note,
+      })
+    } else if (action === "delete_long_term_debt") {
+      await deleteLongTermDebt(String(body.id || "").trim())
+    } else if (action === "pay_long_term_debt") {
+      await payLongTermDebt({
+        id: String(body.id || "").trim(),
+        amount: Number(body.amount || 0),
         note: String(body.note || "").trim(),
         actor: user.email,
       })

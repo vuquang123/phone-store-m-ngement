@@ -7,6 +7,7 @@ import {
   colIndex,
 } from "@/lib/google-sheets"
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
+import { parseVietnameseNumber } from "@/lib/number"
 
 export const dynamic = "force-dynamic"
 
@@ -17,9 +18,7 @@ const SHEET = "Hang_doi_tac"
 const KHO_SHEET = "Kho_Hang"
 
 function toNumber(v: any) {
-  if (v === null || v === undefined) return 0
-  const n = Number(String(v).replace(/[^\d]/g, ""))
-  return Number.isFinite(n) ? n : 0
+  return parseVietnameseNumber(v)
 }
 
 const normalizeKey = (s: string) =>

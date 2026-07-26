@@ -6,13 +6,13 @@ import { NextResponse } from "next/server"
 import { getGhtkTracking } from "@/lib/ghtk"
 import { mapGhtkStatus } from "@/lib/ghtk-status"
 import { syncCashFlowForGhtkCode } from "@/lib/cash-flow/sheets"
+import { parseVietnameseNumber } from "@/lib/number"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 const toNum = (v: any): number => {
-  const n = Number(String(v ?? "").replace(/[^\d.-]/g, ""))
-  return Number.isFinite(n) ? n : 0
+  return parseVietnameseNumber(v)
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ code: string }> }) {

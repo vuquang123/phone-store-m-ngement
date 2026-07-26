@@ -1,6 +1,7 @@
 // Ưu tiên IPv4 khi phân giải DNS để tránh fetch ETIMEDOUT tới api.telegram.org
 // trên server có IPv6 cấu hình lỗi (Node mặc định thử IPv6 trước -> treo ~25s).
 import dns from "node:dns"
+import { parseVietnameseNumber } from "@/lib/number"
 try { dns.setDefaultResultOrder("ipv4first") } catch {}
 
 type OrderType = "online" | "offline" | "return" | "deposit" | string
@@ -130,7 +131,7 @@ export type ProcessingDevice = {
 }
 
 function formatGia(v: string | number | undefined): string {
-  const n = Number(String(v ?? "").replace(/[^\d]/g, ""))
+  const n = parseVietnameseNumber(v)
   return Number.isFinite(n) && n > 0 ? `${n.toLocaleString("vi-VN")}đ` : ""
 }
 
@@ -629,11 +630,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   const emoji = type === "new" ? "🛒" : "↩️"
   // Detect deposit (cọc) presence
   const rawCoc = order.so_tien_coc ?? order.sotiencoc ?? order.deposit ?? 0
-  const cocNum = (() => {
-    const v = rawCoc == null ? 0 : rawCoc;
-    const n = typeof v === 'number' ? v : Number(String(v).replace(/[^\d.-]/g, ''));
-    return Number.isFinite(n) ? n : 0;
-  })();
+  const cocNum = parseVietnameseNumber(rawCoc)
   const isDeposit = type === "new" && cocNum > 0
   const isSettlement = !!order.is_settlement
   const action = isSettlement ? "TẤT TOÁN ĐƠN ĐẶT CỌC" : (isDeposit ? "ĐƠN ĐẶT CỌC MỚI" : (type === "new" ? "TẠO ĐƠN HÀNG MỚI" : "HOÀN TRẢ ĐƠN HÀNG"))
@@ -774,7 +771,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
           return ten
         })()
         const slRaw = a.sl ?? a.so_luong ?? a.quantity
-        const sl = Number.isFinite(slRaw) ? Number(slRaw) : (typeof slRaw === 'string' ? Number(slRaw.replace(/[^\d.-]/g,'')) : 0)
+        const sl = Number.isFinite(slRaw) ? Number(slRaw) : parseVietnameseNumber(slRaw)
         const qty = sl && sl > 1 ? ` x${sl}` : ''
         const display = loai ? `${loai} ${displayName || ''}`.trim() : (displayName || 'Phụ kiện')
         return `• ${display}${qty}`
@@ -790,10 +787,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
 
   // Tổng tiền: ưu tiên tổng cuối cùng nếu có, sau đó đến tong_tien/total
   const parseAmount = (v: any): number => {
-    if (v === null || v === undefined) return 0
-    if (typeof v === 'number' && Number.isFinite(v)) return v
-    const n = Number(String(v).replace(/[^\d.-]/g, ''))
-    return Number.isFinite(n) ? n : 0
+    return parseVietnameseNumber(v)
   }
   const totalCandidates = [order.final_total, order.finalThanhToan, order.tong_tien, order.total, order["Tổng Thu"]]
   const totalVal = totalCandidates.map(parseAmount).find(n => n > 0) || 0
@@ -818,7 +812,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
         const provider = p.provider || p.nha_cung_cap || p.providerName || ''
         const subs: string[] = []
         const fmt = (v: any) => {
-          const n = typeof v === 'number' ? v : Number(String(v).replace(/[^\d.-]/g, ''))
+          const n = parseVietnameseNumber(v)
           return Number.isFinite(n) && n > 0 ? `₫${n.toLocaleString('vi-VN')}` : ''
         }
         const dp = fmt(p.downPayment ?? p.tra_truoc)
@@ -829,7 +823,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
         lines.push(`• ${method}${provider ? ` (${provider})` : ''}${suffix}`)
       } else {
         // Sửa: luôn hiện số tiền từng phương thức, nếu có
-        const amt = typeof p.amount === 'number' ? p.amount : Number(String(p.amount || '').replace(/[^\d.-]/g, ''))
+        const amt = parseVietnameseNumber(p.amount)
         const amtStr = Number.isFinite(amt) ? ` ₫${amt.toLocaleString('vi-VN')}` : ''
         lines.push(`• ${method}${amtStr}`)
       }

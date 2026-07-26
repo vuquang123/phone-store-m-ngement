@@ -8,6 +8,7 @@ import { cancelContractsByIMEIs } from "@/lib/warranty"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
 import { Journal } from "@/lib/tx/journal"
 import { peekIdempotentDone, beginIdempotent, completeIdempotent, failIdempotent } from "@/lib/tx/idempotency"
+import { parseVietnameseNumber } from "@/lib/number"
 
 const SHEET_CANDIDATES = [
   "Hoan_Tra",
@@ -49,9 +50,7 @@ async function getHoanTraSheet(force = false) {
 }
 
 function parseNumber(v: any): number {
-  if (v === undefined || v === null || v === "") return 0
-  const n = Number(String(v).replace(/[^\d.-]/g, ""))
-  return Number.isFinite(n) ? n : 0
+  return parseVietnameseNumber(v)
 }
 
 async function adjustCustomerTotal(phoneRaw: string | undefined, amountDelta: number) {
@@ -140,7 +139,7 @@ export async function GET(req: NextRequest) {
       console.warn("[HOAN-TRA GET] enrich từ Hoan_Tra lỗi (bỏ qua):", e)
     }
 
-    const parsePrice = (v: any) => { const n = Number(String(v ?? "").replace(/[^\d]/g, "")); return Number.isFinite(n) ? n : 0 }
+    const parsePrice = (v: any) => parseVietnameseNumber(v)
 
     const data = BR
       .map((r, i) => ({ r, i }))
@@ -454,10 +453,10 @@ export async function POST(req: NextRequest) {
             const deviceId = getDeviceId({ IMEI: (im||'').trim(), Serial: (sr||'').trim().toUpperCase() })
             return deviceId ? last5FromDeviceId(deviceId) : ''
           }
-          const toNum = (v:any) => { const n = Number(String(v).replace(/[^\d.-]/g,'')); return Number.isFinite(n)? n: 0 }
+          const toNum = (v:any) => parseVietnameseNumber(v)
           // Giá bán ở Ban_Hang là chuỗi có dấu ngăn cách nghìn + " đ" (vd "6.800.000 đ").
           // Bỏ MỌI ký tự không phải số để ra số nguyên đúng (6800000).
-          const parsePrice = (v:any) => { const n = Number(String(v ?? '').replace(/[^\d]/g,'')); return Number.isFinite(n)? n: 0 }
+          const parsePrice = (v:any) => parseVietnameseNumber(v)
           // Ghi vào đúng dòng kế tiếp, NEO CỘT A. Không dùng values.append vì nó
           // tự "dò bảng" và có thể neo nhầm sang cột P khi sheet có hàng lệch.
           let appendRowNum = KR.length + 2 // +1 header, +1 sang dòng mới

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
+import { parseVietnameseNumber } from "@/lib/number"
 
 export const dynamic = "force-dynamic"
 
@@ -33,9 +34,7 @@ function colIndex(header: string[], ...names: string[]) {
 }
 
 function toNumber(x: any): number {
-  if (typeof x === "number" && Number.isFinite(x)) return x
-  const digits = String(x || "").replace(/[^\d-]/g, "")
-  return digits ? Number(digits) : 0
+  return parseVietnameseNumber(x)
 }
 
 function parseVNDateParts(s: any) {

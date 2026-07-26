@@ -10,6 +10,7 @@ import { recordCashTransaction } from "@/lib/cash"
 import { extractGhtkCode, mapGhtkStatus } from "@/lib/ghtk-status"
 import { syncCashFlowFromSale } from "@/lib/cash-flow/sheets"
 import { getGhtkTracking } from "@/lib/ghtk"
+import { parseVietnameseNumber } from "@/lib/number"
 
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
@@ -36,9 +37,7 @@ function normalizePhone(p: string) {
 }
 
 function toNumberLoose(value: any) {
-  if (typeof value === "number") return value
-  const parsed = Number(String(value ?? "").replace(/[^\d.-]/g, ""))
-  return Number.isFinite(parsed) ? parsed : 0
+  return parseVietnameseNumber(value)
 }
 
 function getStoredGhtkStatusLabel(hinhThucVanChuyen: string) {
@@ -59,6 +58,30 @@ function parseGhtkMetaNote(note: string, code: string) {
     codMoney: Number(match[1] || 0),
     shipMoney: Number(match[2] || 0),
   }
+}
+
+function findAccessoryRowIndex(
+  rows: any[][],
+  indexes: { id: number; tenSP?: number; loai?: number },
+  accessory: any,
+) {
+  const rawId = String(accessory?.id || "").trim()
+  if (rawId && indexes.id !== -1) {
+    const byId = rows.findIndex((row) => String(row[indexes.id] || "").trim() === rawId)
+    if (byId !== -1) return byId
+  }
+
+  const targetName = norm(String(accessory?.ten_phu_kien || accessory?.ten || accessory?.name || accessory?.ten_san_pham || ""))
+  const targetType = norm(String(accessory?.loai || accessory?.loai_phu_kien || ""))
+  if (!targetName) return -1
+
+  return rows.findIndex((row) => {
+    const rowName = indexes.tenSP !== undefined && indexes.tenSP !== -1 ? norm(String(row[indexes.tenSP] || "")) : ""
+    const rowType = indexes.loai !== undefined && indexes.loai !== -1 ? norm(String(row[indexes.loai] || "")) : ""
+    if (rowName !== targetName) return false
+    if (!targetType) return true
+    return rowType === targetType
+  })
 }
 
 function upsertGhtkMetaNote(note: string, code: string, codMoney: number, shipMoney: number) {
@@ -521,10 +544,13 @@ export async function POST(request: NextRequest) {
       const { header, rows } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
       const idx = {
         id: colIndex(header, "ID"),
+        tenSP: colIndex(header, "Tên Sản Phẩm"),
+        loai: colIndex(header, "Loại"),
         giaNhap: colIndex(header, "Giá Nhập")
       }
       for (const pk of normalizedAccessories) {
-        const found = rows.find((r) => r[idx.id] === pk.id)
+        const foundIdx = findAccessoryRowIndex(rows, idx, pk)
+        const found = foundIdx !== -1 ? rows[foundIdx] : null
         if (found && idx.giaNhap !== -1) {
           // Nếu không có trường số lượng bán, mặc định là 1
           let soLuongBan = 1;
@@ -937,13 +963,16 @@ export async function POST(request: NextRequest) {
       const { header, rows } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
       const idx = {
         id: colIndex(header, "ID"),
+        tenSP: colIndex(header, "Tên Sản Phẩm"),
+        loai: colIndex(header, "Loại"),
         soLuong: colIndex(header, "Số Lượng")
       }
       for (const pk of normalizedAccessories) {
-        const foundIdx = rows.findIndex((r) => r[idx.id] === pk.id)
+        const foundIdx = findAccessoryRowIndex(rows, idx, pk)
         if (foundIdx !== -1 && idx.soLuong !== -1) {
           let current = Number(rows[foundIdx][idx.soLuong] || 0)
-          let sold = pk.so_luong !== undefined ? Number(pk.so_luong) : 1
+          let sold = pk.so_luong !== undefined ? Number(pk.so_luong) : (pk.sl !== undefined ? Number(pk.sl) : 1)
+          if (!Number.isFinite(sold) || sold <= 0) sold = 1
           let newQty = Math.max(current - sold, 0)
           const rowNumber = foundIdx + 2 // Google Sheets row index (1-based, header is row 1)
           await updateRangeValues(`Phu_Kien!${toColumnLetter(idx.soLuong + 1)}${rowNumber}`, [[newQty]])
@@ -960,11 +989,7 @@ export async function POST(request: NextRequest) {
         const customerName = body.customerName || body.ten_khach_hang || body.ho_ten || (body.khach_hang && (body.khach_hang.ten || body.khach_hang.ten_khach_hang)) || "Khách lẻ"
         // Tính tổng tiền trong đơn (ưu tiên trường tổng / thanh toán nếu có)
         function toNumber(v: any) {
-          if (v === null || v === undefined) return 0
-          if (typeof v === "number") return v
-            const s = String(v).replace(/[^\d.-]/g, "")
-            const n = Number(s)
-            return Number.isFinite(n) ? n : 0
+          return parseVietnameseNumber(v)
         }
         // Ưu tiên dùng tổng thanh toán cuối cùng (bao gồm BH nếu có)
         let amountToAdd = 0
