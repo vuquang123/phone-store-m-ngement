@@ -486,7 +486,7 @@ export async function batchUpdateRangeValues(
 
 export async function ensureSheetExists(sheetName: string) {
   const meta = await sheets.spreadsheets.get({ spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID })
-  const exists = meta.data.sheets?.some((sheet) => sheet.properties?.title === sheetName)
+  const exists = meta.data.sheets?.some((sheet: any) => sheet.properties?.title === sheetName)
   if (exists) return { success: true, created: false }
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,

@@ -95,6 +95,7 @@ export default function CashFlowDailyReportPage() {
 
   const overview = report?.data.overview
   const highlights = useMemo(() => report?.highlights || [], [report])
+  const aiReport = report?.aiReport || null
 
   if (authLoading || isLoading) {
     return (
@@ -115,7 +116,7 @@ export default function CashFlowDailyReportPage() {
           <Alert variant="destructive">
             <ShieldAlert className="h-4 w-4" />
             <AlertTitle>Không mở được báo cáo dòng tiền</AlertTitle>
-            <AlertDescription>{error || "Chưa có báo cáo cho ngày này. Báo cáo sẽ tự tạo sau 20:00 cùng ngày."}</AlertDescription>
+            <AlertDescription>{error || "Chưa có báo cáo cho ngày này. Báo cáo sẽ tự tạo sau 18:00 cùng ngày."}</AlertDescription>
           </Alert>
           <div className="mt-4">
             <Button asChild variant="outline">
@@ -159,6 +160,65 @@ export default function CashFlowDailyReportPage() {
             </CardContent>
           </Card>
 
+          {aiReport ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tóm tắt điều hành bằng Gemini</CardTitle>
+                  <CardDescription>
+                    Trạng thái: {aiReport.overall_status} • Điểm sức khỏe: {aiReport.health_score}/100
+                    {report.aiModel ? ` • Model: ${report.aiModel}` : ""}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-xl border p-4 text-sm leading-7">
+                    {aiReport.executive_summary}
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <MetricCard title="Tiền dùng ngay" value={fmt(aiReport.key_metrics.liquid_cash)} note="Theo báo cáo AI" icon={Wallet} />
+                    <MetricCard title="Công nợ phải thu" value={fmt(aiReport.key_metrics.receivables)} note="Nguồn tiền dự kiến thu" icon={Coins} />
+                    <MetricCard title="Công nợ phải trả" value={fmt(aiReport.key_metrics.payables)} note="Nghĩa vụ cần xử lý" icon={CalendarClock} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-4 xl:grid-cols-3">
+                <AiCashFlowCard title="Hôm nay" block={aiReport.cash_flow_analysis.today} />
+                <AiCashFlowCard title="3 ngày tới" block={aiReport.cash_flow_analysis.next_3_days} />
+                <AiCashFlowCard title="7 ngày tới" block={aiReport.cash_flow_analysis.next_7_days} />
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <AiAlertCard items={aiReport.alerts} />
+                <AiPriorityCard report={aiReport} />
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-3">
+                <ReportListCard
+                  title="Phương án an toàn"
+                  items={[
+                    aiReport.scenarios.safe.expected_result || "",
+                    ...(aiReport.scenarios.safe.actions || []),
+                  ].filter(Boolean)}
+                />
+                <ReportListCard
+                  title="Phương án cân bằng"
+                  items={[
+                    aiReport.scenarios.balanced.expected_result || "",
+                    ...(aiReport.scenarios.balanced.actions || []),
+                  ].filter(Boolean)}
+                />
+                <ReportListCard
+                  title="Phương án tăng trưởng"
+                  items={[
+                    aiReport.scenarios.growth.expected_result || "",
+                    ...(aiReport.scenarios.growth.actions || []),
+                  ].filter(Boolean)}
+                />
+              </div>
+            </>
+          ) : null}
+
           <div className="grid gap-4 xl:grid-cols-2">
             <ReportListCard title="Điểm nhấn" items={highlights} />
             <ReportListCard title="Cảnh báo" items={report.warnings} tone="warning" />
@@ -172,6 +232,119 @@ export default function CashFlowDailyReportPage() {
         </div>
       )}
     </ProtectedRoute>
+  )
+}
+
+function AiCashFlowCard({
+  title,
+  block,
+}: {
+  title: string
+  block: {
+    available: number
+    incoming: number
+    outgoing: number
+    surplus_or_gap: number
+    status: string
+    explanation: string
+  }
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>Trạng thái: {block.status}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Có thể dùng</p>
+            <p className="mt-1 font-semibold">{fmt(block.available)}</p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Chênh lệch</p>
+            <p className="mt-1 font-semibold">{fmt(block.surplus_or_gap)}</p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Thu vào</p>
+            <p className="mt-1 font-semibold">{fmt(block.incoming)}</p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Chi ra</p>
+            <p className="mt-1 font-semibold">{fmt(block.outgoing)}</p>
+          </div>
+        </div>
+        <div className="rounded-lg border p-3 text-sm leading-6">
+          {block.explanation}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function AiAlertCard({
+  items,
+}: {
+  items: Array<{
+    level?: string
+    category?: string
+    title?: string
+    evidence?: string
+    financial_impact?: number
+    deadline?: string
+    recommended_action?: string
+  }>
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Cảnh báo ưu tiên</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {items.length ? items.slice(0, 5).map((item, index) => (
+          <div key={`ai-alert-${index}`} className="rounded-lg border p-3 text-sm leading-6">
+            <p className="font-semibold">{item.title || "Cảnh báo"}</p>
+            <p className="text-muted-foreground">{item.evidence || "Không có diễn giải"}</p>
+            <p className="mt-1">Tác động: {fmt(Number(item.financial_impact || 0))}</p>
+            {item.recommended_action ? <p className="mt-1">{item.recommended_action}</p> : null}
+          </div>
+        )) : (
+          <p className="text-sm text-muted-foreground">Chưa có cảnh báo.</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function AiPriorityCard({
+  report,
+}: {
+  report: NonNullable<CashFlowDailyReport["aiReport"]>
+}) {
+  const items = [
+    ...(report.priority_actions.within_24_hours || []),
+    ...(report.priority_actions.within_3_days || []),
+    ...(report.priority_actions.within_7_days || []),
+  ].slice(0, 6)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Hành động ưu tiên</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {items.length ? items.map((item, index) => (
+          <div key={`priority-${index}`} className="rounded-lg border p-3 text-sm leading-6">
+            <p className="font-semibold">{item.action || "Chưa có mô tả"}</p>
+            <p className="text-muted-foreground">{item.reason || "Không có lý do chi tiết"}</p>
+            <p className="mt-1">Số tiền liên quan: {fmt(Number(item.amount || 0))}</p>
+            {item.expected_result ? <p className="mt-1">{item.expected_result}</p> : null}
+          </div>
+        )) : (
+          <p className="text-sm text-muted-foreground">Chưa có hành động ưu tiên.</p>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

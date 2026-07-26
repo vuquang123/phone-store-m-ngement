@@ -312,6 +312,7 @@ export function buildDashboardData(): CashFlowDashboardData {
   return {
     overview,
     accounts: cashAccountsSample,
+    transactions: [],
     inventoryItems: inventoryItemsSample,
     receivables: receivablesSample,
     payables: payablesSample,

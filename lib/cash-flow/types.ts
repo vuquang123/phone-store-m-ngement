@@ -148,6 +148,23 @@ export interface PaymentSuggestion {
   hasEnoughCash: boolean
 }
 
+export interface LedgerTransaction {
+  id: string
+  type: string
+  amount: number
+  occurredAt: string
+  accountId: string
+  accountName: string
+  refType: string
+  refId: string
+  counterparty: string
+  source: string
+  note: string
+  automatic: boolean
+  createdBy: string
+  createdAt: string
+}
+
 export interface CashFlowOverview {
   asOfDate: string
   cashOnHand: number
@@ -180,6 +197,7 @@ export interface CashFlowOverview {
 export interface CashFlowDashboardData {
   overview: CashFlowOverview
   accounts: CashAccount[]
+  transactions: LedgerTransaction[]
   inventoryItems: InventoryItem[]
   receivables: Receivable[]
   payables: Payable[]
@@ -214,5 +232,120 @@ export interface CashFlowDailyReport {
   cashActions: string[]
   inventoryActions: string[]
   debtActions: string[]
+  aiModel?: string
+  aiError?: string
+  aiReport?: CashFlowAiReport | null
   data: CashFlowDashboardData
+}
+
+export interface CashFlowAiReportAction {
+  priority?: number
+  action?: string
+  reason?: string
+  amount?: number
+  expected_result?: string
+  requires_approval?: boolean
+}
+
+export interface CashFlowAiReportAlert {
+  level?: "info" | "warning" | "high" | "critical"
+  category?: "cash_flow" | "receivable" | "payable" | "inventory" | "loan" | "revenue" | "expense" | "data"
+  title?: string
+  evidence?: string
+  financial_impact?: number
+  deadline?: string
+  recommended_action?: string
+}
+
+export interface CashFlowAiScenario {
+  name?: string
+  required_cash?: number
+  actions?: string[]
+  expected_result?: string
+  risk?: "low" | "medium" | "high"
+  conditions?: string[]
+  do_not_use_when?: string[]
+}
+
+export interface CashFlowAiReport {
+  report_date: string
+  overall_status: "good" | "attention" | "warning" | "critical"
+  health_score: number
+  executive_summary: string
+  key_metrics: {
+    liquid_cash: number
+    inventory_cost: number
+    receivables: number
+    payables: number
+    loan_principal: number
+    estimated_net_position: number
+  }
+  cash_flow_analysis: {
+    today: {
+      available: number
+      incoming: number
+      outgoing: number
+      surplus_or_gap: number
+      status: "surplus" | "balanced" | "deficit"
+      explanation: string
+    }
+    next_3_days: {
+      available: number
+      incoming: number
+      outgoing: number
+      surplus_or_gap: number
+      status: "surplus" | "balanced" | "deficit"
+      explanation: string
+    }
+    next_7_days: {
+      available: number
+      incoming: number
+      outgoing: number
+      surplus_or_gap: number
+      status: "surplus" | "balanced" | "deficit"
+      explanation: string
+    }
+  }
+  alerts: CashFlowAiReportAlert[]
+  priority_actions: {
+    within_24_hours: CashFlowAiReportAction[]
+    within_3_days: CashFlowAiReportAction[]
+    within_7_days: CashFlowAiReportAction[]
+  }
+  receivable_actions: Array<{
+    reference_id?: string
+    amount?: number
+    days_overdue?: number
+    priority?: "low" | "medium" | "high" | "critical"
+    recommended_action?: string
+  }>
+  inventory_actions: Array<{
+    product_id?: string
+    product_name?: string
+    inventory_age_days?: number
+    cost?: number
+    current_price?: number
+    recommended_action?: "keep" | "promote" | "reduce_price" | "bundle" | "stop_importing" | "review"
+    suggested_price?: number
+    reason?: string
+    risk?: "low" | "medium" | "high"
+  }>
+  payment_plan: Array<{
+    reference_id?: string
+    creditor_code?: string
+    due_date?: string
+    amount_due?: number
+    recommended_payment?: number
+    remaining_amount?: number
+    priority?: number
+    reason?: string
+  }>
+  scenarios: {
+    safe: CashFlowAiScenario
+    balanced: CashFlowAiScenario
+    growth: CashFlowAiScenario
+  }
+  questions_for_owner: string[]
+  data_issues: string[]
+  disclaimer: string
 }

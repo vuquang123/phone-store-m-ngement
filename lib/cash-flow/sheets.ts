@@ -2,16 +2,19 @@ import { DateTime } from "luxon"
 import { ensureSheetHeader, readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, batchUpdateRangeValues, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { extractGhtkCode, mapGhtkStatus } from "@/lib/ghtk-status"
 import { getGhtkTracking } from "@/lib/ghtk"
+import { generateCashFlowAiReport } from "@/services/ai/generate-cash-flow-report"
 import { DEFAULT_SAFE_RESERVE } from "./sample-data"
 import type {
   AvailabilityStatus,
   CashAccount,
+  CashFlowAiReport,
   CashFlowDashboardData,
   CashFlowDailyReport,
   CashFlowOverview,
   CashFlowPlanRow,
   CashFlowScenarioInput,
   InventoryItem,
+  LedgerTransaction,
   Payable,
   PaymentSuggestion,
   PriorityLevel,
@@ -118,6 +121,9 @@ const REPORTS_HEADER = [
   "Cash Actions Json",
   "Inventory Actions Json",
   "Debt Actions Json",
+  "AI Model",
+  "AI Error",
+  "AI Report Json",
   "Data Json",
   "Updated At",
 ]
@@ -126,6 +132,8 @@ const SETTING_KEYS = {
   SAFE_RESERVE: "safe_reserve",
   RESET_ORDER_SEQ: "reset_order_seq",
 } as const
+
+const AUTO_REPORT_HOUR = 18
 
 function nowIso() {
   return DateTime.now().setZone("Asia/Ho_Chi_Minh").toISO() || new Date().toISOString()
@@ -172,23 +180,6 @@ function startOfDay(date: string) {
 function daysUntil(date: string) {
   const now = DateTime.fromISO(todayYmd(), { zone: "Asia/Ho_Chi_Minh" }).startOf("day").toMillis()
   return Math.floor((startOfDay(date) - now) / 86400000)
-}
-
-type LedgerTransaction = {
-  id: string
-  type: string
-  amount: number
-  occurredAt: string
-  accountId: string
-  accountName: string
-  refType: string
-  refId: string
-  counterparty: string
-  source: string
-  note: string
-  automatic: boolean
-  createdBy: string
-  createdAt: string
 }
 
 export async function ensureCashFlowSheets() {
@@ -1535,6 +1526,9 @@ async function upsertCashFlowReport(report: CashFlowDailyReport) {
     JSON.stringify(report.cashActions || []),
     JSON.stringify(report.inventoryActions || []),
     JSON.stringify(report.debtActions || []),
+    report.aiModel || "",
+    report.aiError || "",
+    JSON.stringify(report.aiReport || null),
     JSON.stringify(report.data),
     nowIso(),
   ]
@@ -1556,6 +1550,9 @@ async function readCashFlowReportBySlugInternal(slug: string): Promise<CashFlowD
   const idxCashActions = colIndex(header, "Cash Actions Json")
   const idxInventoryActions = colIndex(header, "Inventory Actions Json")
   const idxDebtActions = colIndex(header, "Debt Actions Json")
+  const idxAiModel = colIndex(header, "AI Model")
+  const idxAiError = colIndex(header, "AI Error")
+  const idxAiReport = colIndex(header, "AI Report Json")
   const idxData = colIndex(header, "Data Json")
   const row = rows.find((item) => String(item[idxSlug] || "") === slug)
   if (!row) return null
@@ -1572,27 +1569,70 @@ async function readCashFlowReportBySlugInternal(slug: string): Promise<CashFlowD
     cashActions: parseJsonArray(row[idxCashActions]),
     inventoryActions: parseJsonArray(row[idxInventoryActions]),
     debtActions: parseJsonArray(row[idxDebtActions]),
+    aiModel: String(row[idxAiModel] || ""),
+    aiError: String(row[idxAiError] || ""),
+    aiReport: parseJsonObject<CashFlowAiReport>(row[idxAiReport]),
     data,
   }
 }
 
-export async function maybeCreateDailyCashFlowReport(data?: CashFlowDashboardData) {
-  const now = DateTime.now().setZone("Asia/Ho_Chi_Minh")
-  if (now.hour < 20) return null
-  const reportDate = now.toFormat("yyyy-MM-dd")
+async function createCashFlowDailyReport(reportDate: string, data?: CashFlowDashboardData, force = false) {
   const slug = formatReportSlug(reportDate)
-  const existing = await readCashFlowReportBySlugInternal(slug)
+  const existing = force ? null : await readCashFlowReportBySlugInternal(slug)
   if (existing) return existing
   const snapshot = data || await getCashFlowDashboardDataFromSheets()
+  const ai = await generateCashFlowAiReport(snapshot, reportDate)
   const report: CashFlowDailyReport = {
     slug,
     reportDate,
     generatedAt: nowIso(),
     data: snapshot,
+    aiModel: ai.model,
+    aiError: ai.error,
+    aiReport: ai.report,
     ...buildCashFlowReportContent(snapshot, reportDate),
+  }
+
+  if (ai.report?.executive_summary) {
+    report.summary = ai.report.executive_summary
+  }
+  if (ai.report?.priority_actions?.within_24_hours?.length) {
+    report.cashActions = ai.report.priority_actions.within_24_hours
+      .slice(0, 3)
+      .map((item) => String(item.action || "").trim())
+      .filter(Boolean)
+  }
+  if (ai.report?.inventory_actions?.length) {
+    report.inventoryActions = ai.report.inventory_actions
+      .slice(0, 3)
+      .map((item) => {
+        const name = String(item.product_name || "").trim()
+        const action = String(item.recommended_action || "").trim()
+        const reason = String(item.reason || "").trim()
+        return [name, action, reason].filter(Boolean).join(" - ")
+      })
+      .filter(Boolean)
+  }
+  if (ai.report?.payment_plan?.length) {
+    report.debtActions = ai.report.payment_plan
+      .slice(0, 3)
+      .map((item) => {
+        const ref = String(item.reference_id || item.creditor_code || "").trim()
+        const amount = Number(item.recommended_payment || 0)
+        const reason = String(item.reason || "").trim()
+        return [ref, amount > 0 ? `${amount.toLocaleString("vi-VN")} ₫` : "", reason].filter(Boolean).join(" - ")
+      })
+      .filter(Boolean)
   }
   await upsertCashFlowReport(report)
   return report
+}
+
+export async function maybeCreateDailyCashFlowReport(data?: CashFlowDashboardData) {
+  const now = DateTime.now().setZone("Asia/Ho_Chi_Minh")
+  if (now.hour < AUTO_REPORT_HOUR) return null
+  const reportDate = now.toFormat("yyyy-MM-dd")
+  return createCashFlowDailyReport(reportDate, data, false)
 }
 
 export async function getCashFlowReportBySlug(slug: string) {
@@ -1601,8 +1641,7 @@ export async function getCashFlowReportBySlug(slug: string) {
   const reportDate = parseReportSlug(slug)
   if (!reportDate) return null
   if (reportDate !== todayYmd()) return null
-  if (DateTime.now().setZone("Asia/Ho_Chi_Minh").hour < 20) return null
-  return maybeCreateDailyCashFlowReport()
+  return createCashFlowDailyReport(reportDate, undefined, true)
 }
 
 export async function getCashFlowDashboardDataFromSheets(): Promise<CashFlowDashboardData> {
@@ -1610,6 +1649,7 @@ export async function getCashFlowDashboardDataFromSheets(): Promise<CashFlowDash
   const accounts = await readAccounts()
   await syncOrdersIntoCashFlow(accounts)
   const freshAccounts = await readAccounts()
+  const transactions = await readTransactions()
   const inventoryItems = await readInventorySnapshot()
   const receivables = await readReceivables()
   const payables = await readPayables()
@@ -1638,6 +1678,11 @@ export async function getCashFlowDashboardDataFromSheets(): Promise<CashFlowDash
   return {
     overview,
     accounts: freshAccounts,
+    transactions: [...transactions].sort((a, b) => {
+      const aTime = new Date(a.createdAt || a.occurredAt || 0).getTime()
+      const bTime = new Date(b.createdAt || b.occurredAt || 0).getTime()
+      return bTime - aTime
+    }),
     inventoryItems,
     receivables: receivablesWithStatus,
     payables: payablesWithStatus,

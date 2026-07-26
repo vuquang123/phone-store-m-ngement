@@ -2,6 +2,7 @@
 
 import { type ComponentType, type Dispatch, type SetStateAction, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { DateTime } from "luxon"
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -34,12 +35,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import type { CashFlowDashboardData } from "@/lib/cash-flow/types"
+import type { CashFlowDashboardData, LedgerTransaction } from "@/lib/cash-flow/types"
 
 const ALLOWED_EMAIL = "dung8ahxh@gmail.com"
 const OTP_STORAGE_KEY = "dongtien_otp_verified_v1"
@@ -97,6 +99,7 @@ export default function DongTienPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [creatingReport, setCreatingReport] = useState(false)
   const [accountDrafts, setAccountDrafts] = useState<Record<string, string>>({})
   const [accountForm, setAccountForm] = useState({ name: "", type: "cash", balance: "0", availability: "AVAILABLE", note: "" })
   const [receivableForm, setReceivableForm] = useState({ counterparty: "", phone: "", description: "", totalAmount: "", dueDate: "", collectability: "medium", note: "" })
@@ -202,6 +205,41 @@ export default function DongTienPage() {
     }
   }
 
+  const createReportNow = async () => {
+    try {
+      setCreatingReport(true)
+      setError("")
+      const slug = `bao-cao-${DateTime.now().setZone("Asia/Ho_Chi_Minh").setLocale("en").toFormat("ddLLLyyyy")}`
+      const res = await fetch(`/api/dongtien?reportSlug=${encodeURIComponent(slug)}`, {
+        cache: "no-store",
+        headers: {
+          ...getAuthHeaders(),
+          "x-dongtien-otp": "216917",
+        },
+      })
+      const json = await res.json() as { success?: boolean; report?: { slug?: string }; error?: string }
+      if (!res.ok || !json?.success || !json.report?.slug) {
+        throw new Error(json?.error || "Không tạo được báo cáo dòng tiền")
+      }
+      toast({
+        title: "Thành công",
+        description: `Đã tạo báo cáo ${json.report.slug}`,
+        variant: "success" as any,
+      })
+      router.push(`/dashboard/dongtien/${json.report.slug}`)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Không tạo được báo cáo dòng tiền"
+      setError(message)
+      toast({
+        title: "Lỗi",
+        description: message,
+        variant: "destructive",
+      })
+    } finally {
+      setCreatingReport(false)
+    }
+  }
+
   if (authLoading || isLoading) {
     return (
       <ProtectedRoute requiredRole="quan_ly">
@@ -230,6 +268,7 @@ export default function DongTienPage() {
           error={error}
           onReload={loadData}
           submitting={submitting}
+          creatingReport={creatingReport}
           accountDrafts={accountDrafts}
           setAccountDrafts={setAccountDrafts}
           accountForm={accountForm}
@@ -239,6 +278,7 @@ export default function DongTienPage() {
           payableForm={payableForm}
           setPayableForm={setPayableForm}
           onSubmitAction={submitAction}
+          onCreateReportNow={createReportNow}
         />
       )}
     </ProtectedRoute>
@@ -250,11 +290,13 @@ function StatCard({
   value,
   description,
   icon: Icon,
+  onViewDetail,
 }: {
   title: string
   value: string
   description: string
   icon: ComponentType<{ className?: string }>
+  onViewDetail?: () => void
 }) {
   return (
     <Card className="overflow-hidden">
@@ -269,6 +311,13 @@ function StatCard({
             <Icon className="h-5 w-5" />
           </div>
         </div>
+        {onViewDetail ? (
+          <div className="mt-4">
+            <Button variant="outline" size="sm" onClick={onViewDetail}>
+              Xem chi tiết
+            </Button>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )
@@ -279,6 +328,7 @@ function CashFlowDashboard({
   error,
   onReload,
   submitting,
+  creatingReport,
   accountDrafts,
   setAccountDrafts,
   accountForm,
@@ -288,11 +338,13 @@ function CashFlowDashboard({
   payableForm,
   setPayableForm,
   onSubmitAction,
+  onCreateReportNow,
 }: {
   data: CashFlowDashboardData
   error: string
   onReload: () => Promise<void>
   submitting: boolean
+  creatingReport: boolean
   accountDrafts: Record<string, string>
   setAccountDrafts: Dispatch<SetStateAction<Record<string, string>>>
   accountForm: { name: string; type: string; balance: string; availability: string; note: string }
@@ -302,16 +354,19 @@ function CashFlowDashboard({
   payableForm: { creditor: string; type: string; description: string; principalAmount: string; dueDate: string; priority: string; note: string }
   setPayableForm: Dispatch<SetStateAction<{ creditor: string; type: string; description: string; principalAmount: string; dueDate: string; priority: string; note: string }>>
   onSubmitAction: (payload: Record<string, any>) => Promise<void>
+  onCreateReportNow: () => Promise<void>
 }) {
-  const { overview, alerts, accounts, inventoryItems, receivables, payables, plan, paymentSuggestions, scenarios } = data
+  const { overview, alerts, accounts, transactions, inventoryItems, receivables, payables, plan, paymentSuggestions, scenarios } = data
   const countedInventory = inventoryItems.filter((item) => item.status === "IN_STOCK" || item.status === "IN_STOCK_RETURNED")
   const availableAccounts = useMemo(() => accounts.filter((item) => item.availability === "AVAILABLE"), [accounts])
+  const visibleReceivables = useMemo(() => receivables.filter((item) => item.totalAmount - item.collectedAmount > 0), [receivables])
   const due3Total = overview.dueToday + overview.dueIn3Days
   const visiblePayables = useMemo(() => payables.filter((item) => item.principalAmount - item.paidAmount > 0), [payables])
   const suggestionMap = useMemo(() => new Map(paymentSuggestions.map((item) => [item.payableId, item])), [paymentSuggestions])
   const [receivableDrafts, setReceivableDrafts] = useState<Record<string, ReceivableDraft>>({})
   const [payableDrafts, setPayableDrafts] = useState<Record<string, PayableDraft>>({})
   const [selectedPayableId, setSelectedPayableId] = useState("")
+  const [detailView, setDetailView] = useState<"cash" | "inventory" | "receivable" | "payable" | null>(null)
 
   useEffect(() => {
     const defaultAccountId = availableAccounts[0]?.id || ""
@@ -375,6 +430,21 @@ function CashFlowDashboard({
     }))
   ), [plan])
 
+  const cashTransactions = useMemo(
+    () => transactions.filter((item) =>
+      ["sale_cash", "sale_transfer", "sale_cod", "receivable_collection", "payable_payment"].includes(item.type),
+    ),
+    [transactions],
+  )
+  const receivableTransactions = useMemo(
+    () => transactions.filter((item) => item.type === "receivable_collection"),
+    [transactions],
+  )
+  const payableTransactions = useMemo(
+    () => transactions.filter((item) => item.type === "payable_payment"),
+    [transactions],
+  )
+
   return (
     <div className="mx-auto w-full max-w-[calc(100vw-2rem)] space-y-4 overflow-x-hidden px-1 pb-4">
       {error ? (
@@ -385,19 +455,125 @@ function CashFlowDashboard({
         </Alert>
       ) : null}
 
-      <div className="flex justify-end">
-        <Button variant="outline" onClick={() => onReload()} disabled={submitting}>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button onClick={() => onCreateReportNow()} disabled={submitting || creatingReport}>
+          {creatingReport ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Tạo báo cáo ngay
+        </Button>
+        <Button variant="outline" onClick={() => onReload()} disabled={submitting || creatingReport}>
           {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Đồng bộ lại từ sheet
         </Button>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Tiền mặt và tài khoản" value={fmt(overview.cashOnHand)} description="Chỉ tính nguồn AVAILABLE" icon={Wallet} />
-        <StatCard title="Giá trị hàng tồn" value={fmt(overview.inventoryValue)} description={`Bán nhanh có thể thu ${fmt(overview.inventoryQuickSaleValue)}`} icon={Boxes} />
-        <StatCard title="Công nợ phải thu" value={fmt(overview.totalReceivables)} description={`Sau thu nợ + COD chờ về: ${fmt(overview.projectedCashAfterReceivables)}`} icon={ArrowDownCircle} />
-        <StatCard title="Tổng nợ phải trả" value={fmt(overview.totalPayables)} description={`Tổng tài sản ngắn hạn: ${fmt(overview.totalShortTermAssets)}`} icon={ArrowUpCircle} />
+        <StatCard title="Tiền mặt và tài khoản" value={fmt(overview.cashOnHand)} description="Chỉ tính nguồn AVAILABLE" icon={Wallet} onViewDetail={() => setDetailView("cash")} />
+        <StatCard title="Giá trị hàng tồn" value={fmt(overview.inventoryValue)} description={`Bán nhanh có thể thu ${fmt(overview.inventoryQuickSaleValue)}`} icon={Boxes} onViewDetail={() => setDetailView("inventory")} />
+        <StatCard title="Công nợ phải thu" value={fmt(overview.totalReceivables)} description={`Sau thu nợ + COD chờ về: ${fmt(overview.projectedCashAfterReceivables)}`} icon={ArrowDownCircle} onViewDetail={() => setDetailView("receivable")} />
+        <StatCard title="Tổng nợ phải trả" value={fmt(overview.totalPayables)} description={`Tổng tài sản ngắn hạn: ${fmt(overview.totalShortTermAssets)}`} icon={ArrowUpCircle} onViewDetail={() => setDetailView("payable")} />
       </div>
+
+      <Dialog open={detailView !== null} onOpenChange={(open) => !open ? setDetailView(null) : null}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              {detailView === "cash" ? "Chi tiết tiền mặt và tài khoản" : null}
+              {detailView === "inventory" ? "Chi tiết giá trị hàng tồn" : null}
+              {detailView === "receivable" ? "Chi tiết công nợ phải thu" : null}
+              {detailView === "payable" ? "Chi tiết nợ phải trả" : null}
+            </DialogTitle>
+            <DialogDescription>
+              {detailView === "cash" ? "Xem nhanh nguồn tiền khả dụng và lịch sử giao dịch thu chi gần nhất." : null}
+              {detailView === "inventory" ? "Danh sách máy đang góp vào giá trị hàng tồn hiện tại." : null}
+              {detailView === "receivable" ? "Các khoản còn phải thu và lịch sử ghi nhận thu nợ." : null}
+              {detailView === "payable" ? "Các khoản còn phải trả và lịch sử ghi nhận chi trả." : null}
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailView === "cash" ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                {accounts.map((account) => (
+                  <div key={account.id} className="rounded-xl border p-3">
+                    <p className="font-medium">{account.name}</p>
+                    <p className="mt-1 text-lg font-semibold">{fmt(account.balance)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{account.type} • {account.availability}</p>
+                  </div>
+                ))}
+              </div>
+              <TransactionList transactions={cashTransactions} emptyText="Chưa có lịch sử thu chi." />
+            </div>
+          ) : null}
+
+          {detailView === "inventory" ? (
+            <div className="space-y-3">
+              {countedInventory.length ? countedInventory.map((item) => (
+                <div key={item.id} className="flex flex-col gap-2 rounded-xl border p-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="font-medium">{item.model || "Chưa rõ tên máy"}</p>
+                    <p className="text-sm text-muted-foreground">{[item.color, item.capacity, item.imei || item.code].filter(Boolean).join(" • ")}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.condition || "Không có ghi chú tình trạng"}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold">Giá nhập: {fmt(item.costPrice)}</p>
+                    <p className="text-sm text-muted-foreground">Bán nhanh: {fmt(item.quickSalePrice)}</p>
+                  </div>
+                </div>
+              )) : (
+                <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Không có hàng tồn đang tham gia tính giá trị.</div>
+              )}
+            </div>
+          ) : null}
+
+          {detailView === "receivable" ? (
+            <div className="space-y-4">
+              <div className="space-y-3">
+                {visibleReceivables.length ? visibleReceivables.map((item) => (
+                  <div key={item.id} className="rounded-xl border p-3">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="font-medium">{item.counterparty}</p>
+                        <p className="text-sm text-muted-foreground">{item.description}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Hẹn thu: {item.dueDate} • Đã thu: {fmt(item.collectedAmount)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">Còn lại: {fmt(item.totalAmount - item.collectedAmount)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Không còn khoản phải thu nào chưa thu đủ.</div>
+                )}
+              </div>
+              <TransactionList transactions={receivableTransactions} emptyText="Chưa có lịch sử thu nợ." />
+            </div>
+          ) : null}
+
+          {detailView === "payable" ? (
+            <div className="space-y-4">
+              <div className="space-y-3">
+                {visiblePayables.length ? visiblePayables.map((item) => (
+                  <div key={item.id} className="rounded-xl border p-3">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="font-medium">{item.creditor}</p>
+                        <p className="text-sm text-muted-foreground">{item.description}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Đến hạn: {item.dueDate} • Đã trả: {fmt(item.paidAmount)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">Còn phải trả: {fmt(item.principalAmount - item.paidAmount)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Không còn khoản phải trả nào chưa tất toán.</div>
+                )}
+              </div>
+              <TransactionList transactions={payableTransactions} emptyText="Chưa có lịch sử chi trả." />
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Phải trả hôm nay" value={fmt(overview.dueToday)} description="Khoản đến hạn ngày 25/07/2026" icon={CalendarClock} />
@@ -721,7 +897,7 @@ function CashFlowDashboard({
                   </Button>
                 </div>
               </div>
-              {receivables.map((item) => (
+              {visibleReceivables.map((item) => (
                 <div key={item.id} className="rounded-xl border p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
@@ -900,6 +1076,11 @@ function CashFlowDashboard({
                   </div>
                 </div>
               ))}
+              {!visibleReceivables.length ? (
+                <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+                  Hiện không còn khoản phải thu nào chưa thu đủ.
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1315,6 +1496,37 @@ function CashFlowDashboard({
           </div>
         </TabsContent>
       </Tabs>
+    </div>
+  )
+}
+
+function TransactionList({ transactions, emptyText }: { transactions: LedgerTransaction[]; emptyText: string }) {
+  if (!transactions.length) {
+    return <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">{emptyText}</div>
+  }
+
+  return (
+    <div className="space-y-3">
+      {transactions.map((item) => {
+        const isOutflow = item.type === "payable_payment"
+        return (
+          <div key={item.id} className="flex flex-col gap-2 rounded-xl border p-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-medium">{item.counterparty || item.note || item.type}</p>
+              <p className="text-sm text-muted-foreground">{item.note || "Không có ghi chú"}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {item.occurredAt} • {item.accountName} • {item.source}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className={`font-semibold ${isOutflow ? "text-red-400" : "text-emerald-400"}`}>
+                {isOutflow ? "-" : "+"}{fmt(item.amount)}
+              </p>
+              <p className="text-xs text-muted-foreground">{item.type}</p>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
