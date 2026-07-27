@@ -264,7 +264,7 @@ function findAccountById(accounts: CashAccount[], accountId: string) {
 
 async function readReceivables(): Promise<Receivable[]> {
   const { header, rows } = await readFromGoogleSheets(SHEETS.RECEIVABLES, undefined, { force: true })
-  return rows
+  const mapped = rows
     .filter((row) => String(row[0] || "").trim())
     .map((row) => ({
       id: String(row[colIndex(header, "ID")] || ""),
@@ -281,7 +281,42 @@ async function readReceivables(): Promise<Receivable[]> {
       autoRefType: String(row[colIndex(header, "Auto Ref Type")] || ""),
       autoRefId: String(row[colIndex(header, "Auto Ref ID")] || ""),
       note: String(row[colIndex(header, "Ghi Chú")] || ""),
+      createdAt: String(row[colIndex(header, "Created At")] || ""),
+      updatedAt: String(row[colIndex(header, "Updated At")] || ""),
     }))
+
+  const deduped = new Map<string, Receivable>()
+  const result: Receivable[] = []
+
+  for (const item of mapped) {
+    const key = item.autoRefType && item.autoRefId ? `${item.autoRefType}::${item.autoRefId}` : ""
+    if (!key) {
+      result.push(item)
+      continue
+    }
+
+    const existing = deduped.get(key)
+    if (!existing) {
+      deduped.set(key, item)
+      continue
+    }
+
+    const existingRemaining = Math.max(0, existing.totalAmount - existing.collectedAmount)
+    const itemRemaining = Math.max(0, item.totalAmount - item.collectedAmount)
+    const existingTime = new Date(existing.updatedAt || existing.createdAt || existing.incurredAt || 0).getTime() || 0
+    const itemTime = new Date(item.updatedAt || item.createdAt || item.incurredAt || 0).getTime() || 0
+
+    const shouldReplace =
+      item.collectedAmount > existing.collectedAmount ||
+      (item.collectedAmount === existing.collectedAmount && itemRemaining < existingRemaining) ||
+      (item.collectedAmount === existing.collectedAmount && itemRemaining === existingRemaining && itemTime >= existingTime)
+
+    if (shouldReplace) {
+      deduped.set(key, item)
+    }
+  }
+
+  return [...result, ...deduped.values()]
 }
 
 async function readPayables(): Promise<Payable[]> {
@@ -868,7 +903,11 @@ async function syncOrdersIntoCashFlow(accounts: CashAccount[]) {
   const existingTx = await readTransactions()
   const existingRecv = await readReceivables()
   const txRefSet = new Set(existingTx.map((item) => `${item.refType}::${item.refId}`))
-  const recvRefSet = new Set(existingRecv.map((item) => `${item.note}::${item.description}`))
+  const recvRefSet = new Set(
+    existingRecv
+      .filter((item) => item.autoRefType && item.autoRefId)
+      .map((item) => `${item.autoRefType}::${item.autoRefId}`),
+  )
   const cashAccount = findPreferredAccount(accounts, "cash")
   const bankAccount = findPreferredAccount(accounts, "bank")
   if (!cashAccount || !bankAccount) return
@@ -949,7 +988,7 @@ async function syncOrdersIntoCashFlow(accounts: CashAccount[]) {
 
     if (payment.card > 0) {
       const refId = `${orderId}::card`
-      const marker = `${refId}::Thẻ từ đơn ${orderId}`
+      const marker = `order_card::${refId}`
       if (!recvRefSet.has(marker)) {
         const due = DateTime.fromISO(orderDate).plus({ days: 2 }).toFormat("yyyy-MM-dd")
         receivableRows.push(buildReceivableRow({
@@ -969,7 +1008,7 @@ async function syncOrdersIntoCashFlow(accounts: CashAccount[]) {
 
     if (payment.installmentLoan > 0) {
       const refId = `${orderId}::installment`
-      const marker = `${refId}::Trả góp từ đơn ${orderId}`
+      const marker = `order_installment::${refId}`
       if (!recvRefSet.has(marker)) {
         const due = DateTime.fromISO(orderDate).plus({ days: 2 }).toFormat("yyyy-MM-dd")
         receivableRows.push(buildReceivableRow({
@@ -1070,7 +1109,11 @@ async function syncSingleOrderIntoCashFlow(accounts: CashAccount[], params: {
   const existingTx = await readTransactions()
   const existingRecv = await readReceivables()
   const txRefSet = new Set(existingTx.map((item) => `${item.refType}::${item.refId}`))
-  const recvRefSet = new Set(existingRecv.map((item) => `${item.note}::${item.description}`))
+  const recvRefSet = new Set(
+    existingRecv
+      .filter((item) => item.autoRefType && item.autoRefId)
+      .map((item) => `${item.autoRefType}::${item.autoRefId}`),
+  )
   const cashAccount = findPreferredAccount(accounts, "cash")
   const bankAccount = findPreferredAccount(accounts, "bank")
   if (!cashAccount || !bankAccount) return
@@ -1139,7 +1182,7 @@ async function syncSingleOrderIntoCashFlow(accounts: CashAccount[], params: {
 
   if (payment.card > 0) {
     const refId = `${params.orderId}::card`
-    const marker = `${refId}::Thẻ từ đơn ${params.orderId}`
+    const marker = `order_card::${refId}`
     if (!recvRefSet.has(marker)) {
       receivableRows.push(buildReceivableRow({
         counterparty: customer,
@@ -1152,12 +1195,13 @@ async function syncSingleOrderIntoCashFlow(accounts: CashAccount[], params: {
         autoRefId: refId,
         note: refId,
       }))
+      recvRefSet.add(marker)
     }
   }
 
   if (payment.installmentLoan > 0) {
     const refId = `${params.orderId}::installment`
-    const marker = `${refId}::Trả góp từ đơn ${params.orderId}`
+    const marker = `order_installment::${refId}`
     if (!recvRefSet.has(marker)) {
       receivableRows.push(buildReceivableRow({
         counterparty: customer,
@@ -1170,6 +1214,7 @@ async function syncSingleOrderIntoCashFlow(accounts: CashAccount[], params: {
         autoRefId: refId,
         note: refId,
       }))
+      recvRefSet.add(marker)
     }
   }
 

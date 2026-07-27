@@ -1121,9 +1121,11 @@ export async function POST(request: NextRequest) {
           dia_chi: body.dia_chi_nhan || body["Địa Chỉ Nhận"] || body.dia_chi || body.address || undefined
         },
         ghi_chu: body.ghi_chu || body["Ghi Chú"] || '',
-        // Tổng tiền: ưu tiên final từ FE nếu có, fallback về trường cũ
-        final_total: (typeof finalTotalFromClient === 'number' ? finalTotalFromClient : undefined),
-        tong_tien: body["Thanh Toan"] || body.tong_tien || body.thanh_toan || 0,
+        // Tổng giá trị đơn phải là giá full trước khi trừ cọc; số còn lại nằm ở chi tiết thanh toán.
+        final_total: grossOrderTotal > 0 ? grossOrderTotal : (typeof finalTotalFromClient === 'number' ? finalTotalFromClient : undefined),
+        tong_tien: grossOrderTotal > 0 ? grossOrderTotal : (body["Thanh Toan"] || body.tong_tien || body.thanh_toan || 0),
+        so_tien_coc: parseVietnameseNumber(body.so_tien_coc),
+        so_tien_con_lai: typeof finalTotalFromClient === 'number' ? finalTotalFromClient : 0,
         phuong_thuc_thanh_toan: body["Phuong Thuc Thanh Toan"] || body["phuong_thuc_thanh_toan"] || body.paymentMethod || body.hinh_thuc_thanh_toan || body["Hình Thức Thanh Toán"] || "N/A",
         hinh_thuc_van_chuyen: body["Hình Thức Vận Chuyển"] || body.hinh_thuc_van_chuyen || undefined,
         ngay_tao: Date.now(),

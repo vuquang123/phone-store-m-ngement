@@ -21,6 +21,7 @@ interface DepositOrdersTabProps {
   setSelectedCustomer: (c: Customer | null) => void
   setCurrentDepositOrderId: (v: string | null) => void
   setDepositAmountAlreadyPaid: (v: number) => void
+  setDepositPaymentSummary: (v: string) => void
   setLoaiThanhToan: (v: string) => void
   toast: (props: any) => void
   setActiveTab: (v: string) => void
@@ -36,6 +37,7 @@ export function DepositOrdersTab({
   setSelectedCustomer,
   setCurrentDepositOrderId,
   setDepositAmountAlreadyPaid,
+  setDepositPaymentSummary,
   setLoaiThanhToan,
   toast,
   setActiveTab,
@@ -173,8 +175,15 @@ export function DepositOrdersTab({
                                    return sum + (Number(val) || 0);
                                  }, 0);
 
+                                 const existingDepositPaymentSummary = String(
+                                   allRows[0]?.["Hình Thức Thanh Toán"] ||
+                                   allRows[0]?.["hinh_thuc_thanh_toan"] ||
+                                   ""
+                                 ).trim()
+
                                  setCurrentDepositOrderId(maDon || null);
                                  setDepositAmountAlreadyPaid(totalPaid || 0);
+                                 setDepositPaymentSummary(existingDepositPaymentSummary);
                                  setLoaiThanhToan("Thanh toán đủ");
                                  toast({ title: 'Đã tải đơn đặt cọc', description: `Đã cọc: ₫${(totalPaid || 0).toLocaleString('vi-VN')}. Vui lòng thanh toán số còn lại.` });
 

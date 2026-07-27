@@ -213,6 +213,7 @@ export default function BanHangPage() {
   const [orders, setOrders] = useState<any[]>([])
   const [currentDepositOrderId, setCurrentDepositOrderId] = useState<string | null>(null)
   const [depositAmountAlreadyPaid, setDepositAmountAlreadyPaid] = useState(0)
+  const [depositPaymentSummary, setDepositPaymentSummary] = useState("")
   const [customerSearch, setCustomerSearch] = useState("")
 
   const [customerResults, setCustomerResults] = useState<any[]>([])
@@ -510,6 +511,23 @@ export default function BanHangPage() {
   // Nếu có trả góp, yêu cầu Trả trước == (Tiền mặt + Chuyển khoản + Thẻ)
   const mustMatchDownPayment = !installmentEnabled || ((installmentDown||0) === immediateSum)
   const paymentParts: string[] = []
+  const parseStoredDepositPayments = (summary: string) => {
+    return String(summary || "")
+      .split("|")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const amountMatch = part.match(/(\d[\d.]*)/)
+        const amount = amountMatch ? Number(String(amountMatch[1]).replace(/\D/g, "")) || 0 : 0
+        const normalized = normalizeVi(part)
+        if (!amount) return null
+        if (normalized.includes("tien mat")) return { method: "Tiền mặt (cọc trước)", amount }
+        if (normalized.includes("chuyen khoan")) return { method: "Chuyển khoản (cọc trước)", amount }
+        if (normalized.includes("the")) return { method: "Thẻ (cọc trước)", amount }
+        return { method: "Đặt cọc trước", amount }
+      })
+      .filter(Boolean) as Array<{ method: string; amount: number }>
+  }
   if (cashEnabled && cashAmount>0) paymentParts.push(`Tiền mặt: ₫${cashAmount.toLocaleString('vi-VN')}`)
   if (transferEnabled && transferAmount>0) paymentParts.push(`Chuyển khoản: ₫${transferAmount.toLocaleString('vi-VN')}`)
   if (cardEnabled && cardAmount>0) paymentParts.push(`Thẻ: ₫${cardAmount.toLocaleString('vi-VN')}`)
@@ -522,6 +540,11 @@ export default function BanHangPage() {
     if (installmentLoan>0) parts.push(`Góp ₫${installmentLoan.toLocaleString('vi-VN')}`)
     paymentParts.push(`${label}: ${parts.join(' + ')}`)
   }
+  const depositSummaryLabel =
+    currentDepositOrderId && depositAmountAlreadyPaid > 0
+      ? `Đặt cọc trước: ${depositPaymentSummary || `₫${depositAmountAlreadyPaid.toLocaleString('vi-VN')}`}`
+      : ""
+  if (depositSummaryLabel) paymentParts.push(depositSummaryLabel)
   const paymentSummary = paymentParts.join(' | ')
   // Thông tin máy thu cũ -> gộp vào Ghi chú (để hiện trong Telegram)
   const thuMayNote = thuMayEnabled
@@ -537,6 +560,17 @@ export default function BanHangPage() {
   ].filter(Boolean) as any[]
   if (installmentEnabled && (installmentDown>0 || installmentLoan>0)) {
     paymentsArray.push({ method: 'Trả góp', provider: installmentType || undefined, downPayment: installmentDown||0, loanAmount: installmentLoan||0, amount: (installmentDown||0)+(installmentLoan||0) })
+  }
+  if (currentDepositOrderId && depositAmountAlreadyPaid > 0) {
+    const parsedDepositPayments = parseStoredDepositPayments(depositPaymentSummary)
+    if (parsedDepositPayments.length > 0) {
+      paymentsArray.push(...parsedDepositPayments)
+    } else {
+      paymentsArray.push({
+        method: 'Đặt cọc trước',
+        amount: depositAmountAlreadyPaid,
+      })
+    }
   }
 
   // Helper dùng chung để nhận diện phụ kiện
@@ -1128,6 +1162,7 @@ export default function BanHangPage() {
           } catch {}
           setCurrentDepositOrderId(null)
           setDepositAmountAlreadyPaid(0)
+          setDepositPaymentSummary("")
 
           toast({ title: 'Tạo đơn thành công', description: `Mã: ${order.id_don_hang || order.ma_don_hang || ''}` })
           if (order?.telegram?.success === false) {
@@ -1412,6 +1447,7 @@ export default function BanHangPage() {
               setSelectedCustomer={setSelectedCustomer}
               setCurrentDepositOrderId={setCurrentDepositOrderId}
               setDepositAmountAlreadyPaid={setDepositAmountAlreadyPaid}
+              setDepositPaymentSummary={setDepositPaymentSummary}
               setLoaiThanhToan={setLoaiThanhToan}
               toast={toast}
               setActiveTab={setActiveTab}

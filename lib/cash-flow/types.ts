@@ -87,6 +87,8 @@ export interface Receivable {
   autoRefType?: string
   autoRefId?: string
   note?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface Payable {
