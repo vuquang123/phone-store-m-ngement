@@ -161,7 +161,15 @@ import { appendToGoogleSheets, readFromGoogleSheets, updateRangeValues, colIndex
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
 
 function isActiveDepositStatus(value: unknown) {
-  return norm(String(value || "")) === "dat_coc"
+  const raw = String(value || "")
+    .normalize("NFD")
+    // @ts-ignore
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/đ/gi, "d")
+    .replace(/\s+/g, "_")
+    .toLowerCase()
+    .trim()
+  return raw === "dat_coc"
 }
 
 async function compactDatCocSheet() {
