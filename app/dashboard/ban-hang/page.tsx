@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { ProtectedRoute } from "@/components/auth/protected-route"
+import { ProtectedRoute, getAuthHeaders } from "@/components/auth/protected-route"
 import { CustomerDialog } from "@/components/ban-hang/customer-dialog"
 import { CustomerSelectDialog } from "@/components/ban-hang/customer-select-dialog"
 import { Button } from "@/components/ui/button"
@@ -375,7 +375,7 @@ export default function BanHangPage() {
     const fetchCaches = async () => {
       try {
         const [resKho, resPhuKien, resPartner] = await Promise.all([
-          fetch('/api/kho-hang'),
+          fetch('/api/kho-hang', { headers: getAuthHeaders() }),
           fetch('/api/phu-kien'),
           fetch('/api/doi-tac/hang-order')
         ])
@@ -392,6 +392,7 @@ export default function BanHangPage() {
               id: p['ID Máy'] || p.id_may || p.id,
               type: 'product',
               gia_nhap: p.gia_nhap ?? p['Giá Nhập'] ?? '',
+              nguon_nhap: p.nguon_nhap ?? p['Nguồn nhập'] ?? p['Nguồn Nhập'] ?? '',
               'Tên Sản Phẩm': p.ten_san_pham,
               'Loại Máy': p.loai_may,
               'Dung Lượng': p.dung_luong,
@@ -1055,6 +1056,7 @@ export default function BanHangPage() {
             tinh_trang_may: p.tinh_trang,
             gia_ban: p.gia_ban,
             gia_nhap: p.gia_nhap,
+            nguon_nhap: p.nguon_nhap || '',
             so_luong: p.so_luong,
             source: p.source || p.nguon || '',
             nguon: p.nguon || p.source || '',
@@ -1323,6 +1325,7 @@ export default function BanHangPage() {
                   editPriceRef={editPriceRef}
                   setCart={setCart}
                   toast={toast}
+                  isManager={isManager}
                   cartProductKeys={cartProductKeys}
                   advancedFilter={filterType === "phu_kien" || filterType === "sim_ghep"
                     ? null

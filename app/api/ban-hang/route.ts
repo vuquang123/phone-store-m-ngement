@@ -169,6 +169,7 @@ function idxBanHang(header: string[]) {
     lai: colIndex(header, "Lãi"),
     nguoiBan: colIndex(header, "Người Bán"),
     nguonHang: colIndex(header, "Nguồn Hàng", "Nguồn"),
+    nguonNhap: colIndex(header, "Nguồn nhập", "Nguon nhap", "Nguồn Nhập", "Nguon Nhap"),
     tenDoiTac: colIndex(header, "Tên Đối Tác", "Đối Tác"),
     sdtDoiTac: colIndex(header, "SĐT Đối Tác", "SĐT", "SDT Đối Tác"),
   }
@@ -190,6 +191,7 @@ function idxKhoHang(header: string[]) {
     giaBan: colIndex(header, "Giá Bán"),
     ghiChu: colIndex(header, "Ghi Chú"),
     trangThai: colIndex(header, "Trạng Thái"),
+    nguonNhap: colIndex(header, "Nguồn nhập", "Nguon nhap", "Nguồn Nhập", "Nguon Nhap"),
   }
 }
 
@@ -766,6 +768,9 @@ export async function POST(request: NextRequest) {
         if (k === "Nguồn Hàng" || k === "Nguồn") {
           if (isPartner) return "Kho ngoài (mua lại)";
           return may["Nguồn Hàng"] || may.nguon || body["Nguồn Hàng"] || body["nguon_hang"] || "";
+        }
+        if (k === "Nguồn nhập" || k === "Nguồn Nhập" || k === "Nguon nhap" || k === "Nguon Nhap") {
+          return may["Nguồn nhập"] || may["Nguồn Nhập"] || may.nguon_nhap || body["Nguồn nhập"] || body["nguon_nhap"] || ""
         }
         if (k === "Tên Đối Tác" || k === "Đối Tác") {
           return doiTacTen;

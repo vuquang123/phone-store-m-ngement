@@ -22,7 +22,7 @@ const RESILIENT = {
 } as const
 
 export function useInventoryData() {
-  return useQuery({ queryKey: ["inventory"], queryFn: () => fetchJson("/api/kho-hang"), ...RESILIENT })
+  return useQuery({ queryKey: ["inventory"], queryFn: () => fetchJson("/api/kho-hang", 12000, getAuthHeaders()), ...RESILIENT })
 }
 
 export function usePartnerData() {

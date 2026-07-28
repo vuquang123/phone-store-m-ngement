@@ -131,6 +131,7 @@ export function useCart({ toast, setSearchQuery, setActiveTab }: UseCartDeps) {
             "Màu Sắc": product.mau_sac,
             "Pin (%)": product.pin,
             "Tình Trạng Máy": product.tinh_trang,
+            nguon_nhap: product.nguon_nhap || "",
             gia_niemyet: Number(product.gia_ban) || 0,
             gia_ban: (Number(product.gia_ban) || 0) - (Number(product.giam_gia) || 0)
           }
@@ -184,6 +185,7 @@ export function useCart({ toast, setSearchQuery, setActiveTab }: UseCartDeps) {
       // Metadata cho API ban-hang xử lý xóa dòng kho ngoài
       source: 'Kho ngoài',
       nguon: 'Kho ngoài',
+      nguon_nhap: '',
       partner_sheet: p.sheet,
       partner_row_index: p.row_index,
       ten_doi_tac: p.ten_doi_tac || '',

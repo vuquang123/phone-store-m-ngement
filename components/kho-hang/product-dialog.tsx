@@ -32,6 +32,7 @@ interface Product {
   tinh_trang: string
   trang_thai: string
   nguon?: string
+  nguon_nhap?: string
   gia_nhap: number
   gia_ban: number
   giam_gia: number
@@ -110,6 +111,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     tinh_trang: "",
     trang_thai: "Còn hàng",
     nguon: "Kho trong",
+    nguon_nhap: "",
     gia_nhap: "",
     gia_ban: "",
     giam_gia: "",
@@ -132,6 +134,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     tinh_trang: "",
     trang_thai: "Còn hàng",
     nguon: "Kho trong",
+    nguon_nhap: "",
     gia_nhap: "",
     gia_ban: "",
     giam_gia: "",
@@ -173,6 +176,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         tinh_trang: product.tinh_trang || "",
         trang_thai: "Còn hàng",
         nguon: product.nguon || "Kho trong",
+        nguon_nhap: product.nguon_nhap || "",
         gia_nhap: (typeof product.gia_nhap === "number" && !isNaN(product.gia_nhap)) ? product.gia_nhap.toString() : "",
         gia_ban: (typeof product.gia_ban === "number" && !isNaN(product.gia_ban)) ? product.gia_ban.toString() : "",
         giam_gia: (typeof product.giam_gia === "number" && !isNaN(product.giam_gia)) ? product.giam_gia.toString() : "",
@@ -196,6 +200,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         tinh_trang: "",
         trang_thai: "Còn hàng",
         nguon: "Kho trong",
+        nguon_nhap: "",
         gia_nhap: "",
         gia_ban: "",
         giam_gia: "",
@@ -341,6 +346,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         do_sim: r.do_sim === "Không rõ" ? "" : r.do_sim,
         trang_thai: "Còn hàng",
         nguon: r.nguon || "Kho trong",
+        nguon_nhap: r.nguon_nhap || "",
         trang_thai_kho: r.nguon || "Kho trong",
       }))
 
@@ -453,6 +459,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                     </th>
                     <th className="px-2 py-2 text-left min-w-[120px]">Tình trạng*</th>
                     <th className="px-2 py-2 text-left min-w-[110px]">Nguồn*</th>
+                    <th className="px-2 py-2 text-left min-w-[160px]">Nguồn nhập</th>
                     <th className="px-2 py-2 text-left min-w-[110px]">Giá nhập*</th>
                     <th className="px-2 py-2 text-left min-w-[110px]">Giá Bán*</th>
                     <th className="px-2 py-2 text-left min-w-[110px]">Giảm giá</th>
@@ -554,6 +561,14 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                               <SelectItem value="Kho ngoài" className="text-xs">Kho ngoài</SelectItem>
                             </SelectContent>
                           </Select>
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input
+                            value={row.nguon_nhap || ""}
+                            onChange={(e) => setField("nguon_nhap", e.target.value)}
+                            placeholder="Bên nhập"
+                            className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 px-2 min-w-[160px]"
+                          />
                         </td>
                         <td className="px-1 py-1">
                           <Input
@@ -741,6 +756,15 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nguon_nhap">Nguồn nhập</Label>
+                  <Input
+                    id="nguon_nhap"
+                    value={formData.nguon_nhap}
+                    onChange={(e) => setFormData({ ...formData, nguon_nhap: e.target.value })}
+                    placeholder="VD: Anh Tuấn Q10, Kho Cần Thơ..."
+                  />
                 </div>
               </CardContent>
             </Card>

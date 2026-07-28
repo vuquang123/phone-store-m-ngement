@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm, khoColIndex, updateProductsNguon, updateProductsDangXuLy } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm, khoColIndex, nguonNhapColIndex, updateProductsNguon, updateProductsDangXuLy } from "@/lib/google-sheets"
 
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { sendStockEventNotification, sendProcessingDeviceMessage, deleteTelegramMessage } from "@/lib/telegram"
@@ -45,6 +45,32 @@ const normalizeKey = (s: string) =>
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "")
+
+async function isManager(request: NextRequest): Promise<boolean> {
+  const email = request.headers.get("x-user-email")
+  if (!email) return false
+  try {
+    const { header, rows } = await readFromGoogleSheets("USERS")
+    const normHeader = header.map((h) => normalizeKey(String(h)))
+    const findCol = (candidates: string[]) => {
+      for (const c of candidates) {
+        const idx = normHeader.findIndex((h) => h === normalizeKey(c))
+        if (idx !== -1) return idx
+      }
+      return -1
+    }
+    const idxEmail = findCol(["Email", "E-mail"])
+    const idxRole = findCol(["Vai Trò", "Vai Tro", "Role", "Quyen"])
+    if (idxEmail === -1 || idxRole === -1) return false
+    const userRow = rows.find(
+      (r) => String(r[idxEmail] || "").trim().toLowerCase() === String(email).trim().toLowerCase()
+    )
+    if (!userRow) return false
+    return String(userRow[idxRole] || "").trim().toLowerCase() === "quan_ly"
+  } catch {
+    return false
+  }
+}
 
 function buildBodyNormMap(body: Record<string, any> = {}) {
   const bodyNormMap: Record<string, any> = {}
@@ -115,6 +141,9 @@ function getValForHeader(
   if (k === "Nguồn" || k === "Nguồn Hàng") {
     return body.nguon || bodyNormMap["nguon"] || bodyNormMap["nguonhang"] || ""
   }
+  if (nk === "nguonnhap" || nk === "nguonnhaphang") {
+    return body.nguon_nhap || body.nguonNhap || bodyNormMap["nguonnhap"] || bodyNormMap["nguonnhaphang"] || ""
+  }
   if (k === "Dạng Sim" || k === "Dạng sim" || k === "Kiểu dạng sim") {
     return body.do_sim || bodyNormMap["dangsim"] || bodyNormMap["kieudangsim"] || ""
   }
@@ -149,6 +178,7 @@ function idxKho(header: string[]) {
     trangThai: colIndex(header, "Trạng Thái"),
     trangThaiKho: khoColIndex(header),
     nguon: colIndex(header, "Nguồn", "Nguồn Hàng", "Nguon", "Nguon Hang"),
+    nguonNhap: nguonNhapColIndex(header),
     doSim: colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim"),
     dangXuLy: colIndex(header, "Đang xử lý", "Đang Xử Lý", "Dang xu ly"),
   }
@@ -157,6 +187,7 @@ function idxKho(header: string[]) {
 /* ========== GET: list + filters + pagination ========== */
 export async function GET(request: NextRequest) {
   try {
+    const manager = await isManager(request)
     const force = new URL(request.url).searchParams.get("refresh") === "1"
     const { header, rows } = await readFromGoogleSheets(SHEET, undefined, { force })
     const idx = idxKho(header)
@@ -176,6 +207,7 @@ export async function GET(request: NextRequest) {
       trang_thai: row[idx.trangThai],
       trang_thai_kho: idx.trangThaiKho !== -1 ? row[idx.trangThaiKho] : (row[idx.trangThai] === "Còn hàng" ? "Có sẵn" : ""),
       nguon: (idx.nguon !== -1 && row[idx.nguon]) ? row[idx.nguon] : (idx.trangThaiKho !== -1 ? row[idx.trangThaiKho] : ""),
+      nguon_nhap: manager && idx.nguonNhap !== -1 ? (row[idx.nguonNhap] || "") : "",
       ghi_chu: row[idx.ghiChu],
       do_sim: idx.doSim !== -1 ? row[idx.doSim] : "",
       dang_xu_ly: idx.dangXuLy !== -1 ? String(row[idx.dangXuLy] || "").trim() : "",

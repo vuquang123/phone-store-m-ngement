@@ -44,6 +44,18 @@ export function khoColIndex(header: string[]) {
   return dups.length >= 2 ? dups[1] : -1
 }
 
+export function nguonNhapColIndex(header: string[]) {
+  return colIndex(
+    header,
+    "Nguồn nhập",
+    "Nguon nhap",
+    "Nguồn Nhập",
+    "Nguon Nhap",
+    "Nguồn nhập hàng",
+    "Nguon nhap hang"
+  )
+}
+
 
 // Cập nhật trạng thái bảo hành cho nhiều sản phẩm trong sheet Bao_Hanh
 export async function updateBaoHanhStatus(imeis: string[], employeeId: string) {

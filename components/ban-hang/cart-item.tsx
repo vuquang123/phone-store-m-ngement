@@ -160,6 +160,11 @@ export function CartItemRow({
               )}
             </>
           )}
+          {isManager && item.type === 'product' && item.nguon_nhap && (
+            <span className="text-[10px] text-muted-foreground">
+              Nguồn nhập: <span className="text-foreground">{item.nguon_nhap}</span>
+            </span>
+          )}
         </div>
         {item.type === 'accessory' && (
           <div className="mt-1 sm:hidden text-[11px] text-muted-foreground space-y-1">

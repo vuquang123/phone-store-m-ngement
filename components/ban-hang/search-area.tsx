@@ -41,6 +41,7 @@ interface SearchAreaProps {
   toast: any
   advancedFilter?: React.ReactNode
   cartProductKeys?: Set<string>
+  isManager?: boolean
 }
 
 export function SearchArea({
@@ -73,7 +74,8 @@ export function SearchArea({
   setCart,
   toast,
   advancedFilter,
-  cartProductKeys
+  cartProductKeys,
+  isManager = false
 }: SearchAreaProps) {
   if (isMobile && mobileView !== 'san-pham') return null
 
@@ -205,6 +207,11 @@ export function SearchArea({
                             <span className="rounded-full border border-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-500">Kho trong</span>
                           )
                         )}
+                        {isManager && !isAccessoryItem && product.nguon_nhap && (
+                          <span className="max-w-[180px] truncate rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600" title={product.nguon_nhap}>
+                            Nhập: {product.nguon_nhap}
+                          </span>
+                        )}
                         {!isAccessoryItem && product.do_sim && (
                           <span className="max-w-[120px] truncate rounded-full border border-orange-300 px-3 py-1 text-xs font-medium text-orange-500 dark:border-orange-500/40">{product.do_sim}</span>
                         )}
@@ -239,6 +246,12 @@ export function SearchArea({
                               <>
                                 <dt className="text-muted-foreground">{product.imei ? 'IMEI' : 'Serial'}</dt>
                                 <dd className="font-mono font-medium text-foreground">{product.imei || product.serial}</dd>
+                              </>
+                            )}
+                            {isManager && product.nguon_nhap && (
+                              <>
+                                <dt className="text-muted-foreground">Nguồn nhập</dt>
+                                <dd className="font-medium text-foreground">{product.nguon_nhap}</dd>
                               </>
                             )}
                           </>
@@ -305,6 +318,7 @@ export function SearchArea({
                       <TableHead>Loại</TableHead>
                       <TableHead>Pin</TableHead>
                       <TableHead>Tình trạng</TableHead>
+                      {isManager && <TableHead>Nguồn nhập</TableHead>}
                       <TableHead className="cursor-pointer" onClick={() => toggleSort('trang_thai')}>
                         Trạng thái {sortKey === 'trang_thai' && <span>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
                       </TableHead>
@@ -317,7 +331,7 @@ export function SearchArea({
                     {isSearching && sortedSearchResults.length === 0 ? (
                       Array.from({ length: 8 }).map((_, i) => (
                         <TableRow key={`skeleton-${i}`}>
-                          <TableCell colSpan={7}><div className="h-8 w-full bg-muted animate-pulse rounded" /></TableCell>
+                          <TableCell colSpan={isManager ? 8 : 7}><div className="h-8 w-full bg-muted animate-pulse rounded" /></TableCell>
                         </TableRow>
                       ))
                     ) : (
@@ -367,6 +381,11 @@ export function SearchArea({
                                   ) : (
                                     <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-transparent text-[10px] h-4 px-1 py-0 leading-none">Kho trong</Badge>
                                   )}
+                                  {isManager && product.nguon_nhap && (
+                                    <Badge variant="outline" className="text-[10px] h-4 px-1 py-0 leading-none max-w-[150px] truncate" title={product.nguon_nhap}>
+                                      Nhập: {product.nguon_nhap}
+                                    </Badge>
+                                  )}
                                   {product.do_sim && (
                                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/15 dark:text-orange-400 dark:border-transparent text-[10px] h-4 px-1.5 py-0 leading-none">
                                       {product.do_sim}
@@ -412,6 +431,11 @@ export function SearchArea({
                                 <span className="line-clamp-2" title={tinhTrang}>{tinhTrang || '-'}</span>
                               )}
                             </TableCell>
+                            {isManager && (
+                              <TableCell className="px-3 py-2 text-xs text-muted-foreground max-w-[180px] align-top">
+                                {isAccessory ? '-' : (product.nguon_nhap || '-')}
+                              </TableCell>
+                            )}
                             {/* Trạng thái */}
                             <TableCell className="px-3 py-2 align-top">
                               <Badge className={`${getTrangThaiColor(trangThai)} border-none whitespace-nowrap`}>{trangThai}</Badge>

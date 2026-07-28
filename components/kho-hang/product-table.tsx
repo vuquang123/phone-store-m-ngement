@@ -26,6 +26,7 @@ interface Product {
   ngay_nhap: string
   loai_may?: string
   nguon?: string
+  nguon_nhap?: string
   do_sim?: string
   dang_xu_ly?: string
 }
@@ -246,6 +247,7 @@ export function ProductTable({
               </div>
             </TableHead>
             <TableHead className="font-semibold text-foreground hidden md:table-cell">IMEI/Serial</TableHead>
+            {isManager && <TableHead className="font-semibold text-foreground hidden xl:table-cell">Nguồn nhập</TableHead>}
             <TableHead className="font-semibold text-foreground hidden sm:table-cell">Loại</TableHead>
             <TableHead className="font-semibold text-foreground hidden lg:table-cell">Pin</TableHead>
             <TableHead className="font-semibold text-foreground hidden md:table-cell">Tình trạng</TableHead>
@@ -291,6 +293,11 @@ export function ProductTable({
                       <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/15 dark:text-blue-400 dark:border-transparent text-[10px] h-4 px-1 py-0 leading-none">Kho ngoài</Badge>
                     ) : (
                       <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-transparent text-[10px] h-4 px-1 py-0 leading-none">Kho trong</Badge>
+                    )}
+                    {isManager && product.nguon_nhap && (
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 py-0 leading-none truncate max-w-[120px]" title={product.nguon_nhap}>
+                        Nhập: {product.nguon_nhap}
+                      </Badge>
                     )}
                     {product.do_sim && (
                       <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-100 dark:bg-orange-500/15 dark:text-orange-400 dark:border-transparent text-[10px] h-4 px-1 py-0 leading-none truncate max-w-[80px]" title={product.do_sim}>
@@ -338,6 +345,13 @@ export function ProductTable({
                   )}
                 </div>
               </TableCell>
+              {isManager && (
+                <TableCell className="hidden xl:table-cell">
+                  <span className="text-sm text-muted-foreground" title={product.nguon_nhap || ""}>
+                    {product.nguon_nhap || "-"}
+                  </span>
+                </TableCell>
+              )}
               <TableCell className="hidden sm:table-cell">
                 <Badge variant="outline" className={`${getLoaiMayBadgeClass(product.loai_may)} font-medium`}>
                   {getLoaiMayLabel(product.loai_may)}
@@ -440,7 +454,7 @@ export function ProductTable({
           )})}
           {products.length === 0 && (
             <TableRow>
-              <TableCell colSpan={isEditMode ? 9 : 8} className="h-32 text-center text-muted-foreground">
+              <TableCell colSpan={isEditMode ? (isManager ? 10 : 9) : (isManager ? 9 : 8)} className="h-32 text-center text-muted-foreground">
 
                 Không tìm thấy sản phẩm nào phù hợp.
               </TableCell>
