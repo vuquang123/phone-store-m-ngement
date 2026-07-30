@@ -4,9 +4,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Edit2, Eye, Hammer, Hourglass, UserPlus } from "lucide-react"
+import { Copy, Edit2, Eye, Hammer, Hourglass, UserPlus } from "lucide-react"
 import { getTrangThaiColor, getTrangThaiKhoColor, getLoaiMayLabel, getLoaiMayBadgeClass, getPinColorClass, getAppleColorHex, formatPinDisplay } from "@/lib/utils/inventory-helpers"
+import { buildCustomerQuote, copyTextToClipboard } from "@/lib/utils/customer-quote"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface Product {
   id: string
@@ -47,6 +49,14 @@ const processingName = (p: Product) => {
 const processingLabel = (p: Product) => {
   const name = processingName(p)
   return name ? `Đang xử lý · ${name}` : "Đang xử lý"
+}
+
+// Copy tin báo khách của 1 máy, ví dụ: "15ProMax 256GB Blue 98.5 Pin 99%, 2 esim, giá chỉ 15.500K"
+const handleCopyQuote = async (p: Product) => {
+  const quote = buildCustomerQuote(p)
+  const ok = await copyTextToClipboard(quote)
+  if (ok) toast.success("Đã copy tin báo khách", { description: quote })
+  else toast.error("Không copy được, thử lại giúp mình")
 }
 
 interface ProductTableProps {
@@ -187,6 +197,15 @@ export function ProductTable({
                       </div>
                       {!isEditMode && (
                         <div className="flex shrink-0 gap-1">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-sky-600"
+                            title="Copy tin báo khách"
+                            onClick={() => handleCopyQuote(product)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
                           {onToggleProcessing && (
                             <Button
                               variant="outline"
@@ -403,6 +422,15 @@ export function ProductTable({
                     isProcessing(product) ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                   )}>
                     {/* Row-level edit removed as per user request */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-sky-600"
+                      title="Copy tin báo khách"
+                      onClick={() => handleCopyQuote(product)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
                     {onToggleProcessing && (
                       <Button
                         variant="ghost"

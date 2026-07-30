@@ -1,10 +1,8 @@
 import { DateTime } from "luxon"
 import { ensureSheetHeader, readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, batchUpdateRangeValues, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
-import { extractGhtkCode, mapGhtkStatus } from "@/lib/ghtk-status"
-import { getGhtkTracking } from "@/lib/ghtk"
+import { extractGhtkCode } from "@/lib/ghtk-status"
 import { parseVietnameseNumber } from "@/lib/number"
 import { generateCashFlowAiReport } from "@/services/ai/generate-cash-flow-report"
-import { DEFAULT_SAFE_RESERVE } from "./sample-data"
 import type {
   AvailabilityStatus,
   CashAccount,
@@ -171,6 +169,7 @@ const SETTING_KEYS = {
 } as const
 
 const AUTO_REPORT_HOUR = 18
+const DEFAULT_SAFE_RESERVE = 20000000
 const PROFIT_TRACKING_START = "2026-07-16"
 
 function nowIso() {
@@ -591,24 +590,6 @@ function findPreferredAccount(accounts: CashAccount[], kind: "cash" | "bank") {
   return byName || accounts.find((item) => item.availability === "AVAILABLE") || accounts[0]
 }
 
-function applyActiveDepositsToAccounts(accounts: CashAccount[], depositOrders: DepositOrderSummary[]) {
-  const totalDepositCollected = depositOrders.reduce((sum, item) => sum + Math.max(0, item.depositAmount || 0), 0)
-  if (totalDepositCollected <= 0) return accounts
-  const bankAccount = findPreferredAccount(accounts, "bank")
-  if (!bankAccount) return accounts
-  return accounts.map((item) =>
-    item.id === bankAccount.id
-      ? {
-          ...item,
-          balance: item.balance + totalDepositCollected,
-          note: [item.note, `Đã cộng tiền cọc máy đang mở: ${totalDepositCollected.toLocaleString("vi-VN")} ₫`]
-            .filter(Boolean)
-            .join(" | "),
-        }
-      : item,
-  )
-}
-
 function parsePaymentSummary(summary: string) {
   const normalized = String(summary || "")
   const parseAmount = (segment: string) => toNumber(segment)
@@ -730,10 +711,12 @@ function remainingPayable(item: Payable) {
 function statusForReceivable(item: Receivable) {
   const remaining = remainingReceivable(item)
   if (remaining <= 0) return "COLLECTED"
+  // Quá hạn/đến hạn phải thắng "đã thu một phần", nếu không khoản thu dở
+  // sẽ biến mất khỏi các bucket đến hạn và cảnh báo thiếu hụt.
   const distance = daysUntil(item.dueDate)
-  if (item.collectedAmount > 0) return "PARTIALLY_COLLECTED"
   if (distance < 0) return "OVERDUE"
   if (distance === 0) return "DUE_TODAY"
+  if (item.collectedAmount > 0) return "PARTIALLY_COLLECTED"
   return "NOT_DUE"
 }
 
@@ -745,9 +728,9 @@ function statusForPayable(item: Payable) {
   const remaining = remainingPayable(item)
   if (remaining <= 0) return "PAID"
   const distance = daysUntil(item.dueDate)
-  if (item.paidAmount > 0) return "PARTIALLY_PAID"
   if (distance < 0) return "OVERDUE"
   if (distance === 0) return "DUE_TODAY"
+  if (item.paidAmount > 0) return "PARTIALLY_PAID"
   return "NOT_DUE"
 }
 
@@ -923,8 +906,6 @@ async function syncOrdersIntoCashFlow(accounts: CashAccount[]) {
   const idxDate = colIndex(header, "Ngày Bán", "Ngày Xuất")
   const idxCustomer = colIndex(header, "Tên Khách Hàng")
   const idxPayment = colIndex(header, "Hình Thức Thanh Toán")
-  const idxShip = colIndex(header, "Hình Thức Vận Chuyển")
-  const idxNote = colIndex(header, "Ghi Chú")
 
   const grouped = new Map<string, string[]>()
   for (const row of rows) {
@@ -939,7 +920,6 @@ async function syncOrdersIntoCashFlow(accounts: CashAccount[]) {
     const paymentSummary = String(row[idxPayment] || "")
     const customer = String(row[idxCustomer] || "Khách lẻ")
     const orderDate = toSheetDateVN(String(row[idxDate] || todayYmd()))
-    const shipping = String(row[idxShip] || "")
     const payment = parsePaymentSummary(paymentSummary)
 
     if (payment.cash > 0) {
@@ -1026,65 +1006,9 @@ async function syncOrdersIntoCashFlow(accounts: CashAccount[]) {
       }
     }
 
-    const storedCod = resolveStoredGhtkCod(row, {
-      ship: idxShip,
-      note: idxNote,
-      payment: idxPayment,
-    })
-
-    if ((storedCod?.codAmount || payment.cod) > 0) {
-      const code = storedCod?.code || extractGhtkCode(shipping)
-      if (!code) continue
-      const refId = `${orderId}::cod`
-      if (txRefSet.has(`order_cod::${refId}`)) continue
-      const codAmount = storedCod?.codAmount || payment.cod
-
-      if (storedCod?.isReconciled) {
-        transactionRows.push(buildTransactionRow({
-          type: "sale_cod",
-          amount: codAmount,
-          occurredAt: todayYmd(),
-          accountId: bankAccount.id,
-          accountName: bankAccount.name,
-          refType: "order_cod",
-          refId,
-          counterparty: customer,
-          source: "GHTK",
-          note: `COD GHTK ${code} của đơn ${orderId} đã đối soát`,
-          automatic: true,
-          createdBy: "system",
-        }))
-        addAccountDelta(bankAccount.id, codAmount)
-        txRefSet.add(`order_cod::${refId}`)
-        continue
-      }
-
-      try {
-        const tracking = await getGhtkTracking(code)
-        if (!tracking.success) continue
-        const mapped = mapGhtkStatus(tracking.order.status || "")
-        if (mapped.group !== "delivered" && mapped.group !== "reconciled") continue
-        const trackingCodAmount = Math.max(0, toNumber(tracking.order.cod || tracking.order.pick_money || codAmount))
-        transactionRows.push(buildTransactionRow({
-          type: "sale_cod",
-          amount: trackingCodAmount || codAmount,
-          occurredAt: todayYmd(),
-          accountId: bankAccount.id,
-          accountName: bankAccount.name,
-          refType: "order_cod",
-          refId,
-          counterparty: customer,
-          source: "GHTK",
-          note: `COD GHTK ${code} của đơn ${orderId} ở trạng thái ${mapped.label}`,
-          automatic: true,
-          createdBy: "system",
-        }))
-        addAccountDelta(bankAccount.id, trackingCodAmount || codAmount)
-        txRefSet.add(`order_cod::${refId}`)
-      } catch {
-        continue
-      }
-    }
+    // COD GHTK KHÔNG tự cộng vào nguồn tiền. Số COD (chờ về / đã đối soát) chỉ
+    // hiển thị để tính phương án qua readGhtkCodSummaryFromSales; chủ cửa hàng
+    // tự cộng thủ công vào Nguồn tiền khi GHTK báo tiền về.
   }
 
   if (transactionRows.length) {
@@ -1218,56 +1142,7 @@ async function syncSingleOrderIntoCashFlow(accounts: CashAccount[], params: {
     }
   }
 
-  if (payment.cod > 0 && params.shipping) {
-    const code = extractGhtkCode(params.shipping)
-    if (code) {
-      const refId = `${params.orderId}::cod`
-      if (!txRefSet.has(`order_cod::${refId}`)) {
-        const storedStatusLabel = getStoredGhtkStatusLabel(params.shipping)
-        if (norm(storedStatusLabel) === norm("Đã đối soát")) {
-          transactionRows.push(buildTransactionRow({
-            type: "sale_cod",
-            amount: payment.cod,
-            occurredAt: todayYmd(),
-            accountId: bankAccount.id,
-            accountName: bankAccount.name,
-            refType: "order_cod",
-            refId,
-            counterparty: customer,
-            source: "GHTK",
-            note: `COD GHTK ${code} của đơn ${params.orderId} đã đối soát`,
-            automatic: true,
-            createdBy: "system",
-          }))
-          addDelta(bankAccount.id, payment.cod)
-        } else {
-        try {
-          const tracking = await getGhtkTracking(code)
-          if (tracking.success) {
-            const mapped = mapGhtkStatus(tracking.order.status || "")
-            if (mapped.group === "delivered" || mapped.group === "reconciled") {
-              transactionRows.push(buildTransactionRow({
-                type: "sale_cod",
-                amount: payment.cod,
-                occurredAt: todayYmd(),
-                accountId: bankAccount.id,
-                accountName: bankAccount.name,
-                refType: "order_cod",
-                refId,
-                counterparty: customer,
-                source: "GHTK",
-                note: `COD GHTK ${code} của đơn ${params.orderId} ở trạng thái ${mapped.label}`,
-                automatic: true,
-                createdBy: "system",
-              }))
-              addDelta(bankAccount.id, payment.cod)
-            }
-          }
-        } catch {}
-        }
-      }
-    }
-  }
+  // COD GHTK không tự cộng vào nguồn tiền — xem ghi chú trong syncOrdersIntoCashFlow.
 
   if (transactionRows.length) await appendMultipleToGoogleSheets(SHEETS.TRANSACTIONS, transactionRows)
   if (receivableRows.length) await appendMultipleToGoogleSheets(SHEETS.RECEIVABLES, receivableRows)
@@ -1552,7 +1427,17 @@ function buildOverview(args: {
   const activeDepositCollected = args.depositOrders.reduce((sum, item) => sum + item.depositAmount, 0)
   const activeDepositInventoryValue = args.depositOrders.reduce((sum, item) => sum + item.inventoryValue, 0)
   const activeDepositRemaining = args.depositOrders.reduce((sum, item) => sum + item.remainingAmount, 0)
-  const dueToday = args.payables.reduce((sum, item) => statusForPayable(item) === "DUE_TODAY" ? sum + remainingPayable(item) : sum, 0)
+  // Khoản quá hạn chưa trả vẫn là nghĩa vụ phải xử lý ngay — tách bucket riêng
+  // và cộng vào phép tính thiếu hụt, không được bỏ sót như trước.
+  const overduePayables = args.payables.reduce((sum, item) => {
+    const d = daysUntil(item.dueDate)
+    return d < 0 ? sum + remainingPayable(item) : sum
+  }, 0)
+  const overdueReceivables = args.receivables.reduce((sum, item) => {
+    const d = daysUntil(item.dueDate)
+    return d < 0 ? sum + remainingReceivable(item) : sum
+  }, 0)
+  const dueToday = args.payables.reduce((sum, item) => daysUntil(item.dueDate) === 0 ? sum + remainingPayable(item) : sum, 0)
   const dueIn3Days = args.payables.reduce((sum, item) => {
     const d = daysUntil(item.dueDate)
     return d >= 1 && d <= 3 ? sum + remainingPayable(item) : sum
@@ -1563,13 +1448,13 @@ function buildOverview(args: {
   }, 0)
   const receivableDueIn3Days = args.receivables.reduce((sum, item) => {
     const d = daysUntil(item.dueDate)
-    return d >= 0 && d <= 3 ? sum + remainingReceivable(item) : sum
+    return d <= 3 ? sum + remainingReceivable(item) : sum
   }, 0)
   const codPending3Days = args.ghtkCodSummary.pending3Days
   const spendableCash = Math.max(0, cashOnHand - args.safeReserve)
   const totalShortTermAssets = cashOnHand + inventoryValue + totalReceivables
   const projectedCashAfterReceivables = cashOnHand + totalReceivables + codPending3Days
-  const shortageForUpcomingDues = Math.max(0, dueToday + dueIn3Days - (spendableCash + receivableDueIn3Days + codPending3Days))
+  const shortageForUpcomingDues = Math.max(0, overduePayables + dueToday + dueIn3Days - (spendableCash + receivableDueIn3Days + codPending3Days))
   const projectedEndingBalance = totalShortTermAssets - totalPayables
   const ageCount = currentInventory.reduce(
     (acc, item) => {
@@ -1594,6 +1479,8 @@ function buildOverview(args: {
     inventoryAging: ageCount,
     totalReceivables,
     totalPayables,
+    overduePayables,
+    overdueReceivables,
     dueToday,
     dueIn3Days,
     dueIn7Days,
@@ -1616,17 +1503,51 @@ function buildOverview(args: {
   }
 }
 
+// Số tiền lãi phát sinh MỖI NGÀY của một khoản nợ, quy đổi theo kiểu lãi.
+// interestValue có thể nhập dạng phần trăm (2 = 2%) hoặc tỷ lệ (0.02) — giá trị
+// lớn hơn 1 được hiểu là phần trăm.
+function dailyInterestAmount(item: Payable): number {
+  if (!item.hasInterest || !item.interestValue) return 0
+  const remaining = remainingPayable(item)
+  if (remaining <= 0) return 0
+  switch (item.interestMode) {
+    case "daily_rate": {
+      const rate = item.interestValue > 1 ? item.interestValue / 100 : item.interestValue
+      return Math.round(remaining * rate)
+    }
+    case "monthly_rate": {
+      const rate = item.interestValue > 1 ? item.interestValue / 100 : item.interestValue
+      return Math.round((remaining * rate) / 30)
+    }
+    case "fixed_daily":
+    default:
+      return item.interestValue
+  }
+}
+
 function buildPlan(overview: CashFlowOverview, receivables: Receivable[], payables: Payable[]): CashFlowPlanRow[] {
   const rows: CashFlowPlanRow[] = []
   let openingBalance = overview.cashOnHand
   for (let offset = 0; offset <= 7; offset++) {
     const date = DateTime.fromISO(todayYmd(), { zone: "Asia/Ho_Chi_Minh" }).plus({ days: offset }).toFormat("yyyy-MM-dd")
     const receivableInflow = receivables.reduce((sum, item) => item.dueDate === date ? sum + remainingReceivable(item) : sum, 0)
-    const payablesToday = payables.filter((item) => item.dueDate === date)
+    // Ngày đầu tiên gánh luôn các khoản đã quá hạn — chúng phải được xử lý ngay,
+    // bỏ ra ngoài sẽ làm mô phỏng lạc quan hơn thực tế.
+    const payablesToday = payables.filter((item) =>
+      item.dueDate === date || (offset === 0 && daysUntil(item.dueDate) < 0),
+    )
     const externalDebtOutflow = payablesToday.filter((item) => item.type === "external_debt").reduce((sum, item) => sum + remainingPayable(item), 0)
     const inventoryOutflow = payablesToday.filter((item) => item.type === "inventory_payable" || item.type === "supplier").reduce((sum, item) => sum + remainingPayable(item), 0)
     const loanOutflow = payablesToday.filter((item) => item.type === "loan").reduce((sum, item) => sum + remainingPayable(item), 0)
-    const interestOutflow = payablesToday.filter((item) => item.type === "interest" || item.hasInterest).reduce((sum, item) => sum + (item.type === "interest" ? remainingPayable(item) : (item.interestValue || 0)), 0)
+    // Lãi = khoản loại "interest" đến hạn trong ngày + lãi phát sinh hằng ngày
+    // của mọi khoản đang tính lãi (tích lũy từng ngày, không chỉ ngày đến hạn).
+    const interestOutflow =
+      payablesToday.filter((item) => item.type === "interest").reduce((sum, item) => sum + remainingPayable(item), 0) +
+      payables.reduce((sum, item) => {
+        if (!item.hasInterest || item.type === "interest") return sum
+        if (item.interestStartAt && startOfDay(item.interestStartAt) > startOfDay(date)) return sum
+        return sum + dailyInterestAmount(item)
+      }, 0)
     const operatingOutflow = payablesToday.filter((item) => ["rent", "salary", "operating_cost", "other"].includes(item.type)).reduce((sum, item) => sum + remainingPayable(item), 0)
     const salesInflow = 0
     const otherInflow = 0
@@ -1691,6 +1612,15 @@ function buildPaymentSuggestions(payables: Payable[], overview: CashFlowOverview
 function buildAlerts(overview: CashFlowOverview, plan: CashFlowPlanRow[]) {
   const alerts: CashFlowDashboardData["alerts"] = []
   const due3Total = overview.dueToday + overview.dueIn3Days
+  if (overview.overduePayables > 0) {
+    alerts.push({
+      id: "overdue",
+      level: "danger",
+      title: "Nợ quá hạn chưa xử lý",
+      description: "Có khoản phải trả đã quá hạn nhưng chưa tất toán, cần ưu tiên trả hoặc đàm phán giãn ngay.",
+      amount: overview.overduePayables,
+    })
+  }
   alerts.push({
     id: "due_today",
     level: overview.dueToday <= 0 ? "success" : overview.spendableCash >= overview.dueToday ? "success" : "danger",
@@ -1739,7 +1669,10 @@ function buildAlerts(overview: CashFlowOverview, plan: CashFlowPlanRow[]) {
 }
 
 function buildScenario(overview: CashFlowOverview, input: CashFlowScenarioInput) {
-  const collectibleFromInventory = Math.round(overview.inventoryValue * input.sellThroughRate)
+  // Bán hàng thu về theo giá bán nhanh (thận trọng), không phải giá vốn.
+  // Giá trị hàng tồn còn lại vẫn tính theo giá vốn của phần chưa bán.
+  const collectibleFromInventory = Math.round(overview.inventoryQuickSaleValue * input.sellThroughRate)
+  const soldInventoryCost = Math.round(overview.inventoryValue * input.sellThroughRate)
   const collectibleFromReceivables = Math.round(overview.totalReceivables * input.receivableCollectRate)
   const endingBalance = overview.cashOnHand + collectibleFromInventory + collectibleFromReceivables - overview.totalPayables
   return {
@@ -1747,7 +1680,7 @@ function buildScenario(overview: CashFlowOverview, input: CashFlowScenarioInput)
     collectibleFromReceivables,
     totalOutflow: overview.totalPayables,
     endingBalance,
-    remainingInventoryValue: overview.inventoryValue - collectibleFromInventory,
+    remainingInventoryValue: overview.inventoryValue - soldInventoryCost,
     remainingReceivables: overview.totalReceivables - collectibleFromReceivables,
     firstNegativeDate: endingBalance < 0 ? todayYmd() : null,
     shortage: Math.max(0, input.safeReserve - endingBalance),
@@ -1782,6 +1715,9 @@ function buildCashFlowReportContent(data: CashFlowDashboardData, reportDate: str
   ]
 
   const warnings = [
+    overview.overduePayables > 0
+      ? `Có ${overview.overduePayables.toLocaleString("vi-VN")} ₫ nợ đã quá hạn chưa tất toán, cần xử lý trước tiên.`
+      : "Không có nợ quá hạn tồn đọng.",
     overview.shortageForUpcomingDues > 0
       ? `Đang thiếu ${overview.shortageForUpcomingDues.toLocaleString("vi-VN")} ₫ cho chu kỳ 3 ngày tới ngay cả khi đã tính công nợ và COD sắp thu.`
       : "Chu kỳ 3 ngày tới hiện chưa có thiếu hụt sau khi tính công nợ và COD dự kiến.",
@@ -1984,17 +1920,38 @@ export async function getCashFlowReportBySlug(slug: string) {
   return createCashFlowDailyReport(reportDate, undefined, true)
 }
 
-export async function getCashFlowDashboardDataFromSheets(): Promise<CashFlowDashboardData> {
+// Chống chạy sync chồng nhau: hai GET song song cùng đọc txRefSet trước khi bên
+// kia kịp append sẽ ghi trùng giao dịch và cộng tiền 2 lần. Mutex trong process
+// đảm bảo mọi caller cùng chờ một lượt sync; throttle tránh sync lại liên tục
+// mỗi lần reload (bấm "Đồng bộ lại từ sheet" sẽ force bỏ qua throttle).
+let orderSyncInFlight: Promise<void> | null = null
+let lastOrderSyncAt = 0
+const ORDER_SYNC_MIN_INTERVAL_MS = 30_000
+
+async function runOrderSyncs(forceSync = false) {
+  if (orderSyncInFlight) return orderSyncInFlight
+  if (!forceSync && Date.now() - lastOrderSyncAt < ORDER_SYNC_MIN_INTERVAL_MS) return
+  orderSyncInFlight = (async () => {
+    try {
+      const accounts = await readAccounts()
+      await syncOrdersIntoCashFlow(accounts)
+      await syncProfitFundFromSales()
+      lastOrderSyncAt = Date.now()
+    } finally {
+      orderSyncInFlight = null
+    }
+  })()
+  return orderSyncInFlight
+}
+
+export async function getCashFlowDashboardDataFromSheets(options?: { forceSync?: boolean }): Promise<CashFlowDashboardData> {
   await ensureCashFlowSheets()
-  const accounts = await readAccounts()
-  await syncOrdersIntoCashFlow(accounts)
-  await syncProfitFundFromSales()
+  await runOrderSyncs(options?.forceSync)
   const freshAccounts = await readAccounts()
   const transactions = await readTransactions()
   const profitFundEntries = await readProfitFundEntries()
   const longTermDebts = (await readLongTermDebts()).map((item) => ({ ...item, status: statusForLongTermDebt(item) }))
   const depositOrders = await readActiveDepositOrders()
-  const displayAccounts = applyActiveDepositsToAccounts(freshAccounts, depositOrders)
   const inventoryItems = await readInventorySnapshot()
   const receivables = await readReceivables()
   const payables = await readPayables()
@@ -2002,8 +1959,11 @@ export async function getCashFlowDashboardDataFromSheets(): Promise<CashFlowDash
   const ghtkCodSummary = await readGhtkCodSummaryFromSales()
   const receivablesWithStatus = receivables.map((item) => ({ ...item, status: statusForReceivable(item) as any }))
   const payablesWithStatus = payables.map((item) => ({ ...item, status: statusForPayable(item) as any }))
+  // Tiền mặt và tài khoản = ĐÚNG tổng các nguồn AVAILABLE trong Nguồn tiền.
+  // Tiền cọc và COD GHTK không tự cộng vào — chủ cửa hàng tự cộng thủ công khi
+  // tiền thực về; các con số đó chỉ hiển thị riêng để tính phương án.
   const overview = buildOverview({
-    accounts: displayAccounts,
+    accounts: freshAccounts,
     inventoryItems,
     receivables: receivablesWithStatus,
     payables: payablesWithStatus,
@@ -2014,7 +1974,7 @@ export async function getCashFlowDashboardDataFromSheets(): Promise<CashFlowDash
     ghtkCodSummary,
   })
   const plan = buildPlan(overview, receivablesWithStatus, payablesWithStatus)
-  const paymentSuggestions = buildPaymentSuggestions(payablesWithStatus, overview, displayAccounts)
+  const paymentSuggestions = buildPaymentSuggestions(payablesWithStatus, overview, freshAccounts)
   const alerts = buildAlerts(overview, plan)
   const scenarios = [
     { id: "none", name: "Không bán được hàng", sellThroughRate: 0, receivableCollectRate: 0, safeReserve },
@@ -2025,7 +1985,7 @@ export async function getCashFlowDashboardDataFromSheets(): Promise<CashFlowDash
   ].map((scenario) => ({ ...scenario, ...buildScenario(overview, scenario) }))
   return {
     overview,
-    accounts: displayAccounts,
+    accounts: freshAccounts,
     transactions: [...transactions].sort((a, b) => {
       const aTime = new Date(a.createdAt || a.occurredAt || 0).getTime()
       const bTime = new Date(b.createdAt || b.occurredAt || 0).getTime()

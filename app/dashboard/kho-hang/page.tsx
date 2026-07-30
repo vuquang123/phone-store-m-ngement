@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { TablePaginationFooter } from "@/components/ui/table-pagination-footer"
-import { Plus, ListChecks } from "lucide-react"
+import { Plus, ListChecks, Copy } from "lucide-react"
 
 // Components
 import { FilterBar } from "@/components/kho-hang/filter-bar"
@@ -49,6 +49,7 @@ import { toast } from "sonner"
 // Utils
 import { uploadTelegramProof } from "@/lib/utils/telegram"
 import { isConHangProduct, extractPartnerInfo } from "@/lib/utils/inventory-helpers"
+import { buildCustomerQuoteList, copyTextToClipboard } from "@/lib/utils/customer-quote"
 
 
 export default function KhoHangPage() {
@@ -524,6 +525,18 @@ export default function KhoHangPage() {
   const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
 
+  // Copy tin báo khách cho TOÀN BỘ danh sách sau khi lọc (mọi trang, không chỉ trang hiện tại)
+  const handleCopyAllQuotes = async () => {
+    if (!filteredProducts.length) {
+      toast.error("Không có máy nào trong danh sách để copy")
+      return
+    }
+    const text = buildCustomerQuoteList(filteredProducts)
+    const ok = await copyTextToClipboard(text)
+    if (ok) toast.success(`Đã copy ${filteredProducts.length} máy để báo khách`)
+    else toast.error("Không copy được, thử lại giúp mình")
+  }
+
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
@@ -571,6 +584,15 @@ export default function KhoHangPage() {
                   <ListChecks className="w-4 h-4" />
                 </Button>
                 <RefreshButton onRefresh={handleRefresh} loading={refreshing} className="h-10 w-10" />
+                <Button
+                  variant="outline"
+                  className="border-sky-300 text-sky-700 hover:bg-sky-50 hover:text-sky-700 dark:border-sky-500/40 dark:text-sky-400 dark:hover:bg-sky-500/10 dark:hover:text-sky-300"
+                  title="Copy tin báo khách toàn bộ danh sách đã lọc"
+                  onClick={handleCopyAllQuotes}
+                  disabled={!filteredProducts.length}
+                >
+                  <Copy className="w-4 h-4 mr-2" /> Copy tổng ({filteredProducts.length})
+                </Button>
               </div>
               {isEditMode && selectedIds.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 transition-all">

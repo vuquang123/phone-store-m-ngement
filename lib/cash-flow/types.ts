@@ -241,6 +241,8 @@ export interface CashFlowOverview {
   }
   totalReceivables: number
   totalPayables: number
+  overduePayables: number
+  overdueReceivables: number
   dueToday: number
   dueIn3Days: number
   dueIn7Days: number

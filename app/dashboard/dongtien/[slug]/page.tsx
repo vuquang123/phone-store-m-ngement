@@ -12,23 +12,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import type { CashFlowDailyReport } from "@/lib/cash-flow/types"
+import { clearOtpSession, readOtpSession, saveOtpSession } from "@/lib/cash-flow/otp-session"
 
 const ALLOWED_EMAIL = "dung8ahxh@gmail.com"
-const OTP_STORAGE_KEY = "dongtien_otp_verified_v1"
 
 const fmt = (value: number) => `${Number(value || 0).toLocaleString("vi-VN")} ₫`
-
-function readOtpSession(email?: string) {
-  if (typeof window === "undefined" || !email) return false
-  try {
-    const raw = localStorage.getItem(OTP_STORAGE_KEY)
-    if (!raw) return false
-    const parsed = JSON.parse(raw) as { email: string; otp: string }
-    return parsed.email === email && parsed.otp === "216917"
-  } catch {
-    return false
-  }
-}
 
 type ApiResponse = { success: true; report: CashFlowDailyReport } | { error: string }
 
@@ -38,13 +26,18 @@ export default function CashFlowDailyReportPage() {
   const router = useRouter()
   const { me, isLoading: authLoading } = useAuthMe()
   const [otpVerified, setOtpVerified] = useState(false)
+  const [otpCode, setOtpCode] = useState("")
   const [report, setReport] = useState<CashFlowDailyReport | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
 
   useEffect(() => {
     if (!me?.email) return
-    setOtpVerified(readOtpSession(me.email))
+    const stored = readOtpSession(me.email)
+    if (stored) {
+      setOtpCode(stored)
+      setOtpVerified(true)
+    }
   }, [me?.email])
 
   useEffect(() => {
@@ -54,7 +47,7 @@ export default function CashFlowDailyReportPage() {
       router.replace("/dashboard")
       return
     }
-    if (!otpVerified) {
+    if (!otpVerified || !otpCode) {
       setIsLoading(false)
       return
     }
@@ -67,9 +60,15 @@ export default function CashFlowDailyReportPage() {
           cache: "no-store",
           headers: {
             ...getAuthHeaders(),
-            "x-dongtien-otp": "216917",
+            "x-dongtien-otp": otpCode,
           },
         })
+        if (res.status === 401) {
+          clearOtpSession()
+          setOtpCode("")
+          setOtpVerified(false)
+          return
+        }
         const json = await res.json() as ApiResponse
         if (!res.ok || !("success" in json)) throw new Error("error" in json ? json.error : "Không tải được báo cáo")
         setReport(json.report)
@@ -81,15 +80,12 @@ export default function CashFlowDailyReportPage() {
     }
 
     loadReport()
-  }, [authLoading, me, otpVerified, router, slug])
+  }, [authLoading, me, otpVerified, otpCode, router, slug])
 
   const onVerified = (otp: string) => {
     if (!me?.email) return
-    localStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
-      email: me.email,
-      otp,
-      verifiedAt: new Date().toISOString(),
-    }))
+    saveOtpSession(me.email, otp)
+    setOtpCode(otp)
     setOtpVerified(true)
   }
 

@@ -40,9 +40,9 @@ import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import type { CashFlowDashboardData, DepositOrderSummary, LedgerTransaction, Receivable } from "@/lib/cash-flow/types"
+import { clearOtpSession, readOtpSession, saveOtpSession } from "@/lib/cash-flow/otp-session"
 
 const ALLOWED_EMAIL = "dung8ahxh@gmail.com"
-const OTP_STORAGE_KEY = "dongtien_otp_verified_v1"
 
 const fmt = (value: number) => `${Number(value || 0).toLocaleString("vi-VN")} ₫`
 const fmtShort = (value: number) => `${(value / 1000000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}tr`
@@ -87,23 +87,12 @@ type LongTermDebtDraft = {
   payNote: string
 }
 
-function readOtpSession(email?: string) {
-  if (typeof window === "undefined" || !email) return false
-  try {
-    const raw = localStorage.getItem(OTP_STORAGE_KEY)
-    if (!raw) return false
-    const parsed = JSON.parse(raw) as { email: string; otp: string; verifiedAt: string }
-    return parsed.email === email && parsed.otp === "216917"
-  } catch {
-    return false
-  }
-}
-
 export default function DongTienPage() {
   const router = useRouter()
   const { me, isLoading: authLoading } = useAuthMe()
   const { toast } = useToast()
   const [otpVerified, setOtpVerified] = useState(false)
+  const [otpCode, setOtpCode] = useState("")
   const [data, setData] = useState<CashFlowDashboardData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
@@ -115,17 +104,30 @@ export default function DongTienPage() {
   const [payableForm, setPayableForm] = useState({ creditor: "", type: "external_debt", description: "", principalAmount: "", dueDate: "", priority: "medium", note: "" })
   const [longTermDebtForm, setLongTermDebtForm] = useState({ creditor: "", description: "", principalAmount: "", dueDate: "", priority: "medium", note: "" })
 
-  const loadData = async () => {
+  const handleOtpExpired = () => {
+    clearOtpSession()
+    setOtpCode("")
+    setOtpVerified(false)
+    setData(null)
+  }
+
+  const loadData = async (opts?: { forceSync?: boolean; otp?: string }) => {
+    const otp = opts?.otp || otpCode
+    if (!otp) return
     try {
       setIsLoading(true)
       setError("")
-      const res = await fetch("/api/dongtien", {
+      const res = await fetch(`/api/dongtien${opts?.forceSync ? "?forceSync=1" : ""}`, {
         cache: "no-store",
         headers: {
           ...getAuthHeaders(),
-          "x-dongtien-otp": "216917",
+          "x-dongtien-otp": otp,
         },
       })
+      if (res.status === 401) {
+        handleOtpExpired()
+        return
+      }
       const json = await res.json() as ApiResponse
       if (!res.ok || !("success" in json)) throw new Error("error" in json ? json.error : "Không tải được dữ liệu")
       setData(json.data)
@@ -139,7 +141,11 @@ export default function DongTienPage() {
 
   useEffect(() => {
     if (!me?.email) return
-    setOtpVerified(readOtpSession(me.email))
+    const stored = readOtpSession(me.email)
+    if (stored) {
+      setOtpCode(stored)
+      setOtpVerified(true)
+    }
   }, [me?.email])
 
   useEffect(() => {
@@ -158,11 +164,8 @@ export default function DongTienPage() {
 
   const onVerified = (otp: string) => {
     if (!me?.email) return
-    localStorage.setItem(OTP_STORAGE_KEY, JSON.stringify({
-      email: me.email,
-      otp,
-      verifiedAt: new Date().toISOString(),
-    }))
+    saveOtpSession(me.email, otp)
+    setOtpCode(otp)
     setOtpVerified(true)
   }
 
@@ -174,10 +177,14 @@ export default function DongTienPage() {
         headers: {
           "Content-Type": "application/json",
           ...getAuthHeaders(),
-          "x-dongtien-otp": "216917",
+          "x-dongtien-otp": otpCode,
         },
         body: JSON.stringify(payload),
       })
+      if (res.status === 401) {
+        handleOtpExpired()
+        return
+      }
       const json = await res.json()
       if (!res.ok || !json?.success) throw new Error(json?.error || "Không lưu được dữ liệu")
       setData(json.data)
@@ -229,9 +236,13 @@ export default function DongTienPage() {
         cache: "no-store",
         headers: {
           ...getAuthHeaders(),
-          "x-dongtien-otp": "216917",
+          "x-dongtien-otp": otpCode,
         },
       })
+      if (res.status === 401) {
+        handleOtpExpired()
+        return
+      }
       const json = await res.json() as { success?: boolean; report?: { slug?: string }; error?: string }
       if (!res.ok || !json?.success || !json.report?.slug) {
         throw new Error(json?.error || "Không tạo được báo cáo dòng tiền")
@@ -281,7 +292,7 @@ export default function DongTienPage() {
         <CashFlowDashboard
           data={data}
           error={error}
-          onReload={loadData}
+          onReload={() => loadData({ forceSync: true })}
           submitting={submitting}
           creatingReport={creatingReport}
           accountDrafts={accountDrafts}
@@ -416,7 +427,12 @@ function CashFlowDashboard({
     () => pendingInstallmentReceivables.reduce((sum, item) => sum + Math.max(0, item.totalAmount - item.collectedAmount), 0),
     [pendingInstallmentReceivables],
   )
-  const due3Total = overview.dueToday + overview.dueIn3Days
+  const due3Total = overview.overduePayables + overview.dueToday + overview.dueIn3Days
+  const asOfDt = DateTime.fromISO(overview.asOfDate)
+  const asOfLabel = asOfDt.isValid ? asOfDt.toFormat("dd/MM/yyyy") : overview.asOfDate
+  const due3RangeLabel = asOfDt.isValid
+    ? `${asOfDt.plus({ days: 1 }).toFormat("dd/MM")} đến ${asOfDt.plus({ days: 3 }).toFormat("dd/MM/yyyy")}`
+    : "3 ngày tới"
   const visiblePayables = useMemo(() => payables.filter((item) => item.principalAmount - item.paidAmount > 0), [payables])
   const suggestionMap = useMemo(() => new Map(paymentSuggestions.map((item) => [item.payableId, item])), [paymentSuggestions])
   const [receivableDrafts, setReceivableDrafts] = useState<Record<string, ReceivableDraft>>({})
@@ -557,14 +573,19 @@ function CashFlowDashboard({
         <StatCard title="Tiền mặt và tài khoản" value={fmt(overview.cashOnHand)} description="Chỉ tính nguồn AVAILABLE" icon={Wallet} onViewDetail={() => setDetailView("cash")} />
         <StatCard title="Giá trị hàng tồn" value={fmt(overview.inventoryValue)} description={`Chưa gồm máy đang cọc • Bán nhanh ${fmt(overview.inventoryQuickSaleValue)}`} icon={Boxes} onViewDetail={() => setDetailView("inventory")} />
         <StatCard title="Máy đang đặt cọc" value={fmt(overview.activeDepositCollected)} description={`${overview.activeDepositOrders} đơn • Giá nhập giữ chỗ ${fmt(overview.activeDepositInventoryValue)}`} icon={Boxes} onViewDetail={() => setDetailView("deposit")} />
-        <StatCard title="Công nợ phải thu" value={fmt(businessReceivablesTotal)} description={`Sau thu nợ + COD chờ về: ${fmt(overview.cashOnHand + businessReceivablesTotal + overview.codPending3Days)}`} icon={ArrowDownCircle} onViewDetail={() => setDetailView("receivable")} />
+        <StatCard title="Công nợ phải thu" value={fmt(businessReceivablesTotal)} description={`Sau thu toàn bộ công nợ + COD chờ: ${fmt(overview.projectedCashAfterReceivables)}`} icon={ArrowDownCircle} onViewDetail={() => setDetailView("receivable")} />
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Tổng nợ phải trả" value={fmt(overview.totalPayables)} description={`Tổng tài sản ngắn hạn: ${fmt(overview.totalShortTermAssets)}`} icon={ArrowUpCircle} onViewDetail={() => setDetailView("payable")} />
-        <StatCard title="Phải trả hôm nay" value={fmt(overview.dueToday)} description="Khoản đến hạn ngày 25/07/2026" icon={CalendarClock} />
-        <StatCard title="Phải trả 3 ngày tới" value={fmt(overview.dueIn3Days)} description="Các khoản từ 26/07 đến 28/07/2026" icon={AlertTriangle} />
-        <StatCard title="COD chờ 3 ngày" value={fmt(overview.codPending3Days)} description={`${overview.codPendingOrders} đơn GHTK chưa đối soát`} icon={Landmark} />
+        <StatCard
+          title="Phải trả hôm nay"
+          value={fmt(overview.dueToday)}
+          description={`Khoản đến hạn ngày ${asOfLabel}${overview.overduePayables > 0 ? ` • Quá hạn còn ${fmt(overview.overduePayables)}` : ""}`}
+          icon={CalendarClock}
+        />
+        <StatCard title="Phải trả 3 ngày tới" value={fmt(overview.dueIn3Days)} description={`Các khoản từ ${due3RangeLabel}`} icon={AlertTriangle} />
+        <StatCard title="COD chờ đối soát" value={fmt(overview.codPending3Days)} description={`${overview.codPendingOrders} đơn GHTK chưa đối soát`} icon={Landmark} />
       </div>
 
       <Dialog open={detailView !== null} onOpenChange={(open) => !open ? setDetailView(null) : null}>
@@ -596,6 +617,13 @@ function CashFlowDashboard({
                     <p className="mt-1 text-xs text-muted-foreground">{account.type} • {account.availability}</p>
                   </div>
                 ))}
+                {overview.activeDepositCollected > 0 ? (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                    <p className="font-medium">Tiền cọc đang giữ</p>
+                    <p className="mt-1 text-lg font-semibold">{fmt(overview.activeDepositCollected)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Theo dõi riêng — chỉ vào tổng khi bạn tự cộng vào nguồn tiền</p>
+                  </div>
+                ) : null}
               </div>
               <TransactionList transactions={cashTransactions} emptyText="Chưa có lịch sử thu chi." />
             </div>
@@ -698,7 +726,7 @@ function CashFlowDashboard({
       </Dialog>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Số dư dự kiến cuối kỳ" value={fmt(overview.projectedEndingBalance)} description={`COD đã đối soát trong tài khoản: ${fmt(overview.codReconciledInCash)}`} icon={Coins} />
+        <StatCard title="Số dư dự kiến cuối kỳ" value={fmt(overview.projectedEndingBalance)} description={`COD đã đối soát (cộng thủ công khi tiền về): ${fmt(overview.codReconciledInCash)}`} icon={Coins} />
         <StatCard title="Lãi tích lũy từ 16/07" value={fmt(overview.realizedProfitSinceStart)} description="Tự đồng bộ từ cột Lãi của Ban_Hang" icon={Coins} />
         <StatCard title="Quỹ lãi còn lại" value={fmt(overview.profitFundBalance)} description="Dùng riêng để trả nợ dài hạn" icon={Wallet} />
         <StatCard title="Nợ dài hạn còn lại" value={fmt(overview.longTermDebtRemaining)} description={`Tổng nợ dài hạn ${fmt(overview.longTermDebtTotal)}`} icon={CalendarClock} />
@@ -770,7 +798,7 @@ function CashFlowDashboard({
           <CardHeader>
             <CardTitle>Thanh khoản và quỹ an toàn</CardTitle>
             <CardDescription>
-              Tiền có thể chi sau khi trừ quỹ an toàn {fmt(overview.safeReserve)}. COD GHTK đã đối soát đã nằm trong số dư hiện có.
+              Tiền có thể chi sau khi trừ quỹ an toàn {fmt(overview.safeReserve)}. COD GHTK chỉ hiển thị để tính phương án — bạn tự cộng vào nguồn tiền khi GHTK báo tiền về.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -785,12 +813,12 @@ function CashFlowDashboard({
               <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
                 <p className="text-xs text-emerald-100/80">COD đã đối soát</p>
                 <p className="mt-1 text-lg font-semibold text-emerald-100">{fmt(overview.codReconciledInCash)}</p>
-                <p className="mt-1 text-xs text-emerald-100/70">{overview.codReconciledOrders} đơn đã vào tiền tài khoản</p>
+                <p className="mt-1 text-xs text-emerald-100/70">{overview.codReconciledOrders} đơn GHTK báo đã đối soát • cộng thủ công khi tiền về</p>
               </div>
               <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 p-3">
                 <p className="text-xs text-sky-100/80">COD có thể thu trong 3 ngày</p>
                 <p className="mt-1 text-lg font-semibold text-sky-100">{fmt(overview.codPending3Days)}</p>
-                <p className="mt-1 text-xs text-sky-100/70">{overview.codPendingOrders} đơn GHTK chưa đối soát</p>
+                <p className="mt-1 text-xs text-sky-100/70">{overview.codPendingOrders} đơn GHTK chưa đối soát • chỉ dùng để tính phương án</p>
               </div>
             </div>
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 sm:p-5">
@@ -874,7 +902,7 @@ function CashFlowDashboard({
             </div>
             <div className={`rounded-xl border p-4 ${overview.shortageForUpcomingDues > 0 ? "border-amber-500/20 bg-amber-500/10" : "border-emerald-500/20 bg-emerald-500/10"}`}>
               <p className={`text-sm font-medium ${overview.shortageForUpcomingDues > 0 ? "text-amber-200" : "text-emerald-200"}`}>
-                {due3Total > 0 ? "Thiếu hụt cho các khoản 3 ngày tới" : "Trạng thái 3 ngày tới"}
+                {due3Total > 0 ? "Thiếu hụt cho quá hạn + 3 ngày tới" : "Trạng thái 3 ngày tới"}
               </p>
               <p className={`mt-2 text-2xl font-bold ${overview.shortageForUpcomingDues > 0 ? "text-amber-100" : "text-emerald-100"}`}>
                 {due3Total > 0 ? fmt(overview.shortageForUpcomingDues) : "Ổn định"}
@@ -940,16 +968,18 @@ function CashFlowDashboard({
         <TabsContent value="tong-quan" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Đối chiếu bộ số liệu mẫu</CardTitle>
+              <CardTitle>Cân đối tài sản và nghĩa vụ</CardTitle>
               <CardDescription>
-                Hệ thống hiện đang khớp với số liệu mẫu bạn yêu cầu cho ngày 25/07/2026.
+                Số liệu thời gian thực tính đến ngày {asOfLabel}.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl border p-4">
                 <p className="text-sm text-muted-foreground">Tài sản ngắn hạn</p>
                 <p className="mt-2 text-xl font-bold">{fmt(overview.totalShortTermAssets)}</p>
-                <p className="mt-1 text-xs text-muted-foreground">257.120.000 + 430.000.000 + 92.100.000</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Tiền {fmtShort(overview.cashOnHand)} + hàng tồn {fmtShort(overview.inventoryValue)} + phải thu {fmtShort(overview.totalReceivables)}
+                </p>
               </div>
               <div className="rounded-xl border p-4">
                 <p className="text-sm text-muted-foreground">Tổng nghĩa vụ</p>
@@ -963,8 +993,10 @@ function CashFlowDashboard({
               </div>
               <div className="rounded-xl border p-4">
                 <p className="text-sm text-muted-foreground">Số dư cuối cùng</p>
-                <p className="mt-2 text-xl font-bold text-emerald-400">{fmt(overview.projectedEndingBalance)}</p>
-                <p className="mt-1 text-xs text-muted-foreground">779.220.000 - 626.400.000</p>
+                <p className={`mt-2 text-xl font-bold ${overview.projectedEndingBalance >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmt(overview.projectedEndingBalance)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Tài sản ngắn hạn {fmtShort(overview.totalShortTermAssets)} − nghĩa vụ {fmtShort(overview.totalPayables)}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -1941,7 +1973,7 @@ function CashFlowDashboard({
                 </CardHeader>
                 <CardContent className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-lg border p-3">
-                    <p className="text-xs text-muted-foreground">Thu từ hàng tồn</p>
+                    <p className="text-xs text-muted-foreground">Thu từ hàng tồn (giá bán nhanh)</p>
                     <p className="mt-1 font-semibold">{fmt(scenario.collectibleFromInventory)}</p>
                   </div>
                   <div className="rounded-lg border p-3">

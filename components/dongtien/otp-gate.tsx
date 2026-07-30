@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { ShieldCheck, LockKeyhole } from "lucide-react"
+import { ShieldCheck, LockKeyhole, Loader2 } from "lucide-react"
+import { getAuthHeaders } from "@/components/auth/protected-route"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
@@ -13,14 +14,29 @@ interface OtpGateProps {
 export function OtpGate({ onVerified }: OtpGateProps) {
   const [otp, setOtp] = useState("")
   const [error, setError] = useState("")
+  const [verifying, setVerifying] = useState(false)
 
-  const handleVerify = () => {
-    if (otp !== "216917") {
-      setError("OTP không đúng. Vui lòng kiểm tra lại.")
-      return
+  const handleVerify = async () => {
+    try {
+      setVerifying(true)
+      setError("")
+      const res = await fetch("/api/dongtien?verifyOtp=1", {
+        cache: "no-store",
+        headers: {
+          ...getAuthHeaders(),
+          "x-dongtien-otp": otp,
+        },
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => null) as { error?: string } | null
+        throw new Error(json?.error || "OTP không đúng. Vui lòng kiểm tra lại.")
+      }
+      onVerified(otp)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "OTP không đúng. Vui lòng kiểm tra lại.")
+    } finally {
+      setVerifying(false)
     }
-    setError("")
-    onVerified(otp)
   }
 
   return (
@@ -55,8 +71,8 @@ export function OtpGate({ onVerified }: OtpGateProps) {
             </div>
           ) : null}
 
-          <Button className="w-full" onClick={handleVerify} disabled={otp.length !== 6}>
-            <LockKeyhole className="mr-2 h-4 w-4" />
+          <Button className="w-full" onClick={handleVerify} disabled={otp.length !== 6 || verifying}>
+            {verifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LockKeyhole className="mr-2 h-4 w-4" />}
             Mở module Dòng tiền
           </Button>
         </CardContent>

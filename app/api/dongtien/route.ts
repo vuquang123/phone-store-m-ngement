@@ -22,7 +22,8 @@ import {
 import { getServerUser } from "@/lib/auth"
 
 const ALLOWED_EMAIL = "dung8ahxh@gmail.com"
-const REQUIRED_OTP = "216917"
+// OTP chỉ tồn tại phía server. Đặt DONGTIEN_OTP trong .env để đổi mã mà không cần sửa code.
+const REQUIRED_OTP = process.env.DONGTIEN_OTP || "216917"
 
 function normalize(input: string) {
   return (input || "")
@@ -66,6 +67,10 @@ async function authorize(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     await authorize(request)
+    // Chỉ xác thực OTP (dùng cho màn OtpGate) — không cần tải dữ liệu.
+    if (request.nextUrl.searchParams.get("verifyOtp")) {
+      return NextResponse.json({ success: true, verified: true })
+    }
     const reportSlug = String(request.nextUrl.searchParams.get("reportSlug") || "").trim()
     if (reportSlug) {
       const report = await getCashFlowReportBySlug(reportSlug)
@@ -74,7 +79,8 @@ export async function GET(request: NextRequest) {
       }
       return NextResponse.json({ success: true, report })
     }
-    const data = await getCashFlowDashboardDataFromSheets()
+    const forceSync = Boolean(request.nextUrl.searchParams.get("forceSync"))
+    const data = await getCashFlowDashboardDataFromSheets({ forceSync })
     const latestReport = await maybeCreateDailyCashFlowReport(data)
     return NextResponse.json({ success: true, data, latestReportSlug: latestReport?.slug || null })
   } catch (error) {
