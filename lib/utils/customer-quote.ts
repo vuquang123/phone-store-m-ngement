@@ -52,13 +52,14 @@ export function buildCustomerQuote(p: {
   ].filter(Boolean) as string[]
 
   const price = formatPriceK((p.gia_ban || 0) - (p.giam_gia || 0))
-  if (price) parts.push(`giá chỉ ${price}`)
+  if (price) parts.push(`giá ${price}`)
 
   return parts.join(", ")
 }
 
+// Từ 2 máy trở lên: chừa 1 dòng trống giữa các máy cho dễ đọc khi gửi khách.
 export function buildCustomerQuoteList(products: Array<Parameters<typeof buildCustomerQuote>[0]>): string {
-  return products.map(buildCustomerQuote).filter(Boolean).join("\n")
+  return products.map(buildCustomerQuote).filter(Boolean).join("\n\n")
 }
 
 export async function copyTextToClipboard(text: string): Promise<boolean> {
