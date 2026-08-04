@@ -568,7 +568,7 @@ export default function KhoHangPage() {
         {activeTab === "san-pham" && (
           <div className="space-y-4">
             <div className="flex flex-wrap justify-between items-center gap-2">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => { setSelectedProduct(null); setIsDialogOpen(true) }}
                   className="bg-emerald-600 hover:bg-emerald-700 shadow-sm"

@@ -185,7 +185,7 @@ export function ProductTable({
                       </p>
                     )}
 
-                    <div className="mt-2 flex items-center justify-between gap-2">
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                       <div className="leading-tight">
                         <span className="font-bold text-emerald-600">₫{giaSau.toLocaleString()}</span>
                         {(product.giam_gia || 0) > 0 && (

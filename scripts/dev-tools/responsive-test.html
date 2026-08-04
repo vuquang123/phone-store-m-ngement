@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Responsive Tester</title>
+<style>
+  body { margin: 0; font-family: -apple-system, sans-serif; background: #111; color: #eee; }
+  #bar { padding: 8px 12px; font-size: 13px; display: flex; gap: 12px; align-items: center; position: sticky; top: 0; background: #111; z-index: 10; }
+  #frameWrap { padding: 0 12px 12px; }
+  iframe { border: 2px solid #555; background: #fff; transform-origin: top left; display: block; }
+  #report { white-space: pre-wrap; font-family: monospace; font-size: 12px; padding: 12px; }
+</style>
+</head>
+<body>
+<div id="bar"><strong id="label"></strong><span id="status"></span></div>
+<div id="frameWrap"><iframe id="frame"></iframe></div>
+<div id="report"></div>
+<script>
+const params = new URLSearchParams(location.search);
+const w = Number(params.get('w') || 375);
+const h = Number(params.get('h') || 667);
+const url = params.get('url') || '/dashboard';
+const scale = Number(params.get('scale') || 0) || Math.min(2, Math.max(0.6, (window.innerHeight - 60) / h));
+const frame = document.getElementById('frame');
+frame.style.width = w + 'px';
+frame.style.height = h + 'px';
+frame.style.transform = `scale(${scale})`;
+document.getElementById('frameWrap').style.height = (h * scale + 16) + 'px';
+document.getElementById('label').textContent = `${w}×${h} @ ${scale.toFixed(2)}x — ${url}`;
+frame.src = url;
+
+// ---- overflow scanner ----
+function scanFrame() {
+  try {
+    const doc = frame.contentDocument;
+    if (!doc || !doc.body) return { error: 'no doc' };
+    const win = frame.contentWindow;
+    const vw = win.innerWidth;
+    const se = doc.scrollingElement;
+    const pageOverflow = Math.max(se.scrollWidth - vw, 0);
+    const clsOf = (el) => String(el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className || '').slice(0, 140);
+    const scrollers = [];
+    const clipped = [];
+    const all = doc.querySelectorAll('body *');
+    for (const el of all) {
+      if (el.scrollWidth <= el.clientWidth + 2 || el.clientWidth === 0) continue;
+      const ox = win.getComputedStyle(el).overflowX;
+      const info = {
+        tag: el.tagName.toLowerCase(),
+        cls: clsOf(el),
+        clientW: el.clientWidth, scrollW: el.scrollWidth,
+        hasTable: !!el.querySelector('table'),
+        text: (el.textContent || '').trim().slice(0, 50),
+      };
+      if (ox === 'auto' || ox === 'scroll') scrollers.push(info);
+      else if (ox === 'hidden' || ox === 'clip') clipped.push(info);
+    }
+    return { url: win.location.pathname, vw, pageOverflow, scrollers: scrollers.slice(0, 20), clipped: clipped.slice(0, 20) };
+  } catch (e) {
+    return { error: String(e) };
+  }
+}
+window.scanFrame = scanFrame;
+
+// ---- multi-route auto scan: ?auto=1&routes=/a,/b&w=375 ----
+async function autoScan() {
+  const routes = (params.get('routes') || '').split(',').filter(Boolean);
+  if (!routes.length) return;
+  const results = [];
+  const status = document.getElementById('status');
+  for (const route of routes) {
+    status.textContent = `loading ${route}...`;
+    await new Promise((resolve) => {
+      let done = false;
+      frame.addEventListener('load', function onl() { frame.removeEventListener('load', onl); if (!done) { done = true; resolve(); } });
+      frame.src = route;
+      setTimeout(() => { if (!done) { done = true; resolve(); } }, 15000);
+    });
+    // poll while client-side data renders; keep the worst observation
+    let worst = null, prevState = '', stable = 0;
+    for (let i = 0; i < 15; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const res = scanFrame();
+      if (res.error) continue;
+      const badness = (res.pageOverflow || 0) + (res.scrollers || []).length * 100 + (res.clipped || []).filter(c => c.scrollW - c.clientW > 8).length * 10;
+      if (!worst || badness >= worst.badness) { res.badness = badness; worst = res; }
+      status.textContent = `${route} poll ${i}: badness=${badness}`;
+      // early exit once content is present and layout stable for 3 polls
+      try {
+        const textLen = (frame.contentDocument.body.innerText || '').length;
+        const state = `${textLen}|${badness}`;
+        stable = state === prevState ? stable + 1 : 0;
+        prevState = state;
+        if (textLen > 400 && stable >= 2 && !frame.contentDocument.querySelector('.animate-spin')) break;
+      } catch (e) {}
+    }
+    if (worst) { worst.route = route; results.push(worst); }
+    else results.push({ route, error: 'never scanned' });
+  }
+  status.textContent = 'DONE';
+  window.__scanResults = results;
+  document.getElementById('report').textContent = JSON.stringify(results, null, 1);
+}
+if (params.get('auto')) autoScan();
+</script>
+</body>
+</html>

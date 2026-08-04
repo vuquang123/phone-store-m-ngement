@@ -124,7 +124,7 @@ export function SearchArea({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             <span className="text-xs text-muted-foreground mr-1">Nguồn:</span>
             <Button size="sm" variant={filterSource === 'all' ? 'default' : 'outline'}
               className={filterSource === 'all' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
@@ -136,7 +136,7 @@ export function SearchArea({
               className={filterSource === 'partner' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
               onClick={() => setFilterSource('partner')}>Kho ngoài</Button>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             <span className="text-xs text-muted-foreground mr-1">Loại:</span>
             <Button size="sm" variant={filterType === 'all' ? 'default' : 'outline'}
               className={filterType === 'all' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
