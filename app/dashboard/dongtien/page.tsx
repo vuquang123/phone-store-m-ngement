@@ -1079,37 +1079,46 @@ function CashFlowDashboard({
                   </Button>
                 </div>
               </div>
-              {accounts.map((account) => (
-                <div key={account.id} className="rounded-xl border p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <p className="font-medium">{account.name}</p>
-                      <p className="text-xs text-muted-foreground">{account.note || "Không có ghi chú"}</p>
-                    </div>
-                    <div className="flex flex-col gap-2 lg:items-end">
-                      <Badge variant={account.availability === "AVAILABLE" ? "default" : "secondary"}>{account.availability}</Badge>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          className="w-36 text-right"
-                          value={accountDrafts[account.id] ?? String(account.balance)}
-                          onChange={(e) => setAccountDrafts((prev) => ({ ...prev, [account.id]: e.target.value.replace(/[^\d]/g, "") }))}
-                        />
-                        <Button
-                          size="sm"
-                          disabled={submitting}
-                          onClick={() => onSubmitAction({
-                            action: "update_account",
-                            id: account.id,
-                            balance: Number(accountDrafts[account.id] || 0),
-                          })}
-                        >
-                          Lưu
-                        </Button>
+              {accounts.map((account) => {
+                const isCashFundAccount = account.id === "acc_cash" || account.name.trim().toLowerCase() === "tiền mặt"
+                return (
+                  <div key={account.id} className="rounded-xl border p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <p className="font-medium">{account.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {isCashFundAccount ? "Tự động đồng bộ từ Quỹ tiền mặt" : account.note || "Không có ghi chú"}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2 lg:items-end">
+                        <Badge variant={account.availability === "AVAILABLE" ? "default" : "secondary"}>{account.availability}</Badge>
+                        {isCashFundAccount ? (
+                          <p className="text-lg font-semibold tabular-nums">{fmt(account.balance)}</p>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              className="w-36 text-right"
+                              value={accountDrafts[account.id] ?? String(account.balance)}
+                              onChange={(e) => setAccountDrafts((prev) => ({ ...prev, [account.id]: e.target.value.replace(/[^\d]/g, "") }))}
+                            />
+                            <Button
+                              size="sm"
+                              disabled={submitting}
+                              onClick={() => onSubmitAction({
+                                action: "update_account",
+                                id: account.id,
+                                balance: Number(accountDrafts[account.id] || 0),
+                              })}
+                            >
+                              Lưu
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </CardContent>
           </Card>
         </TabsContent>

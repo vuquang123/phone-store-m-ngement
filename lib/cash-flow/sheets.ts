@@ -1,5 +1,6 @@
 import { DateTime } from "luxon"
 import { ensureSheetHeader, readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, batchUpdateRangeValues, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
+import { getCashBalance } from "@/lib/cash"
 import { extractGhtkCode } from "@/lib/ghtk-status"
 import { parseVietnameseNumber } from "@/lib/number"
 import { generateCashFlowAiReport } from "@/services/ai/generate-cash-flow-report"
@@ -1947,7 +1948,17 @@ async function runOrderSyncs(forceSync = false) {
 export async function getCashFlowDashboardDataFromSheets(options?: { forceSync?: boolean }): Promise<CashFlowDashboardData> {
   await ensureCashFlowSheets()
   await runOrderSyncs(options?.forceSync)
-  const freshAccounts = await readAccounts()
+  const rawAccounts = await readAccounts()
+  // "Tiền mặt" luôn bằng tổng quỹ tiền mặt (sheet Tien_mat), không cho chỉnh tay.
+  // Nguồn "Tiền mặt ở shop" cũ được ẩn khỏi dashboard.
+  const cashFundBalance = await getCashBalance().catch(() => null)
+  const freshAccounts = rawAccounts
+    .filter((item) => norm(item.name) !== norm("Tiền mặt ở shop"))
+    .map((item) =>
+      cashFundBalance !== null && (item.id === "acc_cash" || norm(item.name) === norm("Tiền mặt"))
+        ? { ...item, balance: cashFundBalance, note: item.note || "Tự động đồng bộ từ Quỹ tiền mặt" }
+        : item,
+    )
   const transactions = await readTransactions()
   const profitFundEntries = await readProfitFundEntries()
   const longTermDebts = (await readLongTermDebts()).map((item) => ({ ...item, status: statusForLongTermDebt(item) }))
