@@ -423,12 +423,22 @@ async function readActiveDepositOrders(): Promise<DepositOrderSummary[]> {
   const idxSale = colIndex(header, "Giá Bán")
 
   const groups = new Map<string, DepositOrderSummary>()
+  const seenDevices = new Set<string>()
   for (const row of rows) {
     const orderId = String((idxOrderId !== -1 ? row[idxOrderId] : "") || "").trim()
     if (!orderId) continue
     const status = String((idxStatus !== -1 ? row[idxStatus] : "") || "").trim()
     const normalizedStatus = norm(status)
     if (normalizedStatus === "huy_dat_coc" || normalizedStatus === "da_thanh_toan" || normalizedStatus === "da_tat_toan") continue
+    // Bỏ dòng trùng máy trong cùng đơn (dữ liệu "ma" do lỗi ghi đè sheet cũ) — tránh cộng đôi giá nhập.
+    const deviceKey =
+      String((idxImei !== -1 ? row[idxImei] : "") || "").trim() ||
+      String((idxSerial !== -1 ? row[idxSerial] : "") || "").trim()
+    if (deviceKey) {
+      const dedupeKey = `${orderId}::${deviceKey}`
+      if (seenDevices.has(dedupeKey)) continue
+      seenDevices.add(dedupeKey)
+    }
     const existing = groups.get(orderId) || {
       id: orderId,
       customer: String((idxCustomer !== -1 ? row[idxCustomer] : "") || "Khách lẻ"),

@@ -64,7 +64,8 @@ export async function PATCH(req: Request) {
         return isActiveDepositStatus(row[idxTrangThai]) ? row : null
       })
       .filter(Boolean) as any[][]
-    await updateRangeValues("Dat_Coc!A1", [header, ...nextRows]);
+    // syncToGoogleSheets xóa sạch A2:ZZ trước khi ghi — tránh để sót dòng "ma" ở cuối khi số dòng giảm.
+    await syncToGoogleSheets("Dat_Coc", nextRows);
 
     if (matchedRows.length > 0 && desired.toLowerCase() === "hủy đặt cọc") {
       try {
@@ -132,7 +133,8 @@ export async function DELETE(req: Request) {
       }
     });
     const nextRows = rows.filter((row) => !imeiSet.has(String(row[idxIMEI]).trim()) && (idxTrangThai === -1 || isActiveDepositStatus(row[idxTrangThai])))
-    await updateRangeValues("Dat_Coc!A1", [header, ...nextRows]);
+    // syncToGoogleSheets xóa sạch A2:ZZ trước khi ghi — tránh để sót dòng "ma" ở cuối khi số dòng giảm.
+    await syncToGoogleSheets("Dat_Coc", nextRows);
 
     // --- Cập nhật trạng thái máy về kho ---
     // Đọc sheet Kho_Hang
@@ -157,7 +159,7 @@ export async function DELETE(req: Request) {
   }
 }
 import { NextResponse } from "next/server"
-import { appendToGoogleSheets, readFromGoogleSheets, updateRangeValues, colIndex, norm } from "@/lib/google-sheets"
+import { appendToGoogleSheets, readFromGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
 
 function isActiveDepositStatus(value: unknown) {
@@ -176,9 +178,25 @@ async function compactDatCocSheet() {
   const { header, rows } = await readFromGoogleSheets("Dat_Coc")
   const idxTrangThai = colIndex(header, "Trạng Thái")
   if (idxTrangThai === -1) return { header, rows }
-  const activeRows = rows.filter((row) => isActiveDepositStatus(row[idxTrangThai]))
+  const idxOrderId = colIndex(header, "ID Đơn Hàng", "Mã Đơn Hàng")
+  const idxImei = colIndex(header, "IMEI")
+  const idxSerial = colIndex(header, "Serial")
+  // Loại dòng không còn active + dòng trùng (cùng đơn, cùng IMEI/Serial) do lỗi ghi đè cũ để lại.
+  const seenDevices = new Set<string>()
+  const activeRows = rows.filter((row) => {
+    if (!isActiveDepositStatus(row[idxTrangThai])) return false
+    const device =
+      String((idxImei !== -1 ? row[idxImei] : "") || "").trim() ||
+      String((idxSerial !== -1 ? row[idxSerial] : "") || "").trim()
+    if (!device) return true
+    const key = `${String((idxOrderId !== -1 ? row[idxOrderId] : "") || "").trim()}::${device}`
+    if (seenDevices.has(key)) return false
+    seenDevices.add(key)
+    return true
+  })
   if (activeRows.length !== rows.length) {
-    await updateRangeValues("Dat_Coc!A1", [header, ...activeRows])
+    // syncToGoogleSheets xóa sạch A2:ZZ trước khi ghi lại, tránh dòng "ma" còn sót ở cuối sheet.
+    await syncToGoogleSheets("Dat_Coc", activeRows)
   }
   return { header, rows: activeRows }
 }
