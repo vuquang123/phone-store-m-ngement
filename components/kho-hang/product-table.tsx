@@ -51,7 +51,7 @@ const processingLabel = (p: Product) => {
   return name ? `Đang xử lý · ${name}` : "Đang xử lý"
 }
 
-// Copy tin báo khách của 1 máy, ví dụ: "15ProMax 256GB Blue 98.5 Pin 99%, 2 esim, giá 15.500K"
+// Copy tin báo khách của 1 máy, ví dụ: "15ProMax 256GB Blue 98.5 Pin 99%, 2 esim, giá 15.500K (44364)"
 const handleCopyQuote = async (p: Product) => {
   const quote = buildCustomerQuote(p)
   const ok = await copyTextToClipboard(quote)

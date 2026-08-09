@@ -1,5 +1,6 @@
 // Sinh tin nhắn báo khách từ 1 dòng sản phẩm trong kho.
-// Format mẫu: "15ProMax 256GB Blue 98.5 Pin 99%, 2 esim, giá chỉ 15.500K"
+// Format mẫu: "15ProMax 256GB Blue 98.5 Pin 99%, 2 esim, giá 15.500K (44364)"
+// Số trong ngoặc cuối là ID máy, để tra lại đúng máy khi khách chốt.
 
 import { formatPinDisplay } from "@/lib/utils/inventory-helpers"
 
@@ -29,6 +30,7 @@ function formatPriceK(price: number): string {
 }
 
 export function buildCustomerQuote(p: {
+  id?: string | number
   ten_san_pham?: string
   dung_luong?: string
   mau_sac?: string
@@ -54,7 +56,9 @@ export function buildCustomerQuote(p: {
   const price = formatPriceK((p.gia_ban || 0) - (p.giam_gia || 0))
   if (price) parts.push(`giá ${price}`)
 
-  return parts.join(", ")
+  const line = parts.join(", ")
+  const id = String(p.id ?? "").trim()
+  return id ? `${line} (${id})` : line
 }
 
 // Từ 2 máy trở lên: chừa 1 dòng trống giữa các máy cho dễ đọc khi gửi khách.
