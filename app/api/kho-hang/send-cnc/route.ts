@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     const idxTen = colIndex(header, "Tên Sản Phẩm", "Tên máy", "Sản phẩm", "Model")
     const idxSerial = colIndex(header, "Serial", "Số sê-ri")
     const idxTrangThai = colIndex(header, "Trạng Thái")
+    const idxDoSim = colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim")
     // Chuẩn hóa danh sách ID Máy cần chuyển: nhận cả IMEI, 5 số cuối IMEI hoặc ID Máy
     const idxIMEI = colIndex(header, "IMEI")
 
@@ -59,12 +60,15 @@ export async function POST(req: Request) {
       })
     } catch (e) { console.warn('[NOTIFY] send-cnc fail:', e) }
     try {
+      const simType = String(doSim || "").trim()
       const devices = rows
         .filter(r => idsToMove.includes(r[idxId]))
         .map(r => ({
           name: idxTen !== -1 ? r[idxTen] : undefined,
           imei: idxIMEI !== -1 ? r[idxIMEI] : undefined,
           serial: idxSerial !== -1 ? r[idxSerial] : undefined,
+          // Không chọn dạng sim ở dialog thì báo dạng sim hiện có của từng máy trong kho
+          do_sim: !simType && idxDoSim !== -1 ? r[idxDoSim] : undefined,
         }))
       await sendStockEventNotification({
         type: "send_cnc",
@@ -72,6 +76,7 @@ export async function POST(req: Request) {
         address: cncAddress,
         devices,
         employee: employeeId,
+        simType,
       })
     } catch (e) { console.warn('[TG] send-cnc message fail:', e) }
     return NextResponse.json({ success: true, message: `Đã gửi CNC thành công cho ${productIds.length} sản phẩm!` })

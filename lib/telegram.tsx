@@ -42,8 +42,13 @@ function formatDeviceSummaryLine(device: DeviceSummary, index: number) {
   if (device.tinh_trang) details.push(`Tình trạng: ${device.tinh_trang}`)
   const pinLabel = formatPinLabel(device.pin)
   if (pinLabel) details.push(`Pin: ${pinLabel}`)
-  const simLabel = resolveSimLabel(device)
-  if (simLabel) details.push(`Loại máy: ${simLabel}`)
+  // "Dạng sim" (2 esim / 2 sim vật lý...) và "Loại máy" (Lock / Quốc tế) là 2 thông tin khác nhau
+  const doSim = String(device.do_sim ?? "").trim()
+  if (doSim) details.push(`Dạng sim: ${doSim}`)
+  else {
+    const simLabel = resolveSimLabel(device)
+    if (simLabel) details.push(`Loại máy: ${simLabel}`)
+  }
 
   const left = [name, ...specs].filter(Boolean).join(" • ")
   return `${index + 1}. ${left}${details.length ? ` • ${details.join(" • ")}` : ""}`
@@ -51,7 +56,7 @@ function formatDeviceSummaryLine(device: DeviceSummary, index: number) {
 
 type StockEvent =
   | { type: "import"; total: number; devices: DeviceSummary[]; employee?: string }
-  | { type: "send_cnc"; total: number; address: string; devices: DeviceSummary[]; employee?: string }
+  | { type: "send_cnc"; total: number; address: string; devices: DeviceSummary[]; employee?: string; simType?: string }
   | { type: "complete_cnc"; total: number; devices: DeviceSummary[]; employee?: string }
   | { type: "send_warranty"; total: number; address: string; devices: DeviceSummary[]; employee?: string }
   | { type: "complete_warranty"; total: number; devices: DeviceSummary[]; employee?: string }
@@ -78,6 +83,11 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
   if (event.type === "send_cnc" || event.type === "send_warranty") {
     const addr = (event as any).address
     if (addr) lines.push(`Địa chỉ: ${addr}`)
+  }
+  if (event.type === "send_cnc") {
+    // Dạng sim yêu cầu CNC làm (chọn ở dialog gửi CNC), áp cho cả lô máy
+    const simType = String((event as any).simType ?? "").trim()
+    if (simType) lines.push(`Dạng sim: ${simType}`)
   }
   if (event.type === "send_partner") {
     const partner = (event as any).partner
