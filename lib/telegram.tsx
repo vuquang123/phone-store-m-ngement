@@ -2,6 +2,7 @@
 // trên server có IPv6 cấu hình lỗi (Node mặc định thử IPv6 trước -> treo ~25s).
 import dns from "node:dns"
 import { parseVietnameseNumber } from "@/lib/number"
+import { getLoaiMayLabel } from "@/lib/utils/inventory-helpers"
 try { dns.setDefaultResultOrder("ipv4first") } catch {}
 
 type OrderType = "online" | "offline" | "return" | "deposit" | string
@@ -42,13 +43,12 @@ function formatDeviceSummaryLine(device: DeviceSummary, index: number) {
   if (device.tinh_trang) details.push(`Tình trạng: ${device.tinh_trang}`)
   const pinLabel = formatPinLabel(device.pin)
   if (pinLabel) details.push(`Pin: ${pinLabel}`)
-  // "Dạng sim" (2 esim / 2 sim vật lý...) và "Loại máy" (Lock / Quốc tế) là 2 thông tin khác nhau
+  // "Dạng sim" (2 esim / 2 sim vật lý...) và "Loại máy" (Lock / Quốc tế) là 2 thông tin khác nhau,
+  // hiển thị độc lập để tin nhập hàng không bị mất Loại Máy khi máy đã có dạng sim.
   const doSim = String(device.do_sim ?? "").trim()
   if (doSim) details.push(`Dạng sim: ${doSim}`)
-  else {
-    const simLabel = resolveSimLabel(device)
-    if (simLabel) details.push(`Loại máy: ${simLabel}`)
-  }
+  const loaiMay = String(device.loai_may ?? "").trim()
+  if (loaiMay) details.push(`Loại máy: ${getLoaiMayLabel(loaiMay)}`)
 
   const left = [name, ...specs].filter(Boolean).join(" • ")
   return `${index + 1}. ${left}${details.length ? ` • ${details.join(" • ")}` : ""}`

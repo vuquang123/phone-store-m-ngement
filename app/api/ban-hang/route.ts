@@ -160,6 +160,7 @@ function idxBanHang(header: string[]) {
     mauSac: colIndex(header, "Màu Sắc"),
     doSim: colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim"),
     imei: colIndex(header, "IMEI"),
+    serial: colIndex(header, "Serial"),
     tinhTrang: colIndex(header, "Tình Trạng Máy"),
     phuKien: colIndex(header, "Phụ Kiện"),
     giaBan: colIndex(header, "Giá Bán"),
@@ -338,6 +339,7 @@ export async function GET(request: NextRequest) {
         pin: row[idx.pin],
         mau_sac: row[idx.mauSac],
         imei: row[idx.imei],
+        serial: idx.serial !== -1 ? row[idx.serial] : "",
         tinh_trang_may: row[idx.tinhTrang],
         phu_kien: row[idx.phuKien],
         gia_ban: giaBanNum,
@@ -378,8 +380,8 @@ export async function GET(request: NextRequest) {
         thanh_toan: totalThanhToan,
         tong_tien: totalThanhToan,
         items_count: items.length,
-        // Collect all IMEIs for filtering
-        imeis: items.map(it => it.imei).filter(Boolean)
+        // Định danh máy dùng để lọc: máy chỉ có serial (iPad wifi) cũng phải tìm được
+        imeis: items.flatMap(it => [it.imei, it.serial]).filter(Boolean)
       }
     })
 
@@ -401,8 +403,12 @@ export async function GET(request: NextRequest) {
         const byName = q.length > 0 && nameN.includes(q)
         const byMaDon = q.length > 0 && maDonN.includes(q)
         const byPhone = qDigits.length > 0 && phoneDigits.includes(qDigits)
+        // Serial có chữ nên so khớp không phân biệt hoa thường
+        const searchUpper = searchRaw.toUpperCase()
         const byImei = imeiList.some(
-          (im: string) => im.includes(searchRaw) || (qDigits.length > 0 && im.replace(/\D/g, "").includes(qDigits)),
+          (im: string) =>
+            im.toUpperCase().includes(searchUpper) ||
+            (qDigits.length > 0 && im.replace(/\D/g, "").includes(qDigits)),
         )
         return byName || byMaDon || byPhone || byImei
       })
@@ -733,8 +739,8 @@ export async function POST(request: NextRequest) {
       }
       tongGiaNhap += giaNhapPhuKien
       // Xác định có cả máy và phụ kiện không
-  const hasMay = mayList.some((m: any) => m.imei)
-      const isMayRow = may.imei
+  // Máy iPad wifi chỉ có serial nên không được coi đơn là "chỉ bán phụ kiện"
+  const hasMay = mayList.some((m: any) => m.imei || m.serial)
       const isOnlyPhuKien = !hasMay && phuKien
       const isPartner =
         String(may.nguon || may["Nguồn Hàng"] || body["Nguồn Hàng"] || body["nguon_hang"] || may.source || "")
@@ -823,6 +829,8 @@ export async function POST(request: NextRequest) {
           return may.do_sim || may["Dạng Sim"] || may["Dạng sim"] || may["Kiểu dạng sim"] || ""
         }
         if (k === "IMEI") return may.imei || may["IMEI"] || ""
+        // Máy chỉ có serial (iPad wifi, Apple Watch...) vẫn phải ghi được định danh xuống sheet
+        if (k === "Serial") return may.serial || may["Serial"] || ""
         if (k === "Màu Sắc") return may.mau_sac || may["Màu Sắc"] || ""
         if (k === "Pin (%)") return may.pin || may["Pin (%)"] || ""
         if (k === "Tình Trạng Máy") return may.tinh_trang_may || may["Tình Trạng Máy"] || ""

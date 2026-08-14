@@ -237,7 +237,8 @@ export async function POST(request: NextRequest) {
           tinh_trang: p.tinh_trang || p.tinh_trang_may || p["Tình Trạng Máy"],
           pin: p.pin || p["Pin (%)"],
           do_sim: p.do_sim || p["Dạng Sim"] || p["Dạng sim"] || p["Kiểu dạng sim"],
-          loai_may: p.loai_may || p["Loại Máy"],
+          // Dialog nhập hàng gửi Lock/Quốc tế ở field loai_phu_kien (ghi vào cột "Loại Máy")
+          loai_may: p.loai_phu_kien || p.loai_may || p["Loại Máy"],
         }))
         await sendStockEventNotification({
           type: "import",

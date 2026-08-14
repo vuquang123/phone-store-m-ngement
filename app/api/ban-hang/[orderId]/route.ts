@@ -190,6 +190,16 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderI
     const idxLai = colIndex("Lãi", "Lai")
     const idxTongThu = colIndex("Tổng Thu", "Tong Thu")
     const idxPhiBH = colIndex("Phí BH", "Phi BH")
+    const idxSerial = colIndex("Serial")
+    const idxImei = colIndex("IMEI")
+    const idxTenSP = colIndex("Tên Sản Phẩm")
+    // Dòng máy nhận diện qua IMEI, Serial hoặc Tên Sản Phẩm — máy chỉ có serial (iPad wifi)
+    // trước đây bị loại khỏi chi_tiet nên UI không hiện sản phẩm lẫn ô sửa giá nhập/lãi.
+    // Dòng chỉ có phụ kiện luôn được ghi với Tên Sản Phẩm rỗng nên không bị nhận nhầm là máy.
+    const isMachineRow = (row: any[]) =>
+      !!(idxImei !== -1 && String(row[idxImei] || "").trim()) ||
+      !!(idxSerial !== -1 && String(row[idxSerial] || "").trim()) ||
+      !!(idxTenSP !== -1 && String(row[idxTenSP] || "").trim())
 
     // Map thông tin chung từ dòng đầu tiên
     const first = orderRows[0]
@@ -215,8 +225,7 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderI
       },
       chi_tiet: orderRows
         .map((row, i) => {
-          const isMay = !!row[idx("IMEI")]
-          if (!isMay) return null
+          if (!isMachineRow(row)) return null
           const absoluteRowIndex = rows.findIndex((r) => r === row)
           return {
             id: `${orderId}_${i}`,
@@ -235,19 +244,18 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderI
               dung_luong: row[idx("Dung Lượng")],
               mau_sac: row[idx("Màu Sắc")],
               imei: row[idx("IMEI")],
+              serial: idxSerial !== -1 ? row[idxSerial] : "",
             },
           }
         })
         .filter(Boolean) as any[],
       tong_tien: orderRows.reduce((s, r) => {
-        const isMay = !!r[idx("IMEI")]
         const gia = parseInt((r[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0
-        return s + (isMay ? gia : 0)
+        return s + (isMachineRow(r) ? gia : 0)
       }, 0),
       thanh_toan: orderRows.reduce((s, r) => {
-        const isMay = !!r[idx("IMEI")]
         const gia = parseInt((r[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0
-        return s + (isMay ? gia : 0)
+        return s + (isMachineRow(r) ? gia : 0)
       }, 0),
       giam_gia: 0,
       tong_gia_nhap: orderRows.reduce((s, r) => s + (idxGiaNhap !== -1 ? toNumber(r[idxGiaNhap]) : 0), 0),

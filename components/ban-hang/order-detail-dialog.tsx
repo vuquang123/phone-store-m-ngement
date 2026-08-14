@@ -51,6 +51,7 @@ interface OrderDetail {
       dung_luong: string
       mau_sac: string
       imei: string
+      serial?: string
       tinh_trang_may?: string
     }
     phu_kien?: {
@@ -180,7 +181,11 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
         nhan_vien: data.nhan_vien || (data["Người Bán"] ? { ho_ten: data["Người Bán"] } : undefined),
         chi_tiet: Array.isArray(data.chi_tiet)
           ? data.chi_tiet.map((item: any) => {
-              const isMay = item.san_pham?.imei || item.imei;
+              // Máy iPad wifi chỉ có serial → vẫn phải tính tiền, không được coi là dòng phụ kiện
+              const isMay =
+                item.san_pham?.imei || item.imei ||
+                item.san_pham?.serial || item.serial ||
+                item.san_pham?.ten_san_pham;
               return {
                 id: item.id || "",
                 so_luong: item.so_luong || 1,
@@ -193,6 +198,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                   dung_luong: item.dung_luong || data.dung_luong || data["Dung Lượng"] || "",
                   mau_sac: item.mau_sac || data.mau_sac || data["Màu Sắc"] || "",
                   imei: item.imei || data.imei || data["IMEI"] || "",
+                  serial: item.serial || data.serial || data["Serial"] || "",
                   tinh_trang_may: item.tinh_trang_may || item["Tình Trạng Máy"] || data["Tình Trạng Máy"] || ""
                 },
                 phu_kien: item.phu_kien || (item["Phụ Kiện"] ? { ten_phu_kien: item["Phụ Kiện"], loai_phu_kien: "" } : undefined)
@@ -211,6 +217,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                   dung_luong: data.dung_luong || data["Dung Lượng"] || "",
                   mau_sac: data.mau_sac || data["Màu Sắc"] || "",
                   imei: data.imei || data["IMEI"] || "",
+                  serial: data.serial || data["Serial"] || "",
                   tinh_trang_may: data["Tình Trạng Máy"] || ""
                 },
                 phu_kien: data.phu_kien ? { ten_phu_kien: data.phu_kien, loai_phu_kien: "" } : undefined
@@ -574,7 +581,11 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                           <div className="text-xs text-muted-foreground mt-0.5">
                             {item.san_pham.dung_luong} • {item.san_pham.mau_sac}
                           </div>
-                          <div className="text-xs text-muted-foreground font-mono mt-1">IMEI: {item.san_pham.imei}</div>
+                          {(item.san_pham.imei || item.san_pham.serial) && (
+                            <div className="text-xs text-muted-foreground font-mono mt-1">
+                              {item.san_pham.imei ? `IMEI: ${item.san_pham.imei}` : `Serial: ${item.san_pham.serial}`}
+                            </div>
+                          )}
                           {(item.san_pham.tinh_trang_may || item.tinh_trang_may) && (
                             <div className="mt-1 text-sm">TT: {item.san_pham.tinh_trang_may || item.tinh_trang_may}</div>
                           )}
@@ -610,7 +621,11 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                                 <div className="text-sm text-muted-foreground">
                                   {item.san_pham.dung_luong} - {item.san_pham.mau_sac}
                                 </div>
-                                <div className="text-xs text-muted-foreground font-mono">IMEI: {item.san_pham.imei}</div>
+                                {(item.san_pham.imei || item.san_pham.serial) && (
+                                  <div className="text-xs text-muted-foreground font-mono">
+                                    {item.san_pham.imei ? `IMEI: ${item.san_pham.imei}` : `Serial: ${item.san_pham.serial}`}
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell>{item.san_pham.tinh_trang_may || item.tinh_trang_may || ""}</TableCell>
                               <TableCell>{item.so_luong}</TableCell>
