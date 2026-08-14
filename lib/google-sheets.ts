@@ -568,8 +568,9 @@ export async function updateProductsStatus(productIds: string[], newStatus: stri
   return { success: true, count: productIds.length }
 }
 export async function moveProductsToCNC(productIds: string[], cncAddress: string, doSim?: string) {
-  // Đọc dữ liệu kho hàng
-  const { header: khoHeader, rows } = await readFromGoogleSheets("Kho_Hang")
+  // Đọc dữ liệu kho hàng (force: bỏ cache 15s để không ghi đè thay đổi của người khác,
+  // vì syncToGoogleSheets ghi lại TOÀN BỘ sheet từ snapshot đọc được)
+  const { header: khoHeader, rows } = await readFromGoogleSheets("Kho_Hang", undefined, { force: true })
   const idxId = colIndex(khoHeader, "ID Máy")
   const idxTrangThai = colIndex(khoHeader, "Trạng Thái")
   const idxNguonKho = khoColIndex(khoHeader)
@@ -580,35 +581,20 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
   const productsToMove = rows.filter(row => productIds.includes(row[idxId]))
   if (productsToMove.length === 0) return { success: false, error: "Không tìm thấy sản phẩm cần chuyển" }
 
-  // Cập nhật trạng thái trong kho
-  const updatedRows = rows.map(row => {
-    if (productIds.includes(row[idxId])) {
-      row[idxTrangThai] = "Đang CNC"
-      if (doSim && idxDoSim !== -1) {
-        row[idxDoSim] = doSim
-      }
-    }
-    return row
-  })
-  const syncResult = await syncToGoogleSheets("Kho_Hang", updatedRows)
-  if (!syncResult.success) {
-    return { success: false, error: "Lỗi đồng bộ kho hàng: " + syncResult.error }
-  }
-
-  // Đọc dữ liệu sheet CNC
-  const { header: cncHeader, rows: cncRows } = await readFromGoogleSheets("CNC")
+  // ===== BƯỚC 1: ghi sang sheet CNC TRƯỚC =====
+  // Trước đây Kho_Hang được đổi "Đang CNC" trước; nếu bước ghi CNC lỗi thì máy biến mất
+  // khỏi cả 2 tab (kho hết "Còn hàng", CNC không có dòng) và không cách nào gửi lại.
+  // Ghi CNC trước nên khi lỗi kho vẫn nguyên "Còn hàng" và nhân viên bấm gửi lại được.
+  const { header: cncHeader, rows: cncRows } = await readFromGoogleSheets("CNC", undefined, { force: true })
   const idxCncId = colIndex(cncHeader, "ID Máy")
-  const idxCncTrangThai = colIndex(cncHeader, "Trạng Thái")
-  const idxCncNgayGui = colIndex(cncHeader, "Ngày gửi")
-  const idxCncDiaChi = colIndex(cncHeader, "Địa chỉ CNC")
-
+  const idxCncImei = colIndex(cncHeader, "IMEI", "Imei")
 
   // Ghi nhận thời gian theo múi giờ Việt Nam để tránh lệch UTC
   const nowVN = DateTime.now().setZone("Asia/Ho_Chi_Minh").toFormat("HH:mm:ss dd/MM/yyyy")
 
-  let newCncRows = [...cncRows]
+  const newCncRows = [...cncRows]
   for (const row of productsToMove) {
-    const idMay = row[idxId]
+    const idMay = String(row[idxId] || "").trim()
     // Map các trường đặc biệt nếu thiếu
     const imei = row[khoHeader.indexOf("IMEI")] || ""
     const nguon = (idxNguonKho !== -1 && row[idxNguonKho]) ? row[idxNguonKho] : "Kho trong"
@@ -622,19 +608,32 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
         const idxMau = colIndex(khoHeader, "Màu Sắc", "mau_sac")
         return idxMau !== -1 ? row[idxMau] : ""
       }
+      // Các cột dưới đây phải quyết định TRƯỚC khi tra sang Kho_Hang: "Trạng Thái" và
+      // "Dạng Sim" tồn tại ở cả 2 sheet, tra sang kho sẽ lấy giá trị cũ (kho chưa cập nhật).
+      if (col === "Trạng Thái") return "Đang CNC"
+      if (colIndex([col], "Dạng Sim", "Dạng sim", "Kiểu dạng sim") !== -1) {
+        if (doSim) return doSim
+        return idxDoSim !== -1 ? row[idxDoSim] : ""
+      }
+      if (col === "Địa chỉ CNC") return cncAddress
+      if (col === "Ngày gửi") return nowVN
       const idxInKho = colIndex(khoHeader, col)
       if (idxInKho !== -1) {
         return row[idxInKho]
       }
-      if (col === "Địa chỉ CNC") return cncAddress
-      if (col === "Ngày gửi") return nowVN
-      if (col === "Trạng Thái") return "Đang CNC"
       return ""
     })
-    // Nếu máy đã tồn tại trong sheet CNC thì cập nhật, nếu chưa thì thêm mới
-    const existIdx = newCncRows.findIndex(r => r[idxCncId] === idMay)
+    // Nếu máy đã tồn tại trong sheet CNC thì cập nhật, nếu chưa thì thêm mới.
+    // Chỉ so khớp khi định danh KHÁC RỖNG: sheet CNC hiện không có cột "ID Máy" nên
+    // idxCncId = -1 -> r[-1] là undefined, so sánh với ID rỗng sẽ khớp nhầm dòng đầu tiên
+    // và GHI ĐÈ lên máy khác thay vì thêm dòng mới.
+    const existIdx = newCncRows.findIndex(r => {
+      if (idxCncId !== -1 && idMay) return String(r[idxCncId] || "").trim() === idMay
+      if (idxCncImei !== -1 && imei) return String(r[idxCncImei] || "").trim() === String(imei).trim()
+      return false
+    })
     if (existIdx !== -1) {
-    newCncRows[existIdx] = newRow
+      newCncRows[existIdx] = newRow
     } else {
       newCncRows.push(newRow)
     }
@@ -644,9 +643,29 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
     return { success: false, error: "Lỗi đồng bộ sheet CNC: " + syncCncResult.error }
   }
 
-    // Ghi lịch sử trạng thái máy sẽ được gọi từ API, không ghi ở đây nữa
-    return { success: true, count: productsToMove.length }
+  // ===== BƯỚC 2: cập nhật trạng thái trong kho =====
+  const updatedRows = rows.map(row => {
+    if (productIds.includes(row[idxId])) {
+      row[idxTrangThai] = "Đang CNC"
+      if (doSim && idxDoSim !== -1) {
+        row[idxDoSim] = doSim
+      }
+    }
+    return row
+  })
+  const syncResult = await syncToGoogleSheets("Kho_Hang", updatedRows)
+  if (!syncResult.success) {
+    // Trả sheet CNC về nguyên trạng để không để lại dòng CNC mồ côi (kho vẫn "Còn hàng")
+    const rollback = await syncToGoogleSheets("CNC", cncRows)
+    const rollbackNote = rollback.success
+      ? ""
+      : " (LƯU Ý: không hoàn tác được sheet CNC, cần kiểm tra tay)"
+    return { success: false, error: "Lỗi đồng bộ kho hàng: " + syncResult.error + rollbackNote }
   }
+
+  // Ghi lịch sử trạng thái máy sẽ được gọi từ API, không ghi ở đây nữa
+  return { success: true, count: productsToMove.length }
+}
 
   // Lấy danh sách lịch sử bảo hành từ sheet Bao_Hanh
   export async function getBaoHanhHistory() {
