@@ -767,9 +767,40 @@ function statusForLongTermDebt(item: LongTermDebt): LongTermDebt["status"] {
   return "OPEN"
 }
 
+function profitFundColLetter(index: number) {
+  let colNum = index + 1
+  let letter = ""
+  while (colNum > 0) {
+    const mod = (colNum - 1) % 26
+    letter = String.fromCharCode(65 + mod) + letter
+    colNum = Math.floor((colNum - mod) / 26)
+  }
+  return letter
+}
+
+// Lãi của một đơn có thể thay đổi sau khi bán (ví dụ lúc xuất chưa điền giá nhập,
+// sau đó mới cập nhật). Vì vậy ngoài việc thêm đơn mới, hàm này còn ghi đè lại
+// số tiền của các dòng lãi tự động đã có nếu cột "Lãi" bên Ban_Hang đã đổi.
 async function syncProfitFundFromSales() {
-  const existing = await readProfitFundEntries()
-  const existingRefs = new Set(existing.filter((item) => item.type === "sale_profit").map((item) => `${item.refType}::${item.refId}`))
+  const { header: fundHeader, rows: fundRows } = await readFromGoogleSheets(SHEETS.PROFIT_FUND, undefined, { force: true })
+  const idxFundType = colIndex(fundHeader, "Loại")
+  const idxFundRefType = colIndex(fundHeader, "Ref Loại")
+  const idxFundRefId = colIndex(fundHeader, "Ref ID")
+  const idxFundAmount = colIndex(fundHeader, "Số Tiền")
+  if (idxFundRefId === -1 || idxFundAmount === -1) return
+
+  // refId -> dòng lãi tự động đầu tiên (số dòng thật trên sheet, đã tính header)
+  const existingSaleRows = new Map<string, { rowNumber: number; amount: number }>()
+  fundRows.forEach((row, index) => {
+    if (!String(row[0] || "").trim()) return
+    const type = String(row[idxFundType] || "").trim()
+    const refType = idxFundRefType === -1 ? "" : String(row[idxFundRefType] || "").trim()
+    if (type !== "sale_profit" && refType !== "sale_profit") return
+    const refId = String(row[idxFundRefId] || "").trim()
+    if (!refId || existingSaleRows.has(refId)) return
+    existingSaleRows.set(refId, { rowNumber: index + 2, amount: toNumber(row[idxFundAmount]) })
+  })
+
   const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force: true })
   const idxId = colIndex(header, "ID Đơn Hàng")
   const idxDate = colIndex(header, "Ngày Bán", "Ngày Xuất")
@@ -792,15 +823,25 @@ async function syncProfitFundFromSales() {
     grouped.set(orderId, current)
   }
 
+  const amountCol = profitFundColLetter(idxFundAmount)
   const rowsToAppend: any[][] = []
+  const updates: Array<{ range: string; values: any[][] }> = []
   for (const [orderId, item] of grouped.entries()) {
     const refType = "sale_profit"
     const refId = orderId
-    if (existingRefs.has(`${refType}::${refId}`)) continue
-    if (!Number.isFinite(item.profit) || item.profit === 0) continue
+    const profit = Number.isFinite(item.profit) ? item.profit : 0
+    const existing = existingSaleRows.get(refId)
+    if (existing) {
+      // Chênh dưới 1 đồng coi như không đổi (tránh ghi lại vì sai số làm tròn).
+      if (Math.abs(existing.amount - profit) >= 1) {
+        updates.push({ range: `'${SHEETS.PROFIT_FUND}'!${amountCol}${existing.rowNumber}`, values: [[profit]] })
+      }
+      continue
+    }
+    if (profit === 0) continue
     rowsToAppend.push(buildProfitFundRow({
       date: item.date,
-      amount: item.profit,
+      amount: profit,
       type: "sale_profit",
       refType,
       refId,
@@ -810,6 +851,10 @@ async function syncProfitFundFromSales() {
       automatic: true,
       createdBy: "system",
     }))
+  }
+
+  if (updates.length) {
+    await batchUpdateRangeValues(updates)
   }
 
   if (rowsToAppend.length) {
