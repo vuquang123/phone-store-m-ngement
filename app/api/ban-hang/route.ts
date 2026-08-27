@@ -616,7 +616,7 @@ export async function POST(request: NextRequest) {
   const receiptFileId = getReceiptFileId(rawReceiptPayload)
     // Tự động sinh ID đơn hàng DH00001-DH99999
     let idDonHang = ""
-    const idxIdDon = header.indexOf("ID Đơn Hàng")
+    const idxIdDon = colIndex(header, "ID Đơn Hàng", "Mã Đơn Hàng", "Mã đơn hàng", "Ma Don Hang", "Mã Đơn", "ID")
     if (idxIdDon !== -1) {
       // Tìm số lớn nhất hiện có
       let maxNum = 0
@@ -752,7 +752,14 @@ export async function POST(request: NextRequest) {
       const doiTacSDT = may.sdt_doi_tac || body.sdt_doi_tac || may["SĐT Đối Tác"] || body["SĐT Đối Tác"] || ""
 
       const newRow = header.map((k) => {
-        if (k === "ID Đơn Hàng") return idDonHang;
+        if (
+          k === "ID Đơn Hàng" ||
+          k === "Mã Đơn Hàng" ||
+          k === "Mã đơn hàng" ||
+          k === "Ma Don Hang" ||
+          k === "Mã Đơn" ||
+          k === "ID"
+        ) return idDonHang;
         if (norm(k) === "ngay_ban" || norm(k) === "ngay_xuat") {
           // FE gửi khoá "Ngày Xuất"; sheet dùng cột "Ngày bán" -> chấp nhận cả hai.
           return (
