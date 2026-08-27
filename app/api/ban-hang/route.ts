@@ -147,7 +147,7 @@ async function tryRemovePartnerRowByIMEI(imei: string) {
 /* =================== Sheet-specific index helpers =================== */
 function idxBanHang(header: string[]) {
   return {
-    idDon: colIndex(header, "ID Đơn Hàng"),
+    idDon: colIndex(header, "ID Đơn Hàng", "Mã Đơn Hàng", "Mã đơn hàng", "Ma Don Hang", "Mã Đơn", "ID"),
     // Sheet dùng tên "Ngày bán"; giữ "Ngày Xuất" làm alias cho dữ liệu cũ.
     ngayXuat: colIndex(header, "Ngày Bán", "Ngày bán", "Ngày Xuất", "ngay_ban"),
     tenKH: colIndex(header, "Tên Khách Hàng"),
@@ -317,7 +317,7 @@ export async function GET(request: NextRequest) {
     const groupedOrdersMap = new Map<string, any[]>()
     
     rows.forEach((row, rowIndex) => {
-      const orderId = String(row[idx.idDon] || "").trim() || `row-${rowIndex}`
+      const orderId = String((idx.idDon !== -1 ? row[idx.idDon] : "") || "").trim() || `row-${rowIndex}`
       if (!groupedOrdersMap.has(orderId)) {
         groupedOrdersMap.set(orderId, [])
       }

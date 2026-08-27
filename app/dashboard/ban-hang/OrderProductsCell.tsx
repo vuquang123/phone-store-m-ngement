@@ -15,13 +15,14 @@ export default function OrderProductsCell({ orderId, editableCosts = false }: Pr
   const [expanded, setExpanded] = useState(false)
   const [costDrafts, setCostDrafts] = useState<Record<string, string>>({})
   const [savingKey, setSavingKey] = useState<string | null>(null)
+  const encodedOrderId = encodeURIComponent(String(orderId || "").trim())
 
   const loadOrderProducts = () => {
-    if (!orderId) {
+    if (!encodedOrderId) {
       setProducts([])
       return
     }
-    fetch(`/api/ban-hang/${orderId}`)
+    fetch(`/api/ban-hang/${encodedOrderId}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         const chiTiet = Array.isArray(data?.chi_tiet) ? data.chi_tiet : []
@@ -39,8 +40,8 @@ export default function OrderProductsCell({ orderId, editableCosts = false }: Pr
 
   useEffect(() => {
     let mounted = true
-    if (!orderId) { setProducts([]); return }
-    fetch(`/api/ban-hang/${orderId}`)
+    if (!encodedOrderId) { setProducts([]); return }
+    fetch(`/api/ban-hang/${encodedOrderId}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!mounted) return
@@ -61,14 +62,14 @@ export default function OrderProductsCell({ orderId, editableCosts = false }: Pr
         }
       })
     return () => { mounted = false }
-  }, [orderId])
+  }, [encodedOrderId])
 
   const saveGiaNhap = async (item: any) => {
     if (!editableCosts || !item?.row_number) return
     const nextGiaNhap = Number(String(costDrafts[item.id] || "").replace(/[^\d]/g, ""))
     setSavingKey(item.id)
     try {
-      const res = await fetch(`/api/ban-hang/${encodeURIComponent(orderId)}`, {
+      const res = await fetch(`/api/ban-hang/${encodedOrderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,6 +1,6 @@
 // API chi tiết đơn hàng: /api/ban-hang/[orderId]
 import { type NextRequest, NextResponse } from "next/server"
-import { batchUpdateRangeValues, readFromGoogleSheets } from "@/lib/google-sheets"
+import { batchUpdateRangeValues, colIndex as findSheetColIndex, readFromGoogleSheets } from "@/lib/google-sheets"
 import { extractGhtkCode } from "@/lib/ghtk-status"
 
 const SHEET_NAME = "Ban_Hang"
@@ -156,16 +156,10 @@ async function requireManager(request: NextRequest) {
 export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderId: string }> }) {
   try {
     const { orderId: orderIdRaw } = await ctx.params
-    const orderId = orderIdRaw.trim()
+    const orderId = decodeURIComponent(orderIdRaw).trim()
     const { header, rows } = await readFromGoogleSheets(SHEET_NAME)
 
-    const colIndex = (...names: string[]) => {
-      for (const n of names) {
-        const i = header.indexOf(n)
-        if (i !== -1) return i
-      }
-      return -1
-    }
+    const colIndex = (...names: string[]) => findSheetColIndex(header, ...names)
 
     const idxIdDon = colIndex("ID Đơn Hàng", "Mã Đơn Hàng", "ID", "Id", "id")
     if (idxIdDon === -1) {
@@ -177,7 +171,7 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderI
       return NextResponse.json({ error: "Không tìm thấy đơn hàng" }, { status: 404 })
     }
 
-    const idx = (name: string) => header.indexOf(name)
+    const idx = (...names: string[]) => colIndex(...names)
     const idxNguon = (() => {
       const i1 = header.indexOf("Nguồn Hàng")
       const i2 = header.indexOf("Nguồn")
@@ -231,8 +225,8 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderI
             id: `${orderId}_${i}`,
             row_number: absoluteRowIndex + 2,
             so_luong: 1,
-            gia_ban: parseInt((row[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0,
-            thanh_tien: parseInt((row[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0,
+            gia_ban: parseInt(String(row[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0,
+            thanh_tien: parseInt(String(row[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0,
             gia_nhap: idxGiaNhap !== -1
               ? Math.max(0, toNumber(row[idxGiaNhap]) - (i === 0 ? accessoryCost : 0))
               : 0,
@@ -250,11 +244,11 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderI
         })
         .filter(Boolean) as any[],
       tong_tien: orderRows.reduce((s, r) => {
-        const gia = parseInt((r[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0
+        const gia = parseInt(String(r[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0
         return s + (isMachineRow(r) ? gia : 0)
       }, 0),
       thanh_toan: orderRows.reduce((s, r) => {
-        const gia = parseInt((r[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0
+        const gia = parseInt(String(r[idx("Giá Bán")] || "").replace(/[^\d]/g, "")) || 0
         return s + (isMachineRow(r) ? gia : 0)
       }, 0),
       giam_gia: 0,
@@ -286,7 +280,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ order
     if (!auth.ok) return auth.response
 
     const { orderId: orderIdRaw } = await ctx.params
-    const orderId = orderIdRaw.trim()
+    const orderId = decodeURIComponent(orderIdRaw).trim()
     const body = await request.json()
     const updates = Array.isArray(body?.updates)
       ? body.updates
@@ -297,13 +291,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ order
     }
 
     const { header, rows } = await readFromGoogleSheets(SHEET_NAME, undefined, { force: true })
-    const colIndex = (...names: string[]) => {
-      for (const n of names) {
-        const i = header.indexOf(n)
-        if (i !== -1) return i
-      }
-      return -1
-    }
+    const colIndex = (...names: string[]) => findSheetColIndex(header, ...names)
     const idxIdDon = colIndex("ID Đơn Hàng", "Mã Đơn Hàng", "ID", "Id", "id")
     const idxGiaNhap = colIndex("Giá Nhập", "Gia Nhap")
     const idxLai = colIndex("Lãi", "Lai")
