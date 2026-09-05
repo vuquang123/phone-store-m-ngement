@@ -2,31 +2,20 @@
 // Kiểu dữ liệu + hàm dựng message báo cáo check-in đầu ca (gửi Telegram, parse_mode HTML).
 
 import { DateTime } from "luxon"
-import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, khoColIndex } from "@/lib/google-sheets"
 import { parseVietnameseNumber } from "@/lib/number"
+import {
+  SERIES_KEYS,
+  SERIES_LABELS,
+  classifySeries,
+  emptySeries,
+  stripVi,
+  type CheckinInput,
+  type KhoCounts,
+  type WebStock,
+} from "@/lib/check-in-shared"
 
-export type Ca = "1" | "2" | "3"
-export type TrangThai = "khop" | "khong_khop"
-
-export interface KhoCounts {
-  website: number
-  thucTe: number
-  s17: number
-  s16: number
-  s15: number
-  ipad: number
-  khac: number
-}
-
-export interface CheckinInput {
-  ca: Ca
-  khoNgoai: KhoCounts
-  khoTrong: KhoCounts
-  trangThai: TrangThai
-  lyDo?: string
-  tienMat?: number // tiền mặt đầu ca (VNĐ)
-  nhanVien?: string
-}
+export * from "@/lib/check-in-shared"
 
 // Escape ký tự đặc biệt cho parse_mode HTML của Telegram.
 function esc(s: any): string {
@@ -47,20 +36,20 @@ export function buildCheckinMessage(input: CheckinInput): string {
       ? `KHỚP WEB ${tongThucTe}/${tongWebsite}`
       : `KHÔNG KHỚP - ${esc(lyDo || "")}`
 
+  // Mỗi dòng máy hiển thị "thực tế/web"; đơn nào chưa có số web (dữ liệu cũ) thì chỉ hiện thực tế.
+  const seriesLines = (k: KhoCounts) =>
+    SERIES_KEYS.map((key) => {
+      const thucTe = Number(k[key]) || 0
+      const web = k.web ? Number(k.web[key]) || 0 : null
+      return `${SERIES_LABELS[key]}: [${web === null ? thucTe : `${thucTe}/${web}`}]`
+    })
+
   const lines: string[] = [
     `Báo cáo check in ca ${esc(ca)}`,
     `  - KHO NGOÀI: Tổng máy ${khoNgoai.thucTe}/${khoNgoai.website}`,
-    `17 Series: [${khoNgoai.s17}]`,
-    `16 Series: [${khoNgoai.s16}]`,
-    `15 Series: [${khoNgoai.s15}]`,
-    `Ipad: [${khoNgoai.ipad}]`,
-    `Khác (14/13/12/Lẻ): [${khoNgoai.khac}]`,
+    ...seriesLines(khoNgoai),
     `- KHO TRONG: Tổng ${khoTrong.thucTe}/${khoTrong.website}`,
-    `17 Series: [${khoTrong.s17}]`,
-    `16 Series: [${khoTrong.s16}]`,
-    `15 Series: [${khoTrong.s15}]`,
-    `Ipad: [${khoTrong.ipad}]`,
-    `Khác (14/13/12/Lẻ): [${khoTrong.khac}]`,
+    ...seriesLines(khoTrong),
     `TRẠNG THÁI : ${statusLine}`,
     `Tiền mặt đầu ca: [${tienMat ? `${Math.round(tienMat / 1000)}k` : "0"}]`,
   ]
@@ -76,14 +65,18 @@ export function buildCheckinMessage(input: CheckinInput): string {
 // ===================== LƯU LỊCH SỬ CHECK-IN VÀO SHEET "Check_in" =====================
 
 const SHEET = "Check_in"
-// 24 cột (A:X). KN = Kho Ngoài, KT = Kho Trong.
+// 34 cột (A:AH). KN = Kho Ngoài, KT = Kho Trong.
+// "KN 17"... là số ĐẾM THỰC TẾ theo dòng máy (giữ nguyên vị trí cũ để không vỡ lịch sử);
+// 10 cột "… Web …" được thêm ở CUỐI nên các dòng cũ vẫn đọc đúng.
 const HEADER = [
   "ID", "Thời Gian", "Nhân Viên", "Ca", "Trạng Thái", "Lý Do",
   "KN Website", "KN Thực Tế", "KN 17", "KN 16", "KN 15", "KN Ipad", "KN Khác",
   "KT Website", "KT Thực Tế", "KT 17", "KT 16", "KT 15", "KT Ipad", "KT Khác",
   "Tổng Web", "Tổng Thực Tế", "Số Ảnh", "Tiền Mặt",
+  "KN Web 17", "KN Web 16", "KN Web 15", "KN Web Ipad", "KN Web Khác",
+  "KT Web 17", "KT Web 16", "KT Web 15", "KT Web Ipad", "KT Web Khác",
 ]
-const HEADER_RANGE = `'${SHEET}'!A1:X1`
+const HEADER_RANGE = `'${SHEET}'!A1:AH1`
 
 function genId(): string {
   try {
@@ -129,6 +122,8 @@ export async function saveCheckin(input: CheckinInput, soAnh = 0): Promise<{ id:
     (kn.thucTe || 0) + (kt.thucTe || 0),
     soAnh,
     Number(input.tienMat) || 0,
+    ...SERIES_KEYS.map((k) => Number(kn.web?.[k]) || 0),
+    ...SERIES_KEYS.map((k) => Number(kt.web?.[k]) || 0),
   ]
   await appendToGoogleSheets(SHEET, row)
   return { id }
@@ -174,11 +169,19 @@ export async function getCheckins(force = false): Promise<CheckinRecord[]> {
         website: toNum(g(r, "KN Website")), thucTe: toNum(g(r, "KN Thực Tế")),
         s17: toNum(g(r, "KN 17")), s16: toNum(g(r, "KN 16")), s15: toNum(g(r, "KN 15")),
         ipad: toNum(g(r, "KN Ipad")), khac: toNum(g(r, "KN Khác")),
+        web: {
+          s17: toNum(g(r, "KN Web 17")), s16: toNum(g(r, "KN Web 16")), s15: toNum(g(r, "KN Web 15")),
+          ipad: toNum(g(r, "KN Web Ipad")), khac: toNum(g(r, "KN Web Khác")),
+        },
       },
       khoTrong: {
         website: toNum(g(r, "KT Website")), thucTe: toNum(g(r, "KT Thực Tế")),
         s17: toNum(g(r, "KT 17")), s16: toNum(g(r, "KT 16")), s15: toNum(g(r, "KT 15")),
         ipad: toNum(g(r, "KT Ipad")), khac: toNum(g(r, "KT Khác")),
+        web: {
+          s17: toNum(g(r, "KT Web 17")), s16: toNum(g(r, "KT Web 16")), s15: toNum(g(r, "KT Web 15")),
+          ipad: toNum(g(r, "KT Web Ipad")), khac: toNum(g(r, "KT Web Khác")),
+        },
       },
     }))
 
@@ -187,4 +190,49 @@ export async function getCheckins(force = false): Promise<CheckinRecord[]> {
     return m ? new Date(+m[6], +m[5] - 1, +m[4], +m[1], +m[2], +m[3]).getTime() : 0
   }
   return list.sort((a, b) => ts(b.thoi_gian) - ts(a.thoi_gian))
+}
+
+// ===================== SỐ MÁY TỒN TRÊN WEBSITE (sheet "Kho_Hang") =====================
+
+const KHO_HANG_SHEET = "Kho_Hang"
+
+/**
+ * Đếm máy đang tồn trên website theo cột "Trạng Thái Kho" của sheet Kho_Hang
+ * ("Kho trong" / "Kho ngoài"), tách theo từng dòng máy.
+ */
+export async function getWebStockCounts(force = false): Promise<WebStock> {
+  const { header, rows } = await readFromGoogleSheets(KHO_HANG_SHEET, undefined, { force })
+  const iTen = colIndex(header, "Tên Sản Phẩm")
+  const iKho = khoColIndex(header)
+  const iId = colIndex(header, "ID Máy")
+  const iImei = colIndex(header, "IMEI")
+  const iSerial = colIndex(header, "Serial")
+
+  const khoNgoai = { ...emptySeries(), total: 0 }
+  const khoTrong = { ...emptySeries(), total: 0 }
+
+  if (iKho !== -1) {
+    for (const row of rows || []) {
+      if (!row || !row.length) continue
+      // Bỏ dòng trống: phải có ít nhất 1 định danh máy.
+      const hasDevice = [iId, iImei, iSerial].some((i) => i !== -1 && String(row[i] || "").trim())
+      if (!hasDevice) continue
+
+      const kho = stripVi(row[iKho])
+      if (!kho) continue
+      const bucket = kho.includes("ngoai")
+        ? khoNgoai
+        : (kho.includes("trong") || kho.includes("co san") ? khoTrong : null)
+      if (!bucket) continue
+
+      bucket[classifySeries(iTen !== -1 ? String(row[iTen] || "") : "")] += 1
+      bucket.total += 1
+    }
+  }
+
+  return {
+    khoNgoai,
+    khoTrong,
+    capturedAt: DateTime.now().setZone("Asia/Ho_Chi_Minh").toFormat("HH:mm:ss dd/MM/yyyy"),
+  }
 }

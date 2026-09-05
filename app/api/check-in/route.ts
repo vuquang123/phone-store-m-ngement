@@ -3,7 +3,7 @@
 
 import dns from "node:dns"
 import { NextRequest, NextResponse } from "next/server"
-import { buildCheckinMessage, saveCheckin, getCheckins, type Ca, type TrangThai, type KhoCounts } from "@/lib/check-in"
+import { buildCheckinMessage, saveCheckin, getCheckins, type Ca, type TrangThai, type KhoCounts, type SeriesCounts } from "@/lib/check-in"
 import { sendTelegramMessage, sendTelegramPhotoBase64, sendTelegramMediaGroup } from "@/lib/telegram"
 import { getServerUser } from "@/lib/auth"
 
@@ -32,14 +32,19 @@ const num = (v: any): number => {
   return Number.isFinite(n) ? n : 0
 }
 
+const normSeries = (s: any): SeriesCounts => ({
+  s17: num(s?.s17),
+  s16: num(s?.s16),
+  s15: num(s?.s15),
+  ipad: num(s?.ipad),
+  khac: num(s?.khac),
+})
+
 const normCounts = (k: any): KhoCounts => ({
+  ...normSeries(k), // s17..khac = số đếm thực tế theo dòng máy
   website: num(k?.website),
   thucTe: num(k?.thucTe),
-  s17: num(k?.s17),
-  s16: num(k?.s16),
-  s15: num(k?.s15),
-  ipad: num(k?.ipad),
-  khac: num(k?.khac),
+  web: normSeries(k?.web), // số trên website theo dòng máy
 })
 
 export async function POST(req: NextRequest) {

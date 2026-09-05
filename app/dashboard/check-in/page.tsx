@@ -1,7 +1,7 @@
 // app/dashboard/check-in/page.tsx
 "use client"
 
-import { useRef, useState } from "react"
+import { Fragment, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
@@ -15,7 +15,14 @@ import { Badge } from "@/components/ui/badge"
 import { ResponsiveTable } from "@/components/ui/responsive-table"
 import { RefreshButton } from "@/components/ui/refresh-button"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, ImagePlus, X, Send } from "lucide-react"
+import { Loader2, ImagePlus, X, Send, Copy } from "lucide-react"
+import {
+  SERIES_KEYS,
+  SERIES_LABELS,
+  type SeriesCounts,
+  type SeriesKey,
+  type WebStock,
+} from "@/lib/check-in-shared"
 
 interface CheckinRow {
   id: string
@@ -30,20 +37,11 @@ interface CheckinRow {
   tien_mat: number
 }
 
-type KhoKey = "website" | "thucTe" | "s17" | "s16" | "s15" | "ipad" | "khac"
-type CountState = Record<KhoKey, string>
+// Người dùng chỉ nhập số ĐẾM THỰC TẾ theo từng dòng máy; cột Website lấy tự động từ Kho_Hang.
+type CountState = Record<SeriesKey, string>
 
-const FIELDS: { key: KhoKey; label: string }[] = [
-  { key: "website", label: "Website" },
-  { key: "thucTe", label: "Thực tế" },
-  { key: "s17", label: "17 Series" },
-  { key: "s16", label: "16 Series" },
-  { key: "s15", label: "15 Series" },
-  { key: "ipad", label: "Ipad" },
-  { key: "khac", label: "Khác (14/13/12/Lẻ)" },
-]
-
-const EMPTY: CountState = { website: "", thucTe: "", s17: "", s16: "", s15: "", ipad: "", khac: "" }
+const EMPTY: CountState = { s17: "", s16: "", s15: "", ipad: "", khac: "" }
+const EMPTY_WEB: SeriesCounts & { total: number } = { s17: 0, s16: 0, s15: 0, ipad: 0, khac: 0, total: 0 }
 const MAX_IMAGES = 6
 
 const n = (v: string) => Number(v || 0) || 0
@@ -71,6 +69,25 @@ export default function CheckInPage() {
       staleTime: 30_000,
     })
 
+  const {
+    data: webStock,
+    isLoading: loadingStock,
+    isFetching: fetchingStock,
+    refetch: refetchStock,
+  } = useQuery<WebStock | null>({
+    queryKey: ["check-in-web-stock"],
+    queryFn: async () => {
+      const res = await fetch("/api/check-in/ton-kho?refresh=1", { cache: "no-store" })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json?.success) throw new Error(json?.message || "Không đọc được tồn kho website")
+      return json.data as WebStock
+    },
+    staleTime: 60_000,
+  })
+
+  const webKhoNgoai = webStock?.khoNgoai ?? EMPTY_WEB
+  const webKhoTrong = webStock?.khoTrong ?? EMPTY_WEB
+
   const [ca, setCa] = useState("1")
   const [khoNgoai, setKhoNgoai] = useState<CountState>({ ...EMPTY })
   const [khoTrong, setKhoTrong] = useState<CountState>({ ...EMPTY })
@@ -82,7 +99,12 @@ export default function CheckInPage() {
 
   const tienMatDisplay = tienMatRaw ? Number(tienMatRaw).toLocaleString("vi-VN") : ""
 
-  const lineTotal = (k: CountState) => n(k.s17) + n(k.s16) + n(k.s15) + n(k.ipad) + n(k.khac)
+  const lineTotal = (k: CountState) => SERIES_KEYS.reduce((sum, key) => sum + n(k[key]), 0)
+
+  const copyFromWeb = (
+    web: SeriesCounts,
+    setState: React.Dispatch<React.SetStateAction<CountState>>,
+  ) => setState(SERIES_KEYS.reduce((acc, k) => ({ ...acc, [k]: String(web[k]) }), {} as CountState))
 
   const onPickImages = (files: FileList | null) => {
     if (!files || !files.length) return
@@ -117,22 +139,23 @@ export default function CheckInPage() {
     }
     setSubmitting(true)
     try {
-      const toNums = (k: CountState) => ({
-        website: n(k.website),
-        thucTe: n(k.thucTe),
-        s17: n(k.s17),
-        s16: n(k.s16),
-        s15: n(k.s15),
-        ipad: n(k.ipad),
-        khac: n(k.khac),
+      // Tổng thực tế = cộng dồn các dòng máy; tổng website lấy thẳng từ Kho_Hang.
+      const pickSeries = <T,>(get: (key: SeriesKey) => T) =>
+        SERIES_KEYS.reduce((acc, key) => ({ ...acc, [key]: get(key) }), {} as Record<SeriesKey, T>)
+
+      const toNums = (k: CountState, web: SeriesCounts & { total: number }) => ({
+        website: web.total,
+        thucTe: lineTotal(k),
+        ...pickSeries((key) => n(k[key])),
+        web: pickSeries((key) => web[key]),
       })
       const res = await fetch("/api/check-in", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ca,
-          khoNgoai: toNums(khoNgoai),
-          khoTrong: toNums(khoTrong),
+          khoNgoai: toNums(khoNgoai, webKhoNgoai),
+          khoTrong: toNums(khoTrong, webKhoTrong),
           trangThai,
           lyDo: trangThai === "khong_khop" ? lyDo : undefined,
           tienMat: Number(tienMatRaw || 0) || 0,
@@ -144,6 +167,7 @@ export default function CheckInPage() {
       toast({ title: "Đã gửi báo cáo check-in" })
       resetForm()
       queryClient.invalidateQueries({ queryKey: ["check-in-history"] })
+      queryClient.invalidateQueries({ queryKey: ["check-in-web-stock"] })
     } catch (e: any) {
       toast({ title: "Lỗi", description: e?.message || "Có lỗi xảy ra", variant: "destructive" })
     } finally {
@@ -155,36 +179,88 @@ export default function CheckInPage() {
     title: string,
     state: CountState,
     setState: React.Dispatch<React.SetStateAction<CountState>>,
-  ) => (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          {FIELDS.map((f) => (
-            <div key={f.key} className="space-y-1">
-              <Label className="text-xs text-muted-foreground">{f.label}</Label>
-              <Input
-                type="number"
-                min={0}
-                inputMode="numeric"
-                placeholder="0"
-                value={state[f.key]}
-                onChange={(e) => setState((prev) => ({ ...prev, [f.key]: e.target.value }))}
-              />
+    web: SeriesCounts & { total: number },
+  ) => {
+    const tongThucTe = lineTotal(state)
+    const lech = tongThucTe - web.total
+    const chuaDem = SERIES_KEYS.every((k) => state[k] === "")
+    const slug = title.toLowerCase().replace(/[^a-z]+/g, "-")
+    return (
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-2 pb-3">
+          <CardTitle className="text-base">{title}</CardTitle>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+            onClick={() => copyFromWeb(web, setState)}
+            disabled={loadingStock}
+          >
+            <Copy className="h-3 w-3" />
+            Chép từ website
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-[1fr_64px_84px] items-center gap-x-2 gap-y-1.5">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Dòng máy</span>
+            <span className="text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Website</span>
+            <span className="text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Thực tế</span>
+
+            {SERIES_KEYS.map((key) => {
+              const thucTe = n(state[key])
+              const lechDong = state[key] !== "" && thucTe !== web[key]
+              return (
+                <Fragment key={key}>
+                  <Label htmlFor={`${slug}-${key}`} className="text-xs font-normal text-muted-foreground">
+                    {SERIES_LABELS[key]}
+                  </Label>
+                  <div
+                    className={`flex h-9 items-center justify-center rounded-md border bg-muted/40 text-sm tabular-nums ${
+                      lechDong ? "border-amber-400 text-amber-600 dark:text-amber-400" : ""
+                    }`}
+                    title="Số máy đang tồn trên website (tự động)"
+                  >
+                    {loadingStock ? <Loader2 className="h-3 w-3 animate-spin" /> : web[key]}
+                  </div>
+                  <Input
+                    id={`${slug}-${key}`}
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    placeholder="0"
+                    className={`h-9 text-center tabular-nums ${lechDong ? "border-amber-400" : ""}`}
+                    value={state[key]}
+                    onChange={(e) => setState((prev) => ({ ...prev, [key]: e.target.value }))}
+                  />
+                </Fragment>
+              )
+            })}
+
+            <span className="text-xs font-semibold">Tổng</span>
+            <div className="flex h-9 items-center justify-center rounded-md border border-transparent text-sm font-semibold tabular-nums">
+              {loadingStock ? "—" : web.total}
             </div>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Tổng theo dòng máy: <span className="font-semibold text-foreground">{lineTotal(state)}</span>
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Đếm từng loại máy ở kho thực tế để đối chiếu với số liệu website
-        </p>
-      </CardContent>
-    </Card>
-  )
+            <div className="flex h-9 items-center justify-center rounded-md border border-transparent text-sm font-semibold tabular-nums">
+              {tongThucTe}
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            {chuaDem ? (
+              "Chưa đếm thực tế"
+            ) : lech === 0 ? (
+              <span className="text-emerald-600 dark:text-emerald-400">Khớp với website</span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400">
+                Lệch {lech > 0 ? `+${lech}` : lech} máy so với website
+              </span>
+            )}
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <ProtectedRoute>
@@ -220,9 +296,17 @@ export default function CheckInPage() {
         </div>
 
         {/* 2 kho */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            Cột <span className="font-medium text-foreground">Website</span> lấy tự động từ kho hàng trên web
+            {webStock?.capturedAt ? ` (lúc ${webStock.capturedAt})` : ""}. Đếm máy thực tế rồi điền vào cột{" "}
+            <span className="font-medium text-foreground">Thực tế</span>.
+          </p>
+          <RefreshButton onRefresh={() => { refetchStock() }} loading={fetchingStock} />
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
-          {renderKhoCard("KHO NGOÀI", khoNgoai, setKhoNgoai)}
-          {renderKhoCard("KHO TRONG", khoTrong, setKhoTrong)}
+          {renderKhoCard("KHO NGOÀI", khoNgoai, setKhoNgoai, webKhoNgoai)}
+          {renderKhoCard("KHO TRONG", khoTrong, setKhoTrong, webKhoTrong)}
         </div>
 
         {/* Trạng thái */}
