@@ -65,19 +65,38 @@ function findAccessoryRowIndex(
   indexes: { id: number; tenSP?: number; loai?: number },
   accessory: any,
 ) {
-  const rawId = String(accessory?.id || "").trim()
-  if (rawId && indexes.id !== -1) {
-    const byId = rows.findIndex((row) => String(row[indexes.id] || "").trim() === rawId)
-    if (byId !== -1) return byId
-  }
+  const nameOf = (row: any[]) =>
+    indexes.tenSP !== undefined && indexes.tenSP !== -1 ? norm(String(row[indexes.tenSP] || "")) : ""
+  const typeOf = (row: any[]) =>
+    indexes.loai !== undefined && indexes.loai !== -1 ? norm(String(row[indexes.loai] || "")) : ""
 
   const targetName = norm(String(accessory?.ten_phu_kien || accessory?.ten || accessory?.name || accessory?.ten_san_pham || ""))
   const targetType = norm(String(accessory?.loai || accessory?.loai_phu_kien || ""))
+
+  const rawId = String(accessory?.id || "").trim()
+  if (rawId && indexes.id !== -1) {
+    // Sheet Phu_Kien có thể bị nhập trùng ID (vd 2 dòng cùng "PK51"). Nếu chỉ lấy
+    // dòng đầu tiên khớp ID thì sẽ trừ tồn / lấy giá nhập của SAI sản phẩm.
+    const byId: number[] = []
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i]?.[indexes.id] || "").trim() === rawId) byId.push(i)
+    }
+    if (byId.length === 1) return byId[0]
+    if (byId.length > 1) {
+      const exact = byId.find((i) => targetName && nameOf(rows[i]) === targetName && (!targetType || typeOf(rows[i]) === targetType))
+      if (exact !== undefined) return exact
+      const byName = byId.find((i) => targetName && nameOf(rows[i]) === targetName)
+      if (byName !== undefined) return byName
+      console.warn(`[Phu_Kien] ID "${rawId}" bị trùng ${byId.length} dòng và không khớp tên "${accessory?.ten_phu_kien || ""}" — dùng dòng đầu tiên.`)
+      return byId[0]
+    }
+  }
+
   if (!targetName) return -1
 
   return rows.findIndex((row) => {
-    const rowName = indexes.tenSP !== undefined && indexes.tenSP !== -1 ? norm(String(row[indexes.tenSP] || "")) : ""
-    const rowType = indexes.loai !== undefined && indexes.loai !== -1 ? norm(String(row[indexes.loai] || "")) : ""
+    const rowName = nameOf(row)
+    const rowType = typeOf(row)
     if (rowName !== targetName) return false
     if (!targetType) return true
     return rowType === targetType
@@ -989,13 +1008,23 @@ export async function POST(request: NextRequest) {
       }
       for (const pk of normalizedAccessories) {
         const foundIdx = findAccessoryRowIndex(rows, idx, pk)
-        if (foundIdx !== -1 && idx.soLuong !== -1) {
-          let current = Number(rows[foundIdx][idx.soLuong] || 0)
-          let sold = pk.so_luong !== undefined ? Number(pk.so_luong) : (pk.sl !== undefined ? Number(pk.sl) : 1)
-          if (!Number.isFinite(sold) || sold <= 0) sold = 1
-          let newQty = Math.max(current - sold, 0)
-          const rowNumber = foundIdx + 2 // Google Sheets row index (1-based, header is row 1)
+        if (foundIdx === -1 || idx.soLuong === -1) {
+          // Không tìm thấy dòng -> tồn kho sẽ lệch, cần log để phát hiện sớm.
+          console.warn("[Phu_Kien] Không tìm thấy dòng để trừ tồn:", {
+            id: pk?.id, ten: pk?.ten_phu_kien || pk?.ten, loai: pk?.loai, hasSoLuongCol: idx.soLuong !== -1,
+          })
+          continue
+        }
+        let current = Number(rows[foundIdx][idx.soLuong] || 0)
+        let sold = pk.so_luong !== undefined ? Number(pk.so_luong) : (pk.sl !== undefined ? Number(pk.sl) : 1)
+        if (!Number.isFinite(sold) || sold <= 0) sold = 1
+        let newQty = Math.max(current - sold, 0)
+        const rowNumber = foundIdx + 2 // Google Sheets row index (1-based, header is row 1)
+        try {
           await updateRangeValues(`Phu_Kien!${toColumnLetter(idx.soLuong + 1)}${rowNumber}`, [[newQty]])
+        } catch (e) {
+          // Đơn đã ghi xong ở trên: không trả 500 làm FE báo lỗi sai, chỉ log lại.
+          console.error("[Phu_Kien] Trừ tồn thất bại:", { id: pk?.id, rowNumber, newQty }, e)
         }
       }
     }
