@@ -834,7 +834,9 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
       } else {
         // Sửa: luôn hiện số tiền từng phương thức, nếu có
         const amt = parseVietnameseNumber(p.amount)
-        const amtStr = Number.isFinite(amt) ? ` ₫${amt.toLocaleString('vi-VN')}` : ''
+        // Khoản shop trả LẠI khách (thu máy xuống đời) là tiền ra -> hiện dấu trừ.
+        const isRefund = /trả\s*lại\s*khách|tra\s*lai\s*khach/i.test(String(p.method || ''))
+        const amtStr = Number.isFinite(amt) ? ` ${isRefund ? '-' : ''}₫${amt.toLocaleString('vi-VN')}` : ''
         lines.push(`• ${method}${amtStr}`)
       }
     }

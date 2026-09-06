@@ -273,6 +273,16 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
     return 'bg-muted text-foreground'
   }
 
+  // Khoản shop trả LẠI cho khách (thu máy xuống đời) — chuỗi này cũng chứa
+  // "tiền mặt"/"chuyển khoản" nên mọi chỗ nhận diện phương thức phải xét nó trước.
+  const isRefundPart = (t: string) =>
+    String(t || '')
+      .normalize('NFD')
+      // @ts-ignore - diacritic char class in modern runtimes
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+      .includes('tra lai khach')
+
   // Tách các dòng thanh toán có số tiền từ chuỗi tổng hợp.
   // Hỗ trợ nhiều biến thể: "Tiền mặt: ₫x | Chuyển khoản: ₫y", "CK 15.500.000", "The: 1,000,000đ"...
   const parsePaymentBreakdown = (raw: string): Array<{label: string; amount: number}> => {
@@ -289,6 +299,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
 
     const friendlyLabel = (t: string) => {
       const n = normalize(t)
+      if (isRefundPart(t)) return /(chuyen\s*khoan)/.test(n) ? 'Trả lại khách (CK)' : 'Trả lại khách (tiền mặt)'
       if (/(chuyen\s*khoan|\bck\b|bank|stk)/.test(n)) return 'Chuyển khoản'
       if (/(tien\s*mat|cash)/.test(n)) return 'Tiền mặt'
       if (/(\bthe\b|pos|card)/.test(n)) return 'Thẻ'
@@ -317,7 +328,7 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
           }
         }
       }
-      if (label) out.push({ label, amount })
+      if (label) out.push({ label, amount: isRefundPart(p) ? -amount : amount })
     }
     return out
   }
@@ -681,12 +692,18 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                       {(() => {
                         // tách và hiển thị badge theo phương thức, không kèm số tiền
                         const raw = order.phuong_thuc_thanh_toan || ''
-                        const s = raw.toLowerCase()
+                        // Bỏ các đoạn "Trả lại khách - ..." khi gắn badge phương thức thu tiền.
+                        const s = String(raw)
+                          .split('|')
+                          .filter((part) => !isRefundPart(part))
+                          .join('|')
+                          .toLowerCase()
                         const arr: string[] = []
                         if (s.includes('trả góp') || s.includes('tra gop') || s.includes('góp')) arr.push('Trả góp')
                         if (s.includes('chuyển khoản') || s.includes('chuyen khoan')) arr.push('Chuyển khoản')
                         if (s.includes('thẻ') || s.includes('the')) arr.push('Thẻ')
                         if (s.includes('tiền mặt') || s.includes('tien mat')) arr.push('Tiền mặt')
+                        if (String(raw).split('|').some((part) => isRefundPart(part))) arr.push('Trả lại khách')
                         const labels = Array.from(new Set(arr))
                         if (!labels.length) return <Badge className={getPhuongThucColor(raw)}>{raw || '-'}</Badge>
                         return labels.map(lb => <Badge key={lb} className={getPhuongThucColor(lb)}>{lb}</Badge>)
@@ -702,7 +719,9 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
                         {arr.map((p, i) => (
                           <div key={`pay-${i}`} className="flex items-center justify-between">
                             <span className="text-muted-foreground">{p.label}:</span>
-                            <span className="font-medium">{p.amount>0? `₫${p.amount.toLocaleString('vi-VN')}` : '-'}</span>
+                            <span className={`font-medium ${p.amount < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                              {p.amount !== 0 ? `${p.amount < 0 ? '-' : ''}₫${Math.abs(p.amount).toLocaleString('vi-VN')}` : '-'}
+                            </span>
                           </div>
                         ))}
                       </div>

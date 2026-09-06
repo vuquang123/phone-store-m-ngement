@@ -184,6 +184,8 @@ export default function BanHangPage() {
   const [thuMayTenSanPham, setThuMayTenSanPham] = useState("")
   const [thuMayLoaiMay, setThuMayLoaiMay] = useState("")
   const [thuMayImei, setThuMayImei] = useState("")
+  // Thu máy "xuống đời": giá thu máy cũ > tiền máy mới -> shop trả lại phần chênh cho khách.
+  const [traKhachMethod, setTraKhachMethod] = useState<'Tiền mặt' | 'Chuyển khoản'>('Tiền mặt')
   const [installmentEnabled, setInstallmentEnabled] = useState(false)
   const [installmentType, setInstallmentType] = useState<'' | 'Góp iCloud' | 'Thẻ tín dụng' | 'Mira'>('')
   const [installmentDown, setInstallmentDown] = useState(0)
@@ -507,10 +509,16 @@ export default function BanHangPage() {
   // COD chỉ áp dụng khi đơn onl + vận chuyển GHTK
   const codActive = loaiDon === 'Đơn onl' && hinhThucVanChuyen === 'GHTK'
   const codToUse = codActive ? (codAmount || 0) : 0
+  // Thu máy xuống đời: phần dư sau khi trừ hết tiền đơn là tiền shop phải trả lại khách.
+  // Chỉ mở khi có thu máy, để việc gõ dư tiền mặt/chuyển khoản vẫn báo lệch như cũ.
+  const grossPayments = immediateSum + (installmentEnabled ? (installmentLoan||0) : 0) + codToUse
+  const tienTraKhach = (thuMayEnabled && (thuMayAmount||0) > 0)
+    ? Math.max(0, grossPayments - expectedCollect)
+    : 0
   // Logic trả góp: Trả trước = immediateSum. Tổng đã nhập = Trả trước + Góp + COD (thu hộ GHTK)
-  const sumPayments = Math.max(0, immediateSum + (installmentEnabled ? (installmentLoan||0) : 0) + codToUse)
-  // Nếu có trả góp, yêu cầu Trả trước == (Tiền mặt + Chuyển khoản + Thẻ)
-  const mustMatchDownPayment = !installmentEnabled || ((installmentDown||0) === immediateSum)
+  const sumPayments = Math.max(0, grossPayments - tienTraKhach)
+  // Nếu có trả góp, yêu cầu Trả trước == (Tiền mặt + Chuyển khoản + Thẻ + Thu máy - Trả lại khách)
+  const mustMatchDownPayment = !installmentEnabled || ((installmentDown||0) === (immediateSum - tienTraKhach))
   const paymentParts: string[] = []
   const parseStoredDepositPayments = (summary: string) => {
     return String(summary || "")
@@ -534,6 +542,7 @@ export default function BanHangPage() {
   if (cardEnabled && cardAmount>0) paymentParts.push(`Thẻ: ₫${cardAmount.toLocaleString('vi-VN')}`)
   if (thuMayEnabled && thuMayAmount>0) paymentParts.push(`Thu máy: ₫${thuMayAmount.toLocaleString('vi-VN')}`)
   if (codActive && codToUse>0) paymentParts.push(`COD (GHTK): ₫${codToUse.toLocaleString('vi-VN')}`)
+  if (tienTraKhach>0) paymentParts.push(`Trả lại khách - ${traKhachMethod}: ₫${tienTraKhach.toLocaleString('vi-VN')}`)
   if (installmentEnabled && (installmentDown>0 || installmentLoan>0)) {
     const label = installmentType || 'Trả góp'
     const parts: string[] = []
@@ -549,7 +558,7 @@ export default function BanHangPage() {
   const paymentSummary = paymentParts.join(' | ')
   // Thông tin máy thu cũ -> gộp vào Ghi chú (để hiện trong Telegram)
   const thuMayNote = thuMayEnabled
-    ? `[Thu máy cũ] ${[thuMayTenSanPham.trim(), thuMayLoaiMay.trim()].filter(Boolean).join(' - ')}${thuMayImei.trim() ? ` | IMEI: ${thuMayImei.trim()}` : ''} | Giá thu: ₫${(thuMayAmount || 0).toLocaleString('vi-VN')}`
+    ? `[Thu máy cũ] ${[thuMayTenSanPham.trim(), thuMayLoaiMay.trim()].filter(Boolean).join(' - ')}${thuMayImei.trim() ? ` | IMEI: ${thuMayImei.trim()}` : ''} | Giá thu: ₫${(thuMayAmount || 0).toLocaleString('vi-VN')}${tienTraKhach > 0 ? ` | Shop trả lại khách ₫${tienTraKhach.toLocaleString('vi-VN')} (${traKhachMethod})` : ''}`
     : ''
   const ghiChuFull = [ghiChu.trim(), thuMayNote].filter(Boolean).join(' | ')
   const paymentsArray = [
@@ -558,6 +567,7 @@ export default function BanHangPage() {
     cardEnabled && cardAmount>0 ? { method: 'Thẻ', amount: cardAmount } : null,
     thuMayEnabled && thuMayAmount>0 ? { method: 'Thu máy', amount: thuMayAmount } : null,
     codActive && codToUse>0 ? { method: 'COD', amount: codToUse } : null,
+    tienTraKhach>0 ? { method: `Trả lại khách - ${traKhachMethod}`, amount: tienTraKhach } : null,
   ].filter(Boolean) as any[]
   if (installmentEnabled && (installmentDown>0 || installmentLoan>0)) {
     paymentsArray.push({ method: 'Trả góp', provider: installmentType || undefined, downPayment: installmentDown||0, loanAmount: installmentLoan||0, amount: (installmentDown||0)+(installmentLoan||0) })
@@ -972,7 +982,7 @@ export default function BanHangPage() {
           setMaGhtk("")
           setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false); setThuMayEnabled(false)
           setCashAmount(0); setTransferAmount(0); setCardAmount(0); setThuMayAmount(0); setCodAmount(0)
-          setThuMayTenSanPham(""); setThuMayLoaiMay(""); setThuMayImei("")
+          setThuMayTenSanPham(""); setThuMayLoaiMay(""); setThuMayImei(""); setTraKhachMethod("Tiền mặt")
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0)
           setCurrentDepositOrderId(dc.id_don_hang || dc.id || null)
           try { localStorage.removeItem('cart_draft_v1'); localStorage.removeItem('cart_warranty_sel_v1') } catch{}
@@ -1150,7 +1160,7 @@ export default function BanHangPage() {
           setDiaChiNhan("");
           setCashEnabled(false); setTransferEnabled(false); setCardEnabled(false); setThuMayEnabled(false);
           setCashAmount(0); setTransferAmount(0); setCardAmount(0); setThuMayAmount(0); setCodAmount(0);
-          setThuMayTenSanPham(""); setThuMayLoaiMay(""); setThuMayImei("");
+          setThuMayTenSanPham(""); setThuMayLoaiMay(""); setThuMayImei(""); setTraKhachMethod("Tiền mặt");
           setInstallmentEnabled(false); setInstallmentType(''); setInstallmentDown(0); setInstallmentLoan(0);
           setGiamGiaInput("");
           try {
@@ -1411,6 +1421,8 @@ export default function BanHangPage() {
                     thuMayTenSanPham={thuMayTenSanPham} setThuMayTenSanPham={setThuMayTenSanPham}
                     thuMayLoaiMay={thuMayLoaiMay} setThuMayLoaiMay={setThuMayLoaiMay}
                     thuMayImei={thuMayImei} setThuMayImei={setThuMayImei}
+                    tienTraKhach={tienTraKhach}
+                    traKhachMethod={traKhachMethod} setTraKhachMethod={setTraKhachMethod}
                     installmentEnabled={installmentEnabled} setInstallmentEnabled={setInstallmentEnabled}
                     installmentType={installmentType} setInstallmentType={setInstallmentType}
                     installmentDown={installmentDown} setInstallmentDown={setInstallmentDown}

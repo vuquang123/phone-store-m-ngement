@@ -8,7 +8,7 @@ import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
 import { recordCashTransaction } from "@/lib/cash"
 import { extractGhtkCode, mapGhtkStatus } from "@/lib/ghtk-status"
-import { syncCashFlowFromSale } from "@/lib/cash-flow/sheets"
+import { syncCashFlowFromSale, syncCashFlowForGhtkCode } from "@/lib/cash-flow/sheets"
 import { getGhtkTracking } from "@/lib/ghtk"
 import { parseVietnameseNumber } from "@/lib/number"
 
@@ -52,11 +52,15 @@ function formatGhtkTransport(code: string, statusLabel: string) {
 
 function parseGhtkMetaNote(note: string, code: string) {
   const safeCode = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const match = String(note || "").match(new RegExp(`\\[GHTK_META:${safeCode}:COD=(\\d+):SHIP=(\\d+)\\]`))
+  // ST=<mã trạng thái GHTK> là phần thêm sau; dữ liệu cũ không có nên để optional.
+  const match = String(note || "").match(
+    new RegExp(`\\[GHTK_META:${safeCode}:COD=(\\d+):SHIP=(\\d+)(?::ST=(-?\\d+))?\\]`),
+  )
   if (!match) return null
   return {
     codMoney: Number(match[1] || 0),
     shipMoney: Number(match[2] || 0),
+    statusCode: match[3] ? String(match[3]) : "",
   }
 }
 
@@ -103,11 +107,16 @@ function findAccessoryRowIndex(
   })
 }
 
-function upsertGhtkMetaNote(note: string, code: string, codMoney: number, shipMoney: number) {
+function upsertGhtkMetaNote(note: string, code: string, codMoney: number, shipMoney: number, statusCode?: string) {
   const safeCode = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const token = `[GHTK_META:${code}:COD=${Math.max(0, Math.round(codMoney))}:SHIP=${Math.max(0, Math.round(shipMoney))}]`
+  // Ghim mã trạng thái vào note để module dòng tiền nhận biết "đã đối soát" theo
+  // mã số (6) thay vì so khớp nhãn chữ do GHTK trả về (nhãn có thể đổi cách viết).
+  const st = String(statusCode ?? "").trim()
+  const token = `[GHTK_META:${code}:COD=${Math.max(0, Math.round(codMoney))}:SHIP=${Math.max(0, Math.round(shipMoney))}${st ? `:ST=${st}` : ""}]`
   const raw = String(note || "").trim()
-  const cleaned = raw.replace(new RegExp(`\\s*\\[GHTK_META:${safeCode}:COD=\\d+:SHIP=\\d+\\]`, "g"), "").trim()
+  const cleaned = raw
+    .replace(new RegExp(`\\s*\\[GHTK_META:${safeCode}:COD=\\d+:SHIP=\\d+(?::ST=-?\\d+)?\\]`, "g"), "")
+    .trim()
   return cleaned ? `${cleaned} ${token}` : token
 }
 
@@ -438,18 +447,21 @@ export async function GET(request: NextRequest) {
       filteredSummaries = filteredSummaries.filter((o: any) => !!o.ma_ghtk)
       if (filteredSummaries.length && idxHinhThuc !== -1) {
         const updates: Array<{ range: string; values: any[][] }> = []
+        // Mã GHTK vừa chuyển sang "Đã đối soát" ở lần refresh này -> đẩy COD vào dòng tiền.
+        const newlyReconciledCodes: string[] = []
         filteredSummaries = await Promise.all(filteredSummaries.map(async (order: any) => {
           const code = String(order.ma_ghtk || "").trim()
           if (!code) return order
 
           const storedStatusLabel = getStoredGhtkStatusLabel(String(order.hinh_thuc_van_chuyen || ""))
           const cachedMeta = parseGhtkMetaNote(String(order.ghi_chu || ""), code)
+          const wasReconciled = cachedMeta?.statusCode === "6" || storedStatusLabel === "Đã đối soát"
 
-          if (storedStatusLabel === "Đã đối soát" && cachedMeta) {
+          if (wasReconciled && cachedMeta) {
             return {
               ...order,
               status_code: "6",
-              status_label: "Đã đối soát",
+              status_label: storedStatusLabel || "Đã đối soát",
               status_group: "reconciled",
               cod_money: cachedMeta.codMoney,
               ship_money: cachedMeta.shipMoney,
@@ -465,7 +477,8 @@ export async function GET(request: NextRequest) {
             const codMoney = toNumberLoose(tracking.order.pick_money)
             const shipMoney = toNumberLoose(tracking.order.ship_money)
             const nextTransport = formatGhtkTransport(code, statusLabel)
-            const nextNote = upsertGhtkMetaNote(String(order.ghi_chu || ""), code, codMoney, shipMoney)
+            const nextNote = upsertGhtkMetaNote(String(order.ghi_chu || ""), code, codMoney, shipMoney, mapped.code)
+            if (mapped.code === "6" && !wasReconciled) newlyReconciledCodes.push(code)
 
             if (String(order.hinh_thuc_van_chuyen || "") !== nextTransport) {
               for (const rowNumber of order.row_numbers || []) {
@@ -505,6 +518,15 @@ export async function GET(request: NextRequest) {
         }))
         if (updates.length) {
           await batchUpdateRangeValues(updates)
+        }
+        // Đơn vừa được GHTK đối soát: cộng chính thức tiền COD (đã trừ phí ship)
+        // vào nguồn tiền "Tiền tài khoản". Hàm sync tự chống ghi trùng theo refId.
+        for (const code of Array.from(new Set(newlyReconciledCodes))) {
+          try {
+            await syncCashFlowForGhtkCode(code)
+          } catch (error) {
+            console.warn("[DONG_TIEN] Không thể đồng bộ COD đã đối soát:", code, error)
+          }
         }
       }
     }
@@ -1087,17 +1109,34 @@ export async function POST(request: NextRequest) {
     // Khi phương thức thanh toán có Tiền mặt -> ghi 1 khoản "thu" vào sổ quỹ, tham chiếu mã đơn.
     try {
       const payments = Array.isArray(body.payments) ? body.payments : []
+      const nhanVien = body.employeeName || body.employeeId || body["Người Bán"] || ""
       const cashAmt = payments
         .filter((p: any) => norm(String(p?.method || "")) === norm("Tiền mặt"))
         .reduce((sum: number, p: any) => sum + (Number(p?.amount) || 0), 0)
       if (cashAmt > 0) {
-        const nhanVien = body.employeeName || body.employeeId || body["Người Bán"] || ""
         await recordCashTransaction({
           loai: "thu",
           so_tien: cashAmt,
           nguon: "ban_hang",
           ma_tham_chieu: idDonHang,
           ly_do: `Bán hàng${idDonHang ? ` ${idDonHang}` : ""}`,
+          nhan_vien: String(nhanVien),
+        })
+      }
+      // Thu máy xuống đời trả lại khách bằng tiền mặt -> ghi 1 khoản CHI vào sổ quỹ.
+      const refundCashAmt = payments
+        .filter((p: any) => {
+          const m = norm(String(p?.method || ""))
+          return m.includes("tra_lai_khach") && m.includes("tien_mat")
+        })
+        .reduce((sum: number, p: any) => sum + (Number(p?.amount) || 0), 0)
+      if (refundCashAmt > 0) {
+        await recordCashTransaction({
+          loai: "chi",
+          so_tien: refundCashAmt,
+          nguon: "ban_hang",
+          ma_tham_chieu: idDonHang,
+          ly_do: `Trả lại khách (thu máy xuống đời)${idDonHang ? ` ${idDonHang}` : ""}`,
           nhan_vien: String(nhanVien),
         })
       }

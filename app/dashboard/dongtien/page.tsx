@@ -535,7 +535,7 @@ function CashFlowDashboard({
 
   const cashTransactions = useMemo(
     () => transactions.filter((item) =>
-      ["sale_cash", "sale_transfer", "sale_cod", "receivable_collection", "payable_payment"].includes(item.type),
+      ["sale_cash", "sale_transfer", "sale_cod", "receivable_collection", "payable_payment", "trade_in_refund"].includes(item.type),
     ),
     [transactions],
   )
@@ -585,7 +585,7 @@ function CashFlowDashboard({
           icon={CalendarClock}
         />
         <StatCard title="Phải trả 3 ngày tới" value={fmt(overview.dueIn3Days)} description={`Các khoản từ ${due3RangeLabel}`} icon={AlertTriangle} />
-        <StatCard title="COD chờ đối soát" value={fmt(overview.codPending3Days)} description={`${overview.codPendingOrders} đơn GHTK chưa đối soát`} icon={Landmark} />
+        <StatCard title="COD chờ đối soát" value={fmt(overview.codPending3Days)} description={`${overview.codPendingOrders} đơn GHTK chưa đối soát • đã trừ phí ship`} icon={Landmark} />
       </div>
 
       <Dialog open={detailView !== null} onOpenChange={(open) => !open ? setDetailView(null) : null}>
@@ -726,7 +726,7 @@ function CashFlowDashboard({
       </Dialog>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Số dư dự kiến cuối kỳ" value={fmt(overview.projectedEndingBalance)} description={`COD đã đối soát (cộng thủ công khi tiền về): ${fmt(overview.codReconciledInCash)}`} icon={Coins} />
+        <StatCard title="Số dư dự kiến cuối kỳ" value={fmt(overview.projectedEndingBalance)} description={`Đã gồm COD GHTK chờ đối soát: ${fmt(overview.codPending3Days)}`} icon={Coins} />
         <StatCard title="Lãi tích lũy từ 16/07" value={fmt(overview.realizedProfitSinceStart)} description="Tự đồng bộ từ cột Lãi của Ban_Hang" icon={Coins} />
         <StatCard title="Quỹ lãi còn lại" value={fmt(overview.profitFundBalance)} description="Dùng riêng để trả nợ dài hạn" icon={Wallet} />
         <StatCard title="Nợ dài hạn còn lại" value={fmt(overview.longTermDebtRemaining)} description={`Tổng nợ dài hạn ${fmt(overview.longTermDebtTotal)}`} icon={CalendarClock} />
@@ -813,12 +813,12 @@ function CashFlowDashboard({
               <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
                 <p className="text-xs text-emerald-100/80">COD đã đối soát</p>
                 <p className="mt-1 text-lg font-semibold text-emerald-100">{fmt(overview.codReconciledInCash)}</p>
-                <p className="mt-1 text-xs text-emerald-100/70">{overview.codReconciledOrders} đơn GHTK báo đã đối soát • cộng thủ công khi tiền về</p>
+                <p className="mt-1 text-xs text-emerald-100/70">{overview.codReconciledOrders} đơn GHTK đã đối soát • tiền đã về nguồn Tiền tài khoản</p>
               </div>
               <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 p-3">
-                <p className="text-xs text-sky-100/80">COD có thể thu trong 3 ngày</p>
+                <p className="text-xs text-sky-100/80">COD chờ đối soát</p>
                 <p className="mt-1 text-lg font-semibold text-sky-100">{fmt(overview.codPending3Days)}</p>
-                <p className="mt-1 text-xs text-sky-100/70">{overview.codPendingOrders} đơn GHTK chưa đối soát • chỉ dùng để tính phương án</p>
+                <p className="mt-1 text-xs text-sky-100/70">{overview.codPendingOrders} đơn GHTK chưa đối soát • đã tính vào số dư dự kiến cuối kỳ</p>
               </div>
             </div>
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 sm:p-5">
@@ -978,7 +978,7 @@ function CashFlowDashboard({
                 <p className="text-sm text-muted-foreground">Tài sản ngắn hạn</p>
                 <p className="mt-2 text-xl font-bold">{fmt(overview.totalShortTermAssets)}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Tiền {fmtShort(overview.cashOnHand)} + hàng tồn {fmtShort(overview.inventoryValue)} + phải thu {fmtShort(overview.totalReceivables)}
+                  Tiền {fmtShort(overview.cashOnHand)} + hàng tồn {fmtShort(overview.inventoryValue)} + phải thu {fmtShort(overview.totalReceivables)} + COD {fmtShort(overview.codPending3Days)}
                 </p>
               </div>
               <div className="rounded-xl border p-4">
@@ -2023,7 +2023,7 @@ function TransactionList({ transactions, emptyText }: { transactions: LedgerTran
   return (
     <div className="space-y-3">
       {transactions.map((item) => {
-        const isOutflow = item.type === "payable_payment"
+        const isOutflow = item.type === "payable_payment" || item.type === "trade_in_refund"
         return (
           <div key={item.id} className="flex flex-col gap-2 rounded-xl border p-3 md:flex-row md:items-center md:justify-between">
             <div>

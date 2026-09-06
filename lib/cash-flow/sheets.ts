@@ -24,6 +24,11 @@ import type {
   Receivable,
 } from "./types"
 
+// Cột mã đơn của sheet Ban_Hang từng tên là "ID Đơn Hàng", nay là "Mã đơn hàng".
+// Giữ đủ alias để sync không chết câm khi tên cột đổi (colIndex trả -1 -> mọi
+// vòng lặp bị bỏ qua mà không báo lỗi).
+const BAN_HANG_ORDER_ID_COLUMNS = ["Mã Đơn Hàng", "Mã đơn hàng", "ID Đơn Hàng", "Ma Don Hang", "Mã Đơn"] as const
+
 const SHEETS = {
   ACCOUNTS: "DongTien_NguonTien",
   RECEIVABLES: "DongTien_CongNoThu",
@@ -167,6 +172,7 @@ const REPORTS_HEADER = [
 const SETTING_KEYS = {
   SAFE_RESERVE: "safe_reserve",
   RESET_ORDER_SEQ: "reset_order_seq",
+  COD_MANUAL_CREDITED: "cod_manual_credited_orders",
 } as const
 
 const AUTO_REPORT_HOUR = 18
@@ -589,6 +595,46 @@ function shouldSyncOrder(orderId: string, resetSeq: number) {
   return getOrderSequence(orderId) > resetSeq
 }
 
+// Trước khi có tự động cộng COD, chủ cửa hàng tự cộng tay vào nguồn tiền khi GHTK
+// báo tiền về. Lần đầu bật tính năng, ta chụp lại danh sách đơn đã đối soát tại
+// thời điểm đó và không ghi sổ chúng nữa — nếu ghi sẽ đếm trùng với phần cộng tay.
+// Đơn đối soát SAU mốc này mới được tự động cộng.
+const CODES_NONE = "none"
+let codManualCreditedCache: Set<string> | null = null
+
+async function readCodManualCreditedOrders(): Promise<Set<string>> {
+  if (codManualCreditedCache) return codManualCreditedCache
+  const raw = String(await readSettingValue(SETTING_KEYS.COD_MANUAL_CREDITED) || "").trim()
+  if (!raw) return codManualCreditedCache = await seedCodManualCreditedOrders()
+  if (raw === CODES_NONE) return codManualCreditedCache = new Set<string>()
+  return codManualCreditedCache = new Set(raw.split(",").map((item) => item.trim()).filter(Boolean))
+}
+
+async function seedCodManualCreditedOrders(): Promise<Set<string>> {
+  const resetSeq = await readResetOrderSeq()
+  const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force: true })
+  const idxId = colIndex(header, ...BAN_HANG_ORDER_ID_COLUMNS)
+  const idxShip = colIndex(header, "Hình Thức Vận Chuyển")
+  const idxNote = colIndex(header, "Ghi Chú")
+  const idxPayment = colIndex(header, "Hình Thức Thanh Toán")
+  const seeded = new Set<string>()
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const orderId = String(row[idxId] || "").trim()
+    if (!orderId || seen.has(orderId)) continue
+    seen.add(orderId)
+    if (!shouldSyncOrder(orderId, resetSeq)) continue
+    const codInfo = resolveStoredGhtkCod(row, { ship: idxShip, note: idxNote, payment: idxPayment })
+    if (codInfo?.isReconciled) seeded.add(orderId)
+  }
+  await upsertSettingRows([{
+    key: SETTING_KEYS.COD_MANUAL_CREDITED,
+    value: seeded.size ? Array.from(seeded).join(",") : CODES_NONE,
+    note: "Đơn GHTK đã đối soát trước khi bật tự động cộng COD — đã cộng tay, không ghi sổ lại",
+  }])
+  return seeded
+}
+
 function findPreferredAccount(accounts: CashAccount[], kind: "cash" | "bank") {
   const exact = accounts.find((item) => item.type === kind && item.availability === "AVAILABLE")
   if (exact) return exact
@@ -610,9 +656,17 @@ function parsePaymentSummary(summary: string) {
   let card = 0
   let cod = 0
   let installmentLoan = 0
+  let refundCash = 0
+  let refundTransfer = 0
   for (const segment of segments) {
     const n = norm(segment)
-    if (n.includes("tien_mat")) cash += parseAmount(segment)
+    // "Trả lại khách - Tiền mặt/Chuyển khoản" cũng chứa "tien_mat"/"chuyen_khoan"
+    // nên phải xét TRƯỚC, nếu không sẽ bị cộng nhầm thành tiền thu vào.
+    if (n.includes("tra_lai_khach")) {
+      if (n.includes("chuyen_khoan")) refundTransfer += parseAmount(segment)
+      else refundCash += parseAmount(segment)
+    }
+    else if (n.includes("tien_mat")) cash += parseAmount(segment)
     else if (n.includes("chuyen_khoan")) transfer += parseAmount(segment)
     else if (n.includes("the")) card += parseAmount(segment)
     else if (n.includes("cod")) cod += parseAmount(segment)
@@ -621,7 +675,7 @@ function parsePaymentSummary(summary: string) {
       if (m) installmentLoan += toNumber(m[1])
     }
   }
-  return { cash, transfer, card, cod, installmentLoan }
+  return { cash, transfer, card, cod, installmentLoan, refundCash, refundTransfer }
 }
 
 function getStoredGhtkStatusLabel(shipping: string) {
@@ -631,13 +685,21 @@ function getStoredGhtkStatusLabel(shipping: string) {
 
 function parseGhtkMetaNote(note: string, code: string) {
   const safeCode = String(code || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const match = String(note || "").match(new RegExp(`\\[GHTK_META:${safeCode}:COD=(\\d+):SHIP=(\\d+)\\]`))
+  // ST=<mã trạng thái GHTK> chỉ có ở note ghi sau này; dữ liệu cũ vẫn khớp regex.
+  const match = String(note || "").match(
+    new RegExp(`\\[GHTK_META:${safeCode}:COD=(\\d+):SHIP=(\\d+)(?::ST=(-?\\d+))?\\]`),
+  )
   if (!match) return null
   return {
     codMoney: toNumber(match[1]),
     shipMoney: toNumber(match[2]),
+    statusCode: match[3] ? String(match[3]) : "",
   }
 }
+
+// Các trạng thái GHTK mà tiền COD chắc chắn không về: hủy đơn, trả hàng, đối soát
+// công nợ trả hàng. Đơn ở các trạng thái này không được tính vào số dư dự kiến.
+const GHTK_DEAD_COD_STATUS = new Set(["-1", "11", "20", "21"])
 
 type GhtkCodSummary = {
   pending3Days: number
@@ -658,19 +720,31 @@ function resolveStoredGhtkCod(row: any[], indexes: {
   const statusLabel = getStoredGhtkStatusLabel(shipping)
   const meta = parseGhtkMetaNote(String(row[indexes.note] || ""), code)
   const payment = parsePaymentSummary(paymentSummary)
-  const codAmount = Math.max(0, meta?.codMoney ?? payment.cod)
+  const codGross = Math.max(0, meta?.codMoney ?? payment.cod)
+  if (codGross <= 0) return null
+  if (meta?.statusCode && GHTK_DEAD_COD_STATUS.has(meta.statusCode)) return null
+  // GHTK khấu trừ phí ship ngay trên tiền COD, nên số thực nhận về tài khoản là
+  // COD trừ phí ship. Dùng chính con số này cho cả dự kiến lẫn lúc ghi sổ để
+  // hai bên không lệch nhau.
+  const shipFee = Math.max(0, meta?.shipMoney ?? 0)
+  const codAmount = Math.max(0, codGross - shipFee)
   if (codAmount <= 0) return null
   return {
     code,
     statusLabel,
+    codGross,
+    shipFee,
     codAmount,
-    isReconciled: norm(statusLabel) === norm("Đã đối soát"),
+    isReconciled: meta?.statusCode === "6" || norm(statusLabel) === norm("Đã đối soát"),
   }
 }
 
 async function readGhtkCodSummaryFromSales(): Promise<GhtkCodSummary> {
+  // Cùng phạm vi với phần ghi sổ: đơn dưới mốc reset không bao giờ được cộng vào
+  // nguồn tiền nên cũng không được tính vào COD chờ về / đã đối soát.
+  const resetSeq = await readResetOrderSeq()
   const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force: true })
-  const idxId = colIndex(header, "ID Đơn Hàng")
+  const idxId = colIndex(header, ...BAN_HANG_ORDER_ID_COLUMNS)
   const idxShip = colIndex(header, "Hình Thức Vận Chuyển")
   const idxNote = colIndex(header, "Ghi Chú")
   const idxPayment = colIndex(header, "Hình Thức Thanh Toán")
@@ -679,6 +753,7 @@ async function readGhtkCodSummaryFromSales(): Promise<GhtkCodSummary> {
   for (const row of rows) {
     const orderId = String(row[idxId] || "").trim()
     if (!orderId) continue
+    if (!shouldSyncOrder(orderId, resetSeq)) continue
     if (!grouped.has(orderId)) grouped.set(orderId, row)
   }
 
@@ -802,7 +877,7 @@ async function syncProfitFundFromSales() {
   })
 
   const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force: true })
-  const idxId = colIndex(header, "ID Đơn Hàng")
+  const idxId = colIndex(header, ...BAN_HANG_ORDER_ID_COLUMNS)
   const idxDate = colIndex(header, "Ngày Bán", "Ngày Xuất")
   const idxCustomer = colIndex(header, "Tên Khách Hàng")
   const idxProfit = colIndex(header, "Lãi")
@@ -937,8 +1012,47 @@ function buildReceivableRow(input: {
   ]
 }
 
+// Dựng bút toán thu COD khi GHTK đã đối soát. Trả về null nếu đơn chưa đối soát
+// hoặc bút toán đã tồn tại (chống ghi trùng theo refId order_payment::<đơn>::cod).
+function buildReconciledCodEntry(input: {
+  codInfo: ReturnType<typeof resolveStoredGhtkCod>
+  orderId: string
+  customer: string
+  orderDate: string
+  bankAccount: CashAccount
+  txRefSet: Set<string>
+  manualCredited: Set<string>
+}) {
+  const { codInfo, orderId, customer, orderDate, bankAccount, txRefSet, manualCredited } = input
+  if (!codInfo || !codInfo.isReconciled || codInfo.codAmount <= 0) return null
+  if (manualCredited.has(orderId)) return null
+  const refId = `${orderId}::cod`
+  const marker = `order_payment::${refId}`
+  if (txRefSet.has(marker)) return null
+  txRefSet.add(marker)
+  return {
+    accountId: bankAccount.id,
+    amount: codInfo.codAmount,
+    row: buildTransactionRow({
+      type: "sale_cod",
+      amount: codInfo.codAmount,
+      occurredAt: orderDate,
+      accountId: bankAccount.id,
+      accountName: bankAccount.name,
+      refType: "order_payment",
+      refId,
+      counterparty: customer,
+      source: "GHTK",
+      note: `COD GHTK ${codInfo.code} đã đối soát cho đơn ${orderId} (COD ${codInfo.codGross.toLocaleString("vi-VN")} ₫ − phí ship ${codInfo.shipFee.toLocaleString("vi-VN")} ₫)`,
+      automatic: true,
+      createdBy: "system",
+    }),
+  }
+}
+
 async function syncOrdersIntoCashFlow(accounts: CashAccount[]) {
   const resetSeq = await readResetOrderSeq()
+  const manualCredited = await readCodManualCreditedOrders()
   const existingTx = await readTransactions()
   const existingRecv = await readReceivables()
   const txRefSet = new Set(existingTx.map((item) => `${item.refType}::${item.refId}`))
@@ -958,10 +1072,12 @@ async function syncOrdersIntoCashFlow(accounts: CashAccount[]) {
   }
 
   const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force: true })
-  const idxId = colIndex(header, "ID Đơn Hàng")
+  const idxId = colIndex(header, ...BAN_HANG_ORDER_ID_COLUMNS)
   const idxDate = colIndex(header, "Ngày Bán", "Ngày Xuất")
   const idxCustomer = colIndex(header, "Tên Khách Hàng")
   const idxPayment = colIndex(header, "Hình Thức Thanh Toán")
+  const idxShip = colIndex(header, "Hình Thức Vận Chuyển")
+  const idxNote = colIndex(header, "Ghi Chú")
 
   const grouped = new Map<string, string[]>()
   for (const row of rows) {
@@ -1062,9 +1178,21 @@ async function syncOrdersIntoCashFlow(accounts: CashAccount[]) {
       }
     }
 
-    // COD GHTK KHÔNG tự cộng vào nguồn tiền. Số COD (chờ về / đã đối soát) chỉ
-    // hiển thị để tính phương án qua readGhtkCodSummaryFromSales; chủ cửa hàng
-    // tự cộng thủ công vào Nguồn tiền khi GHTK báo tiền về.
+    // COD GHTK chỉ vào nguồn tiền khi GHTK đã đối soát (mã trạng thái 6). Trước đó
+    // nó chỉ nằm ở "Số dư dự kiến cuối kỳ" qua readGhtkCodSummaryFromSales.
+    const codEntry = buildReconciledCodEntry({
+      codInfo: resolveStoredGhtkCod(row, { ship: idxShip, note: idxNote, payment: idxPayment }),
+      orderId,
+      customer,
+      orderDate,
+      bankAccount,
+      txRefSet,
+      manualCredited,
+    })
+    if (codEntry) {
+      transactionRows.push(codEntry.row)
+      addAccountDelta(codEntry.accountId, codEntry.amount)
+    }
   }
 
   if (transactionRows.length) {
@@ -1082,6 +1210,7 @@ async function syncSingleOrderIntoCashFlow(accounts: CashAccount[], params: {
   orderDate: string
   shipping?: string
   paymentSummary?: string
+  note?: string
   payments?: Array<{ method?: string; amount?: number; loanAmount?: number }>
 }) {
   const resetSeq = await readResetOrderSeq()
@@ -1102,13 +1231,18 @@ async function syncSingleOrderIntoCashFlow(accounts: CashAccount[], params: {
     ? params.payments.reduce((acc, item) => {
         const method = norm(String(item?.method || ""))
         const amount = Number(item?.amount || 0)
-        if (method.includes("tien_mat")) acc.cash += amount
+        // Xét "trả lại khách" trước vì chuỗi này cũng chứa "tien_mat"/"chuyen_khoan".
+        if (method.includes("tra_lai_khach")) {
+          if (method.includes("chuyen_khoan")) acc.refundTransfer += amount
+          else acc.refundCash += amount
+        }
+        else if (method.includes("tien_mat")) acc.cash += amount
         else if (method.includes("chuyen_khoan")) acc.transfer += amount
         else if (method.includes("the")) acc.card += amount
         else if (method.includes("cod")) acc.cod += amount
         else if (method.includes("tra_gop")) acc.installmentLoan += Number(item?.loanAmount || amount || 0)
         return acc
-      }, { cash: 0, transfer: 0, card: 0, cod: 0, installmentLoan: 0 })
+      }, { cash: 0, transfer: 0, card: 0, cod: 0, installmentLoan: 0, refundCash: 0, refundTransfer: 0 })
     : null
   const payment = parsedFromArray || parsePaymentSummary(params.paymentSummary || "")
   const transactionRows: any[][] = []
@@ -1160,6 +1294,31 @@ async function syncSingleOrderIntoCashFlow(accounts: CashAccount[], params: {
     }
   }
 
+  // Thu máy xuống đời: shop trả lại phần chênh cho khách -> tiền RA khỏi quỹ/tài khoản.
+  for (const refund of [
+    { amount: payment.refundCash || 0, key: "refund_cash", account: cashAccount, label: "tiền mặt" },
+    { amount: payment.refundTransfer || 0, key: "refund_transfer", account: bankAccount, label: "chuyển khoản" },
+  ]) {
+    if (refund.amount <= 0) continue
+    const refId = `${params.orderId}::${refund.key}`
+    if (txRefSet.has(`order_refund::${refId}`)) continue
+    transactionRows.push(buildTransactionRow({
+      type: "trade_in_refund",
+      amount: refund.amount,
+      occurredAt: orderDate,
+      accountId: refund.account.id,
+      accountName: refund.account.name,
+      refType: "order_refund",
+      refId,
+      counterparty: customer,
+      source: "Ban_Hang",
+      note: `Trả lại khách bằng ${refund.label} (thu máy xuống đời) — đơn ${params.orderId}`,
+      automatic: true,
+      createdBy: "system",
+    }))
+    addDelta(refund.account.id, -refund.amount)
+  }
+
   if (payment.card > 0) {
     const refId = `${params.orderId}::card`
     const marker = `order_card::${refId}`
@@ -1198,7 +1357,23 @@ async function syncSingleOrderIntoCashFlow(accounts: CashAccount[], params: {
     }
   }
 
-  // COD GHTK không tự cộng vào nguồn tiền — xem ghi chú trong syncOrdersIntoCashFlow.
+  // COD GHTK chỉ vào nguồn tiền khi đã đối soát — xem ghi chú trong syncOrdersIntoCashFlow.
+  const codEntry = buildReconciledCodEntry({
+    codInfo: resolveStoredGhtkCod(
+      [params.shipping || "", params.note || "", params.paymentSummary || ""],
+      { ship: 0, note: 1, payment: 2 },
+    ),
+    orderId: params.orderId,
+    customer,
+    orderDate,
+    bankAccount,
+    txRefSet,
+    manualCredited: await readCodManualCreditedOrders(),
+  })
+  if (codEntry) {
+    transactionRows.push(codEntry.row)
+    addDelta(codEntry.accountId, codEntry.amount)
+  }
 
   if (transactionRows.length) await appendMultipleToGoogleSheets(SHEETS.TRANSACTIONS, transactionRows)
   if (receivableRows.length) await appendMultipleToGoogleSheets(SHEETS.RECEIVABLES, receivableRows)
@@ -1508,7 +1683,11 @@ function buildOverview(args: {
   }, 0)
   const codPending3Days = args.ghtkCodSummary.pending3Days
   const spendableCash = Math.max(0, cashOnHand - args.safeReserve)
-  const totalShortTermAssets = cashOnHand + inventoryValue + totalReceivables
+  // COD chưa đối soát là tiền chắc chắn về (đã trừ phí ship) nên tính vào tài sản
+  // ngắn hạn và số dư dự kiến cuối kỳ. Khi GHTK đối soát, khoản này rời bucket
+  // "chờ về" và xuất hiện trong cashOnHand qua nguồn tiền "Tiền tài khoản" —
+  // không có double count.
+  const totalShortTermAssets = cashOnHand + inventoryValue + totalReceivables + codPending3Days
   const projectedCashAfterReceivables = cashOnHand + totalReceivables + codPending3Days
   const shortageForUpcomingDues = Math.max(0, overduePayables + dueToday + dueIn3Days - (spendableCash + receivableDueIn3Days + codPending3Days))
   const projectedEndingBalance = totalShortTermAssets - totalPayables
@@ -1766,7 +1945,7 @@ function buildCashFlowReportContent(data: CashFlowDashboardData, reportDate: str
 
   const highlights = [
     `Tiền mặt và tài khoản hiện có ${overview.cashOnHand.toLocaleString("vi-VN")} ₫, sau khi trừ quỹ an toàn còn chi được ${overview.spendableCash.toLocaleString("vi-VN")} ₫.`,
-    `COD GHTK đã đối soát ${overview.codReconciledInCash.toLocaleString("vi-VN")} ₫; COD chờ về 3 ngày tới ${overview.codPending3Days.toLocaleString("vi-VN")} ₫.`,
+    `COD GHTK đã đối soát (đã cộng vào Tiền tài khoản) ${overview.codReconciledInCash.toLocaleString("vi-VN")} ₫; COD chờ đối soát ${overview.codPending3Days.toLocaleString("vi-VN")} ₫.`,
     `Nghĩa vụ gần hạn gồm hôm nay ${overview.dueToday.toLocaleString("vi-VN")} ₫, 3 ngày tới ${overview.dueIn3Days.toLocaleString("vi-VN")} ₫, 7 ngày tới ${overview.dueIn7Days.toLocaleString("vi-VN")} ₫.`,
   ]
 
@@ -2115,7 +2294,7 @@ export async function resetCashFlowData() {
     return next
   })
 
-  const saleIdIdx = colIndex(saleHeader, "ID Đơn Hàng")
+  const saleIdIdx = colIndex(saleHeader, ...BAN_HANG_ORDER_ID_COLUMNS)
   const maxOrderSeq = saleRows.reduce((max, row) => {
     const seq = getOrderSequence(String(row[saleIdIdx] || ""))
     return Math.max(max, seq)
@@ -2409,15 +2588,17 @@ export async function syncCashFlowForGhtkCode(code: string) {
   await ensureCashFlowSheets()
   const accounts = await readAccounts()
   const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force: true })
-  const idxId = colIndex(header, "ID Đơn Hàng")
+  const idxId = colIndex(header, ...BAN_HANG_ORDER_ID_COLUMNS)
   const idxCustomer = colIndex(header, "Tên Khách Hàng")
   const idxDate = colIndex(header, "Ngày Bán", "Ngày Xuất")
   const idxShip = colIndex(header, "Hình Thức Vận Chuyển")
   const idxPay = colIndex(header, "Hình Thức Thanh Toán")
-  const byOrder = new Map<string, { customer: string; orderDate: string; shipping: string; paymentSummary: string }>()
+  const idxNote = colIndex(header, "Ghi Chú")
+  const byOrder = new Map<string, { customer: string; orderDate: string; shipping: string; paymentSummary: string; note: string }>()
   for (const row of rows) {
     const shipping = String(row[idxShip] || "")
-    if (extractGhtkCode(shipping) !== code) continue
+    const note = idxNote === -1 ? "" : String(row[idxNote] || "")
+    if (extractGhtkCode(shipping, note) !== code) continue
     const orderId = String(row[idxId] || "").trim()
     if (!orderId || byOrder.has(orderId)) continue
     byOrder.set(orderId, {
@@ -2425,6 +2606,7 @@ export async function syncCashFlowForGhtkCode(code: string) {
       orderDate: toSheetDateVN(String(row[idxDate] || todayYmd())),
       shipping,
       paymentSummary: String(row[idxPay] || ""),
+      note,
     })
   }
   for (const [orderId, item] of byOrder.entries()) {
@@ -2434,6 +2616,7 @@ export async function syncCashFlowForGhtkCode(code: string) {
       orderDate: item.orderDate,
       shipping: item.shipping,
       paymentSummary: item.paymentSummary,
+      note: item.note,
     })
   }
 }

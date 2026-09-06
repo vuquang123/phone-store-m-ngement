@@ -22,6 +22,8 @@ interface PaymentColumnProps {
   thuMayTenSanPham: string; setThuMayTenSanPham: (v: string) => void
   thuMayLoaiMay: string; setThuMayLoaiMay: (v: string) => void
   thuMayImei: string; setThuMayImei: (v: string) => void
+  tienTraKhach: number
+  traKhachMethod: 'Tiền mặt' | 'Chuyển khoản'; setTraKhachMethod: (v: 'Tiền mặt' | 'Chuyển khoản') => void
   installmentEnabled: boolean; setInstallmentEnabled: (v: boolean) => void
   installmentType: string; setInstallmentType: (v: any) => void
   installmentDown: number; setInstallmentDown: (v: number) => void
@@ -69,6 +71,7 @@ export function PaymentColumn(props: PaymentColumnProps) {
     cardEnabled, setCardEnabled, cardAmount, setCardAmount,
     thuMayEnabled, setThuMayEnabled, thuMayAmount, setThuMayAmount,
     thuMayTenSanPham, setThuMayTenSanPham, thuMayLoaiMay, setThuMayLoaiMay, thuMayImei, setThuMayImei,
+    tienTraKhach, traKhachMethod, setTraKhachMethod,
     installmentEnabled, setInstallmentEnabled, installmentType, setInstallmentType,
     installmentDown, setInstallmentDown, installmentLoan, setInstallmentLoan,
     sumPayments, expectedCollect,
@@ -132,6 +135,36 @@ export function PaymentColumn(props: PaymentColumnProps) {
                       <p className="text-[11px] text-amber-600">IMEI cần đủ 15 số (hiện {thuMayImei.length}).</p>
                     )}
                   </div>
+                  {tienTraKhach > 0 && (
+                    <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50/60 p-2.5 dark:border-amber-500/30 dark:bg-amber-500/10">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                          Máy xuống đời — shop trả lại khách
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-amber-800 dark:text-amber-200">
+                          ₫{tienTraKhach.toLocaleString('vi-VN')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs text-muted-foreground">Trả bằng</span>
+                        {(['Tiền mặt', 'Chuyển khoản'] as const).map((m) => (
+                          <label key={m} className="flex cursor-pointer items-center gap-1.5">
+                            <input
+                              type="radio"
+                              name="tra-lai-khach"
+                              className="h-3.5 w-3.5 accent-amber-600"
+                              checked={traKhachMethod === m}
+                              onChange={() => setTraKhachMethod(m)}
+                            />
+                            <span className="text-xs">{m}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Giá thu máy cũ lớn hơn tiền đơn — phần chênh sẽ ghi vào sổ quỹ là khoản chi.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="space-y-2">
@@ -170,6 +203,7 @@ export function PaymentColumn(props: PaymentColumnProps) {
 
             <p className="text-xs text-muted-foreground pt-1">
               Tổng đã nhập: ₫{sumPayments.toLocaleString('vi-VN')} • Cần thu: ₫{expectedCollect.toLocaleString('vi-VN')}
+              {tienTraKhach > 0 ? ` (đã trừ ₫${tienTraKhach.toLocaleString('vi-VN')} trả lại khách)` : ''}
             </p>
           </div>
 
