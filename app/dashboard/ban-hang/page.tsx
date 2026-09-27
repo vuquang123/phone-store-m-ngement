@@ -34,6 +34,7 @@ import { CartItemList } from "@/components/ban-hang/cart-item-list"
 import { SearchArea } from "@/components/ban-hang/search-area"
 import { AdvancedFilterBar } from "@/components/ban-hang/advanced-filter-bar"
 import { normalizeVi } from "@/lib/ban-hang/quick-accessories"
+import { isSellableStatus } from "@/lib/utils/inventory-helpers"
 
 
 export default function BanHangPage() {
@@ -388,7 +389,7 @@ export default function BanHangPage() {
           const data = await resKho.json()
           const products = Array.isArray(data) ? data : data.data || []
           mappedKho = products
-            .filter((p: any) => p.trang_thai === 'Còn hàng' || p.trang_thai === 'Đang CNC')
+            .filter((p: any) => isSellableStatus(p.trang_thai))
             .map((p: any) => ({
               ...p,
               id: p['ID Máy'] || p.id_may || p.id,

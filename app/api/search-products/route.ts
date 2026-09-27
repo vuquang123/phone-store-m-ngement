@@ -2,6 +2,7 @@
 import { google } from "googleapis"
 import { type NextRequest, NextResponse } from "next/server"
 import { parseVietnameseNumber } from "@/lib/number"
+import { isConHangStatus } from "@/lib/utils/inventory-helpers"
 
 export const dynamic = "force-dynamic"
 
@@ -123,7 +124,7 @@ export async function GET(request: NextRequest) {
           // Nếu có cột Trạng Thái: chỉ lấy còn hàng/blank (tùy bạn chỉnh)
           if (trangThaiCol >= 0) {
             const st = norm(row[trangThaiCol])
-            if (st && st !== "Còn hàng" && st !== "còn hàng") return false
+            if (st && !isConHangStatus(st)) return false
           }
           const name = nameCol >= 0 ? norm(row[nameCol]) : ""
           const loai = loaiCol >= 0 ? norm(row[loaiCol]) : ""

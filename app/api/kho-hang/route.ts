@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm, khoColIndex, nguonNhapColIndex, updateProductsNguon, updateProductsDangXuLy } from "@/lib/google-sheets"
 
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
+import { isConHangStatus } from "@/lib/utils/inventory-helpers"
 import { sendStockEventNotification, sendProcessingDeviceMessage, deleteTelegramMessage } from "@/lib/telegram"
 
 export const dynamic = "force-dynamic"
@@ -205,7 +206,7 @@ export async function GET(request: NextRequest) {
       gia_ban: toNumber(row[idx.giaBan]),
       giam_gia: idx.giamGia !== -1 ? toNumber(row[idx.giamGia]) : 0,
       trang_thai: row[idx.trangThai],
-      trang_thai_kho: idx.trangThaiKho !== -1 ? row[idx.trangThaiKho] : (row[idx.trangThai] === "Còn hàng" ? "Có sẵn" : ""),
+      trang_thai_kho: idx.trangThaiKho !== -1 ? row[idx.trangThaiKho] : (isConHangStatus(row[idx.trangThai]) ? "Có sẵn" : ""),
       nguon: (idx.nguon !== -1 && row[idx.nguon]) ? row[idx.nguon] : (idx.trangThaiKho !== -1 ? row[idx.trangThaiKho] : ""),
       nguon_nhap: manager && idx.nguonNhap !== -1 ? (row[idx.nguonNhap] || "") : "",
       ghi_chu: row[idx.ghiChu],

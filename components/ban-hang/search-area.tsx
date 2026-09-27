@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
-import { getLoaiMayLabel, getLoaiMayBadgeClass, getPinColorClass, formatPinDisplay, getAppleColorHex, getTrangThaiColor } from "@/lib/utils/inventory-helpers"
+import { getLoaiMayLabel, getLoaiMayBadgeClass, getPinColorClass, formatPinDisplay, getAppleColorHex, getTrangThaiColor, normalizeStatus } from "@/lib/utils/inventory-helpers"
 import { useRef } from "react"
 
 interface SearchAreaProps {
@@ -164,7 +164,7 @@ export function SearchArea({
               {/* Mobile: Card grid */}
               <div className="md:hidden mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto overflow-x-hidden rounded-lg border mb-4 p-3 min-h-0">
                 {sortedSearchResults.map((product: any, idx: number) => {
-                  const isDisabled = product.trang_thai === "Đã đặt cọc" || product.trang_thai === "Đã bán"
+                  const isDisabled = ["dadatcoc", "daban"].includes(normalizeStatus(product.trang_thai))
                   const rawPin = product.pin ?? product['Pin (%)']
                   const hasPin = rawPin !== undefined && rawPin !== null && String(rawPin).trim() !== ''
                   const formattedPin = !hasPin ? '' : typeof rawPin === 'number' ? `${rawPin}%` : String(rawPin)
@@ -336,7 +336,7 @@ export function SearchArea({
                       ))
                     ) : (
                       sortedSearchResults.map((product: any, idx: number) => {
-                        const isDisabled = product.trang_thai === 'Đã đặt cọc' || product.trang_thai === 'Đã bán'
+                        const isDisabled = ["dadatcoc", "daban"].includes(normalizeStatus(product.trang_thai))
                         const isAccessory = (product.type === 'accessory') || (!!product.loai_phu_kien && !product.imei && !product.serial)
                         const pinRaw = product.pin ?? product['Pin (%)']
                         const tinhTrang = product.tinh_trang || product['Tình Trạng Máy'] || ''

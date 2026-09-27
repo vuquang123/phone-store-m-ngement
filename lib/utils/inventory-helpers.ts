@@ -15,6 +15,14 @@ export function isConHangProduct(p: any) {
   return isConHangStatus(p.trang_thai)
 }
 
+// Máy được phép bán: "Còn hàng" hoặc "Đang CNC".
+// So sánh sau khi bỏ dấu + viết thường vì Trạng Thái trong sheet hay bị gõ tay
+// lệch hoa/thường ("Còn Hàng", "CÒN HÀNG"...) khiến so sánh chuỗi cứng trượt hết.
+export function isSellableStatus(s?: string) {
+  const n = normalizeStatus(s)
+  return n === "conhang" || n === "dangcnc"
+}
+
 export function classifyCondition(p: any) {
   const text = `${p.tinh_trang || ""} ${p.ghi_chu || ""} ${p.loai_may || ""}`
     .normalize("NFD")
@@ -26,13 +34,14 @@ export function classifyCondition(p: any) {
 }
 
 export function getTrangThaiColor(status: string) {
-  switch (status) {
-    case "Còn hàng": return "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
-    case "Đang CNC": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-red-400"
-    case "Bảo hành": return "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-    case "Giao đối tác": return "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400"
-    case "Đã đặt cọc": return "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"
-    case "Đã bán": return "bg-muted text-muted-foreground"
+  // Chuẩn hoá trước khi so (sheet gõ tay hay lệch hoa/thường: "Còn Hàng", "Đang cnc"...)
+  switch (normalizeStatus(status)) {
+    case "conhang": return "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+    case "dangcnc": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-red-400"
+    case "baohanh": return "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+    case "giaodoitac": return "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400"
+    case "dadatcoc": return "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"
+    case "daban": return "bg-muted text-muted-foreground"
     default: return "bg-muted text-muted-foreground"
   }
 }
