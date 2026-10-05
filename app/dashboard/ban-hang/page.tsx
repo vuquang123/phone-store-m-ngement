@@ -1117,6 +1117,15 @@ export default function BanHangPage() {
           });
           if (!res.ok) throw new Error("API ban-hang lỗi: " + (await res.text()));
           const order = await res.json();
+          // Trừ tồn phụ kiện là best-effort ở server (đơn đã ghi xong rồi) nên phải
+          // báo rõ cho nhân viên khi trừ không thành, tránh tồn kho lệch âm thầm.
+          if (Array.isArray(order?.phuKienWarnings) && order.phuKienWarnings.length > 0) {
+            toast({
+              title: 'Tồn phụ kiện chưa trừ đúng',
+              description: order.phuKienWarnings.join(' • '),
+              variant: 'destructive' as any,
+            })
+          }
           if (order && (order.id_don_hang || order.ma_don_hang) && loaiThanhToan !== "Đặt cọc") {
             const derivedOrderType = loaiDon?.toLowerCase?.() ? (loaiDon.toLowerCase().includes('onl') ? 'online' : 'offline') : undefined;
             try {

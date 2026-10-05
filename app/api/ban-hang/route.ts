@@ -2,7 +2,7 @@
 // app/api/ban-hang/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { sendTelegramMessage, formatOrderMessage, deleteTelegramMessage } from "@/lib/telegram"
-import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, batchUpdateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, batchUpdateRangeValues, readRangeValuesFresh, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
@@ -1019,36 +1019,84 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Lỗi ghi Google Sheets" }, { status: 500 })
     }
 
-    // Giảm số lượng phụ kiện trong kho
+    // Giảm số lượng phụ kiện trong kho.
+    // Cả block bọc try/catch: đơn hàng đã ghi xong ở trên nên không được để lỗi ở đây
+    // làm request trả 500 (FE sẽ báo lỗi sai và nhân viên xuất đơn lại -> trùng đơn).
+    const phuKienWarnings: string[] = []
     if (normalizedAccessories.length > 0) {
-      const { header, rows } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
-      const idx = {
-        id: colIndex(header, "ID"),
-        tenSP: colIndex(header, "Tên Sản Phẩm"),
-        loai: colIndex(header, "Loại"),
-        soLuong: colIndex(header, "Số Lượng")
-      }
-      for (const pk of normalizedAccessories) {
-        const foundIdx = findAccessoryRowIndex(rows, idx, pk)
-        if (foundIdx === -1 || idx.soLuong === -1) {
-          // Không tìm thấy dòng -> tồn kho sẽ lệch, cần log để phát hiện sớm.
-          console.warn("[Phu_Kien] Không tìm thấy dòng để trừ tồn:", {
-            id: pk?.id, ten: pk?.ten_phu_kien || pk?.ten, loai: pk?.loai, hasSoLuongCol: idx.soLuong !== -1,
-          })
-          continue
+      try {
+        const { header, rows } = await readFromGoogleSheets(SHEETS.PHU_KIEN)
+        const idx = {
+          id: colIndex(header, "ID"),
+          tenSP: colIndex(header, "Tên Sản Phẩm"),
+          loai: colIndex(header, "Loại"),
+          soLuong: colIndex(header, "Số Lượng")
         }
-        let current = Number(rows[foundIdx][idx.soLuong] || 0)
-        let sold = pk.so_luong !== undefined ? Number(pk.so_luong) : (pk.sl !== undefined ? Number(pk.sl) : 1)
-        if (!Number.isFinite(sold) || sold <= 0) sold = 1
-        let newQty = Math.max(current - sold, 0)
-        const rowNumber = foundIdx + 2 // Google Sheets row index (1-based, header is row 1)
-        try {
-          await updateRangeValues(`Phu_Kien!${toColumnLetter(idx.soLuong + 1)}${rowNumber}`, [[newQty]])
-        } catch (e) {
-          // Đơn đã ghi xong ở trên: không trả 500 làm FE báo lỗi sai, chỉ log lại.
-          console.error("[Phu_Kien] Trừ tồn thất bại:", { id: pk?.id, rowNumber, newQty }, e)
+        if (idx.soLuong === -1) {
+          phuKienWarnings.push('Sheet Phu_Kien không có cột "Số Lượng" nên không trừ được tồn.')
+        } else {
+          // Gộp theo DÒNG sheet: 1 đơn có thể có nhiều dòng giỏ hàng trỏ về cùng 1 dòng
+          // phụ kiện; nếu ghi từng dòng riêng thì lần ghi sau đè lần ghi trước (chỉ trừ 1).
+          const soldByRow = new Map<number, number>()
+          for (const pk of normalizedAccessories) {
+            const foundIdx = findAccessoryRowIndex(rows, idx, pk)
+            if (foundIdx === -1) {
+              const label = pk?.ten_phu_kien || pk?.ten || pk?.name || pk?.id || "?"
+              console.warn("[Phu_Kien] Không tìm thấy dòng để trừ tồn:", {
+                id: pk?.id, ten: pk?.ten_phu_kien || pk?.ten, loai: pk?.loai,
+              })
+              phuKienWarnings.push(`Không tìm thấy phụ kiện "${label}" trong sheet Phu_Kien — chưa trừ tồn.`)
+              continue
+            }
+            let sold = pk.so_luong !== undefined ? Number(pk.so_luong) : (pk.sl !== undefined ? Number(pk.sl) : 1)
+            if (!Number.isFinite(sold) || sold <= 0) sold = 1
+            soldByRow.set(foundIdx, (soldByRow.get(foundIdx) || 0) + sold)
+          }
+
+          if (soldByRow.size > 0) {
+            const col = toColumnLetter(idx.soLuong + 1)
+            const rowNumbers = Array.from(soldByRow.keys()).map((i) => i + 2)
+            const firstRow = Math.min(...rowNumbers)
+            const lastRow = Math.max(...rowNumbers)
+            // Tồn hiện tại phải đọc TRỰC TIẾP, không dùng `rows` ở trên: đó là snapshot
+            // cache (readFromGoogleSheets cache 15s và serve dữ liệu stale khi bị 429),
+            // tính "tồn cũ - đã bán" trên snapshot cũ sẽ ghi lại số lớn hơn tồn thật
+            // -> trông như tồn kho không giảm.
+            let fresh: any[][] | null = null
+            try {
+              fresh = await readRangeValuesFresh(`'${SHEETS.PHU_KIEN}'!${col}${firstRow}:${col}${lastRow}`)
+            } catch (e) {
+              console.error("[Phu_Kien] Không đọc được tồn mới nhất -> bỏ qua trừ tồn:", e)
+              phuKienWarnings.push("Không đọc được tồn phụ kiện mới nhất — CHƯA trừ tồn, vui lòng trừ tay trong sheet Phu_Kien.")
+            }
+
+            if (fresh) {
+              const updates: Array<{ range: string; values: any[][] }> = []
+              for (const [rowIdx, sold] of soldByRow) {
+                const rowNumber = rowIdx + 2 // Google Sheets row index (1-based, header là dòng 1)
+                const current = toNumberLoose(fresh[rowNumber - firstRow]?.[0] ?? 0)
+                const newQty = Math.max(current - sold, 0)
+                if (current < sold) {
+                  phuKienWarnings.push(`Phụ kiện dòng ${rowNumber}: bán ${sold} nhưng tồn chỉ còn ${current}.`)
+                }
+                updates.push({ range: `'${SHEETS.PHU_KIEN}'!${col}${rowNumber}`, values: [[newQty]] })
+              }
+              try {
+                await batchUpdateRangeValues(updates)
+              } catch (e) {
+                console.error("[Phu_Kien] Trừ tồn thất bại:", updates, e)
+                phuKienWarnings.push("Ghi tồn phụ kiện thất bại — vui lòng trừ tay trong sheet Phu_Kien.")
+              }
+            }
+          }
         }
+      } catch (e) {
+        console.error("[Phu_Kien] Lỗi khi trừ tồn phụ kiện:", e)
+        phuKienWarnings.push("Lỗi khi trừ tồn phụ kiện — vui lòng kiểm tra sheet Phu_Kien.")
       }
+    }
+    if (phuKienWarnings.length > 0) {
+      console.warn("[Phu_Kien] Cảnh báo trừ tồn cho đơn", idDonHang, phuKienWarnings)
     }
 
     /* =================== Cập nhật Khach_Hang (Tổng mua & Lần mua cuối) =================== */
@@ -1385,6 +1433,7 @@ export async function POST(request: NextRequest) {
       warrantyTotalServer: warrantyTotalFee,
       finalTotalServer,
       telegram: telegramStatus,
+      phuKienWarnings,
     }, { status: 201 })
   } catch (error) {
     console.error("Ban_Hang POST error:", error)

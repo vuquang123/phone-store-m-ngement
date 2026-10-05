@@ -453,6 +453,22 @@ export async function updateRowInGoogleSheets(sheetName: string, key: string, ke
   }
 }
 
+// Đọc 1 range TRỰC TIẾP từ Google Sheets, KHÔNG qua cache.
+// Dùng cho read-modify-write (vd trừ tồn phụ kiện khi bán): readFromGoogleSheets()
+// trả về snapshot cache (và khi Sheets trả 429 thì serve cả dữ liệu stale tuỳ ý),
+// nên nếu tính "tồn mới = tồn cũ - đã bán" trên snapshot đó thì giá trị ghi lại
+// có thể BẰNG hoặc LỚN HƠN tồn thật -> tồn kho trông như không bao giờ giảm.
+// Hàm này throw khi đọc lỗi để caller biết mà bỏ qua việc ghi.
+export async function readRangeValuesFresh(range: string): Promise<any[][]> {
+  await throttleReads()
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+    range,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  })
+  return (res.data.values || []) as any[][]
+}
+
 export async function updateRangeValues(range: string, values: any[][]) {
   // Dùng client singleton (getSheetsClient) thay vì tạo google.sheets() mới mỗi lần.
   await sheets.spreadsheets.values.update({

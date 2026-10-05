@@ -82,11 +82,15 @@ function buildBodyNormMap(body: Record<string, any> = {}) {
 }
 
 function getValForHeader(
-  k: string,
+  kRaw: string,
   body: Record<string, any>,
   bodyNormMap: Record<string, any>,
   opts: { idMay: string; imeiStr: string; serialStr: string; defaultNgayNhap: string }
 ) {
+  // Tiêu đề trong sheet có thể bị lọt khoảng trắng đầu/cuối khi sửa tay
+  // (vd cột A của Kho_Hang đang là " ID Máy"). So sánh trên bản đã trim,
+  // nếu không thì mọi nhánh `k === "..."` đều trượt và cột bị ghi rỗng.
+  const k = String(kRaw ?? "").trim()
   const nk = normalizeKey(k)
   if (k === "ID Máy") return opts.idMay
   if (k === "IMEI") return opts.imeiStr
@@ -152,6 +156,7 @@ function getValForHeader(
     return body.dang_xu_ly || bodyNormMap["dangxuly"] || "No"
   }
   return (
+    body[kRaw] ??
     body[k] ??
     body[k.replace(/\s/g, "_").toLowerCase()] ??
     body[k.replace(/\s/g, "").toLowerCase()] ??
@@ -342,7 +347,8 @@ export async function POST(request: NextRequest) {
       const oldRow = rows[rowIndex]
       // Map dữ liệu mới: nếu trường không có trong body thì lấy giá trị cũ
       const bodyNormMap = buildBodyNormMap(body)
-      const newRow = header.map((k, i) => {
+      const newRow = header.map((kRaw, i) => {
+        const k = String(kRaw ?? "").trim()
         const nk = normalizeKey(k)
         // Ưu tiên các key cụ thể trong body hoặc bodyNormMap
         if (k === "Nguồn" || k === "Nguồn Hàng") {
