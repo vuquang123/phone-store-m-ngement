@@ -4,25 +4,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { RotateCcw } from "lucide-react"
+import { useInventoryStore } from "@/lib/store/inventory-store"
 
+// Giá trị bộ lọc đọc trực tiếp từ useInventoryStore (dùng chung với trang Kho hàng),
+// nên component chỉ còn nhận danh sách option động + giá trần.
 interface AdvancedFilterBarProps {
   productNames: string[]
   colors: string[]
   capacities: string[]
   maxPrice: number
-  productNameFilter: string
-  setProductNameFilter: (v: string) => void
-  loaiMayFilter: string
-  setLoaiMayFilter: (v: string) => void
-  colorFilter: string
-  setColorFilter: (v: string) => void
-  capacityFilter: string
-  setCapacityFilter: (v: string) => void
-  pinFilter: "all" | "100" | "9x" | "8x" | "7x" | "lt70"
-  setPinFilter: (v: "all" | "100" | "9x" | "8x" | "7x" | "lt70") => void
-  priceRange: [number, number]
-  setPriceRange: (v: [number, number]) => void
-  resetFilters: () => void
 }
 
 const TRIGGER_CLS = "h-9 bg-card text-xs [&>span]:truncate"
@@ -32,20 +22,17 @@ export function AdvancedFilterBar({
   colors,
   capacities,
   maxPrice,
-  productNameFilter,
-  setProductNameFilter,
-  loaiMayFilter,
-  setLoaiMayFilter,
-  colorFilter,
-  setColorFilter,
-  capacityFilter,
-  setCapacityFilter,
-  pinFilter,
-  setPinFilter,
-  priceRange,
-  setPriceRange,
-  resetFilters,
 }: AdvancedFilterBarProps) {
+  const {
+    productNameFilter, setProductNameFilter,
+    loaiMayFilter, setLoaiMayFilter,
+    colorFilter, setColorFilter,
+    capacityFilter, setCapacityFilter,
+    pinFilter, setPinFilter,
+    priceRange, setPriceRange,
+    resetFilters,
+  } = useInventoryStore()
+
   const fmt = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toLocaleString("vi-VN")}tr` : n.toLocaleString("vi-VN"))
 
   return (
@@ -60,7 +47,7 @@ export function AdvancedFilterBar({
           </SelectContent>
         </Select>
 
-        <Select value={loaiMayFilter} onValueChange={setLoaiMayFilter}>
+        <Select value={loaiMayFilter} onValueChange={setLoaiMayFilter as any}>
           <SelectTrigger className={TRIGGER_CLS}><SelectValue placeholder="Loại máy" /></SelectTrigger>
           <SelectContent className="bg-card">
             <SelectItem value="all">Loại máy: Tất cả</SelectItem>

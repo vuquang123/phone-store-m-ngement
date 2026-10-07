@@ -29,8 +29,7 @@ interface HeaderProps {
 // Tiêu đề hiển thị theo route (khớp tên mục sidebar) — khớp prefix cụ thể nhất trước
 const PAGE_TITLES: [string, string][] = [
   ["/dashboard/ban-hang/don-hang", "Đơn hàng"],
-  ["/dashboard/kho-hang", "Kho hàng"],
-  ["/dashboard/ban-hang", "Bán hàng"],
+  ["/dashboard/ban-hang", "Bán hàng & Kho"],
   ["/dashboard/khach-hang", "Khách hàng"],
   ["/dashboard/hoan-tra", "Hoàn trả"],
   ["/dashboard/tien-mat", "Quỹ tiền mặt"],

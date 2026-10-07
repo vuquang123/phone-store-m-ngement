@@ -34,7 +34,25 @@ import { CartItemList } from "@/components/ban-hang/cart-item-list"
 import { SearchArea } from "@/components/ban-hang/search-area"
 import { AdvancedFilterBar } from "@/components/ban-hang/advanced-filter-bar"
 import { normalizeVi } from "@/lib/ban-hang/quick-accessories"
-import { isSellableStatus } from "@/lib/utils/inventory-helpers"
+import { useSellableCatalog } from "@/hooks/ban-hang/use-sellable-catalog"
+import { isAccessoryItem } from "@/lib/catalog/normalize"
+import { useInventoryStore, MAX_PRICE } from "@/lib/store/inventory-store"
+import { useFilterPersistence } from "@/hooks/use-filter-persistence"
+import { useQueryClient } from "@tanstack/react-query"
+// === Gộp từ trang Kho hàng (trang /dashboard/kho-hang đã bỏ, redirect về đây) ===
+import { InventoryStats } from "@/components/kho-hang/inventory-tabs"
+import { ManageTabs, MANAGE_TABS, type ManageTab } from "@/components/kho-hang/manage-tabs"
+import { ProductDialog } from "@/components/kho-hang/product-dialog"
+import { SendCNCDialog } from "@/components/kho-hang/send-cnc-dialog"
+import { SendPartnerDialog } from "@/components/kho-hang/send-partner-dialog"
+import { RefreshButton } from "@/components/ui/refresh-button"
+import { PullToRefresh } from "@/components/ui/pull-to-refresh"
+import { useInventoryActions } from "@/hooks/use-inventory-actions"
+import { useInventoryData, useCNCData, useBaoHanhHistory, useAccessoriesData } from "@/hooks/use-inventory-data"
+import { isConHangProduct } from "@/lib/utils/inventory-helpers"
+import { buildCustomerQuoteList, copyTextToClipboard } from "@/lib/utils/customer-quote"
+import { toast as sonnerToast } from "sonner"
+import { ListChecks } from "lucide-react"
 
 
 export default function BanHangPage() {
@@ -43,17 +61,22 @@ export default function BanHangPage() {
   const { me } = useAuthMe()
   const isManager = me?.role === "quan_ly"
   const [mobileView, setMobileView] = useState<"san-pham" | "gio-hang" | "thanh-toan">("san-pham")
-  // Bộ lọc nhanh cho mobile-first
-  const [filterSource, setFilterSource] = useState<"all" | "inhouse" | "partner">("all")
-  const [filterType, setFilterType] = useState<"all" | "iphone" | "ipad" | "phu_kien" | "sim_ghep">("all")
-  // Bộ lọc nâng cao (đồng bộ với trang Kho hàng)
-  const BH_MAX_PRICE = 50000000
-  const [productNameFilter, setProductNameFilter] = useState("all")
-  const [loaiMayFilter, setLoaiMayFilter] = useState("all") // "all" | "Lock" | "Qte"
-  const [colorFilter, setColorFilter] = useState("all")
-  const [capacityFilter, setCapacityFilter] = useState("all")
-  const [pinFilter, setPinFilter] = useState<"all" | "100" | "9x" | "8x" | "7x" | "lt70">("all")
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, BH_MAX_PRICE])
+  // Bộ lọc dùng CHUNG với trang Kho hàng (useInventoryStore) — xem lib/store/inventory-store.ts.
+  const BH_MAX_PRICE = MAX_PRICE
+  const {
+    searchTerm: searchQuery, setSearchTerm: setSearchQuery,
+    sourceFilter: filterSource, setSourceFilter: setFilterSource,
+    filterType, setFilterType,
+    productNameFilter,
+    loaiMayFilter,
+    colorFilter,
+    capacityFilter,
+    pinFilter,
+    priceRange,
+    resetFilters: resetAdvancedFilters,
+  } = useInventoryStore()
+  // Nhớ bộ lọc giữa các lần vào trang (localStorage, nạp sau mount)
+  useFilterPersistence()
   // Lấy employeeId từ API /me và lưu vào localStorage
   useEffect(() => {
     async function fetchEmployeeId() {
@@ -75,6 +98,15 @@ export default function BanHangPage() {
   const [depositSearch, setDepositSearch] = useState("")
   const [activeTab, setActiveTab] = useState("ban-hang")
   const [reloadFlag, setReloadFlag] = useState(0)
+  // ===== Quản lý kho (gộp từ trang Kho hàng) =====
+  const [manageTab, setManageTab] = useState<ManageTab>("dang-cnc")
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<any>(null)
+  const [isSendCNCDialogOpen, setIsSendCNCDialogOpen] = useState(false)
+  const [isSendPartnerDialogOpen, setIsSendPartnerDialogOpen] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   // Fetch đơn đặt cọc từ API khi vào tab hoặc khi tạo mới
   useEffect(() => {
     if (activeTab !== "don-dat-coc") return;
@@ -154,8 +186,6 @@ export default function BanHangPage() {
   }, [depositOrdersState])
 
   // State to hold kho hàng products
-  const [khoHangProducts, setKhoHangProducts] = useState<any[]>([])
-  const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<any[]>([])
   // Giỏ hàng + chọn bảo hành tách sang hook useCart (giữ nguyên hành vi load/persist/mutators)
   const {
@@ -220,12 +250,15 @@ export default function BanHangPage() {
   const [customerSearch, setCustomerSearch] = useState("")
 
   const [customerResults, setCustomerResults] = useState<any[]>([])
-  // Máy kho ngoài cache để lọc nhanh trong tìm kiếm
-  const [partnerProducts, setPartnerProducts] = useState<any[]>([])
-  // Cache phụ kiện để tránh gọi API lặp khi query ngắn (chỉ hàng còn tồn > 0, dùng cho tìm kiếm/bán)
-  const [accessoryProducts, setAccessoryProducts] = useState<any[]>([])
-  // Toàn bộ phụ kiện (kể cả tồn = 0) — dùng cho checkbox phụ kiện kèm máy ở giỏ (hiện nhưng khoá khi hết)
-  const [allAccessoryProducts, setAllAccessoryProducts] = useState<any[]>([])
+  // Catalog (máy kho shop / máy kho ngoài / phụ kiện) dùng chung React Query cache với
+  // trang Kho hàng -> mở 2 trang chỉ đọc sheet 1 lượt. allAccessoryProducts gồm cả hàng
+  // tồn = 0 để checkbox phụ kiện kèm máy trong giỏ vẫn hiện (nhưng khoá khi hết).
+  const {
+    khoHangProducts,
+    partnerProducts,
+    accessoryProducts,
+    allAccessoryProducts,
+  } = useSellableCatalog()
   // Desktop search table UX enhancements
   const [sortKey, setSortKey] = useState<SortKey>('san_pham')
   const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc')
@@ -233,44 +266,6 @@ export default function BanHangPage() {
   const tableContainerRef = useRef<HTMLDivElement|null>(null)
   const [isSearching, setIsSearching] = useState(false)
   // Persist search & filters
-  useEffect(() => {
-    try {
-      const savedQ = localStorage.getItem('bh_search_query')
-      const savedSrc = localStorage.getItem('bh_filter_source') as any
-  const savedType = localStorage.getItem('bh_filter_type') as any
-      if (savedQ !== null) setSearchQuery(savedQ)
-      if (savedSrc === 'all' || savedSrc === 'inhouse' || savedSrc === 'partner') setFilterSource(savedSrc)
-  if (savedType === 'iphone' || savedType === 'ipad' || savedType === 'sim_ghep' || savedType === 'phu_kien') setFilterType(savedType)
-  else if (savedType === 'all' || savedType === 'accessory') setFilterType(savedType === 'accessory' ? 'phu_kien' : 'all')
-      // Bộ lọc nâng cao
-      const savedName = localStorage.getItem('bh_filter_name')
-      const savedLoai = localStorage.getItem('bh_filter_loai_may')
-      const savedColor = localStorage.getItem('bh_filter_color')
-      const savedCap = localStorage.getItem('bh_filter_capacity')
-      const savedPin = localStorage.getItem('bh_filter_pin') as any
-      const savedPrice = localStorage.getItem('bh_filter_price')
-      if (savedName) setProductNameFilter(savedName)
-      if (savedLoai === 'all' || savedLoai === 'Lock' || savedLoai === 'Qte') setLoaiMayFilter(savedLoai)
-      if (savedColor) setColorFilter(savedColor)
-      if (savedCap) setCapacityFilter(savedCap)
-      if (['all', '100', '9x', '8x', '7x', 'lt70'].includes(savedPin)) setPinFilter(savedPin)
-      if (savedPrice) {
-        const parsed = JSON.parse(savedPrice)
-        if (Array.isArray(parsed) && parsed.length === 2) setPriceRange([Number(parsed[0]) || 0, Number(parsed[1]) || BH_MAX_PRICE])
-      }
-    } catch {}
-    // run once
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  useEffect(() => { try { localStorage.setItem('bh_search_query', searchQuery) } catch{} }, [searchQuery])
-  useEffect(() => { try { localStorage.setItem('bh_filter_source', filterSource) } catch{} }, [filterSource])
-  useEffect(() => { try { localStorage.setItem('bh_filter_type', filterType) } catch{} }, [filterType])
-  useEffect(() => { try { localStorage.setItem('bh_filter_name', productNameFilter) } catch{} }, [productNameFilter])
-  useEffect(() => { try { localStorage.setItem('bh_filter_loai_may', loaiMayFilter) } catch{} }, [loaiMayFilter])
-  useEffect(() => { try { localStorage.setItem('bh_filter_color', colorFilter) } catch{} }, [colorFilter])
-  useEffect(() => { try { localStorage.setItem('bh_filter_capacity', capacityFilter) } catch{} }, [capacityFilter])
-  useEffect(() => { try { localStorage.setItem('bh_filter_pin', pinFilter) } catch{} }, [pinFilter])
-  useEffect(() => { try { localStorage.setItem('bh_filter_price', JSON.stringify(priceRange)) } catch{} }, [priceRange])
   // Reset row selection when query changes
   useEffect(() => { setSelectedIndex(-1) }, [searchQuery])
   // Hàm reload danh sách khách hàng
@@ -372,115 +367,73 @@ export default function BanHangPage() {
     return () => clearTimeout(debounce)
   }, [searchQuery, khoHangProducts, partnerProducts, accessoryProducts])
 
-  // Fetch cache (kho hàng, phụ kiện, kho ngoài) khi vào trang hoặc sau khi reloadFlag thay đổi
-  useEffect(() => {
-    let alive = true
-    const fetchCaches = async () => {
-      try {
-        const [resKho, resPhuKien, resPartner] = await Promise.all([
-          fetch('/api/kho-hang', { headers: getAuthHeaders() }),
-          fetch('/api/phu-kien'),
-          fetch('/api/doi-tac/hang-order')
-        ])
+  /* =================== Quản lý kho: actions + thống kê =================== */
+  const queryClient = useQueryClient()
+  const { toggleDangXuLy, isTogglingDangXuLy, bulkUpdateNguon } = useInventoryActions()
+  const { data: invResRaw } = useInventoryData()
+  const { data: cncResRaw } = useCNCData()
+  const { data: bhResRaw } = useBaoHanhHistory()
+  const { data: accResRaw } = useAccessoriesData()
 
-        // Kho hàng
-        let mappedKho: any[] = []
-        if (resKho.ok) {
-          const data = await resKho.json()
-          const products = Array.isArray(data) ? data : data.data || []
-          mappedKho = products
-            .filter((p: any) => isSellableStatus(p.trang_thai))
-            .map((p: any) => ({
-              ...p,
-              id: p['ID Máy'] || p.id_may || p.id,
-              type: 'product',
-              gia_nhap: p.gia_nhap ?? p['Giá Nhập'] ?? '',
-              nguon_nhap: p.nguon_nhap ?? p['Nguồn nhập'] ?? p['Nguồn Nhập'] ?? '',
-              'Tên Sản Phẩm': p.ten_san_pham,
-              'Loại Máy': p.loai_may,
-              'Dung Lượng': p.dung_luong,
-              'IMEI': p.imei,
-              serial: p.serial || p['Serial'] || '',
-              'Màu Sắc': p.mau_sac,
-              'Pin (%)': p.pin,
-              'Tình Trạng Máy': p.tinh_trang_may,
-              giam_gia: p.giam_gia ?? 0,
-              ghi_chu: p.ghi_chu ?? p['Ghi Chú'] ?? ''
-            }))
-        }
-
-        // Phụ kiện
-        let mappedAccessories: any[] = []
-        let mappedAllAccessories: any[] = []
-        if (resPhuKien.ok) {
-          const data = await resPhuKien.json()
-          const accessories = Array.isArray(data) ? data : data.data || []
-          mappedAllAccessories = accessories.map((a: any) => {
-            let price = 0
-            if (typeof a.gia_ban === 'string') {
-              const cleaned = a.gia_ban.replace(/[^\d]/g, '')
-              price = cleaned ? parseInt(cleaned, 10) : 0
-            } else if (typeof a.gia_ban === 'number') {
-              price = a.gia_ban
-            }
-            return { ...a, type: 'accessory', ten_san_pham: a.ten_san_pham || a.ten_phu_kien || '', gia_ban: price }
-          })
-          // Danh sách bán/tìm kiếm chỉ gồm hàng còn tồn > 0
-          mappedAccessories = mappedAllAccessories.filter((a: any) => Number(a.so_luong_ton) > 0)
-        }
-
-        // Kho ngoài
-        let mappedPartner: any[] = []
-        if (resPartner.ok) {
-          const data = await resPartner.json()
-          const items = Array.isArray(data?.items) ? data.items : []
-          mappedPartner = items.map((p: any) => ({
-            id: p.imei || p.serial || p.id,
-            type: 'product',
-            ten_san_pham: p.model || '',
-            gia_ban: typeof p.gia_goi_y_ban === 'number' ? p.gia_goi_y_ban : 0,
-            gia_nhap: typeof p.gia_chuyen === 'number' ? p.gia_chuyen : 0,
-            so_luong: 1,
-            max_quantity: 1,
-            imei: p.imei || '',
-            serial: p.serial || '',
-            trang_thai: 'Còn hàng',
-            loai_may: p.loai_may || '',
-            dung_luong: p.bo_nho || '',
-            mau_sac: p.mau || '',
-            pin: p.pin_pct || '',
-            tinh_trang: p.tinh_trang || '',
-            source: 'Kho ngoài',
-            nguon: 'Kho ngoài',
-            partner_sheet: p.sheet,
-            partner_row_index: p.row_index,
-            ten_doi_tac: p.ten_doi_tac || '',
-            sdt_doi_tac: p.sdt_doi_tac || ''
-          }))
-        }
-
-        if (!alive) return
-        setKhoHangProducts(mappedKho)
-        setAccessoryProducts(mappedAccessories)
-        setAllAccessoryProducts(mappedAllAccessories)
-        setPartnerProducts(mappedPartner)
-
-        // Nếu đang không search, cập nhật ngay list hiển thị để người dùng thấy dữ liệu mới
-        if (searchQuery.trim().length < 2) {
-          setSearchResults([...mappedKho, ...mappedPartner, ...mappedAccessories])
-        }
-      } catch (e) {
-        if (!alive) return
-        setKhoHangProducts([])
-        setAccessoryProducts([])
-        setAllAccessoryProducts([])
-        setPartnerProducts([])
-        if (searchQuery.trim().length < 2) setSearchResults([])
-      }
+  const inventoryStats = useMemo(() => {
+    const rawInventory: any[] = invResRaw?.data || []
+    const cncProducts: any[] = cncResRaw?.data || []
+    const baoHanhHistory: any[] = bhResRaw?.data || []
+    const accessories: any[] = accResRaw?.data || []
+    return {
+      soSanPhamCon: rawInventory.filter(isConHangProduct).length,
+      soSanPhamCNC: cncProducts.filter((p: any) => p.trang_thai === "Đang CNC").length,
+      soSanPhamBH: baoHanhHistory.length,
+      soSanPhamDoiTac: rawInventory.filter((p: any) => p.trang_thai === "Giao đối tác").length,
+      soPhuKienDaHet: accessories.filter((a: any) => parseInt(a.so_luong_ton) <= 0).length,
+      soPhuKienSapHet: accessories.filter((a: any) => {
+        const q = parseInt(a.so_luong_ton)
+        return q > 0 && q <= 5
+      }).length,
     }
-    fetchCaches()
-    return () => { alive = false }
-  }, [reloadFlag])
+  }, [invResRaw, cncResRaw, bhResRaw, accResRaw])
+
+  // Máy trong kho hệ thống (có trong sheet Kho_Hang) mới chỉnh/CNC/giao đối tác được.
+  const allInventoryProducts: any[] = invResRaw?.data || []
+
+  const handleSelectMachine = (id: string) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+
+  const clearMachineSelection = () => {
+    setSelectedIds([])
+    setIsEditMode(false)
+  }
+
+  const handleRefreshAll = async () => {
+    setRefreshing(true)
+    try {
+      // Bust cache server (TTL 15s) trước để chắc chắn lấy dữ liệu mới nhất từ sheet
+      await fetch("/api/kho-hang?refresh=1", { cache: "no-store" }).catch(() => {})
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["partner-inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["cnc-inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["accessories-inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["baohanh-history"] }),
+        queryClient.invalidateQueries({ queryKey: ["hang-doi-tac"] }),
+      ])
+      sonnerToast.success("Đã làm mới dữ liệu")
+    } catch {
+      sonnerToast.error("Lỗi khi làm mới dữ liệu")
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  // reloadFlag là tín hiệu "vừa ghi xong đơn" -> làm mới catalog qua React Query.
+  // Bỏ qua lần render đầu vì query đã tự fetch khi mount.
+  const didMountRef = useRef(false)
+  useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return }
+    queryClient.invalidateQueries({ queryKey: ["inventory"] })
+    queryClient.invalidateQueries({ queryKey: ["accessories-inventory"] })
+    queryClient.invalidateQueries({ queryKey: ["partner-inventory"] })
+  }, [reloadFlag, queryClient])
 
   // === CART === addToCart/addPartnerItemToCart/updateQuantity/removeFromCart chuyển sang useCart
 
@@ -585,22 +538,6 @@ export default function BanHangPage() {
     }
   }
 
-  // Helper dùng chung để nhận diện phụ kiện
-  const isAccessoryItem = (p: any) => (p.type === "accessory") || (!!p.loai_phu_kien && !p.imei && !p.serial)
-
-  // Đặt lại toàn bộ bộ lọc (tìm kiếm + nhanh + nâng cao)
-  const resetAdvancedFilters = () => {
-    setSearchQuery("")
-    setFilterSource("all")
-    setFilterType("all")
-    setProductNameFilter("all")
-    setLoaiMayFilter("all")
-    setColorFilter("all")
-    setCapacityFilter("all")
-    setPinFilter("all")
-    setPriceRange([0, BH_MAX_PRICE])
-  }
-
   // Tập định danh các máy đã có trong giỏ (để tô màu ở bảng tìm kiếm)
   const cartProductKeys = useMemo(() => {
     const s = new Set<string>()
@@ -641,8 +578,8 @@ export default function BanHangPage() {
       if (filterType === 'sim_ghep') return isAccessoryItem(p) && isSimGhep(p)
       // Các tab còn lại: phụ kiện không hiển thị (đã chuyển sang tích kèm máy trong giỏ)
       if (isAccessoryItem(p)) return false
-      if (filterSource === "inhouse" && isPartner) return false
-      if (filterSource === "partner" && !isPartner) return false
+      if (filterSource === "kho" && isPartner) return false
+      if (filterSource === "doi_tac" && !isPartner) return false
       if (filterType==='iphone') {
         if (isIpad(p)) return false
       }
@@ -691,8 +628,8 @@ export default function BanHangPage() {
       if (isAccessoryItem(p)) return false
       const src = String(p.nguon || p.source || "").toLowerCase()
       const isPartner = !!src.match(/kho ngoài|kho ngoài/i)
-      if (filterSource === "inhouse" && isPartner) return false
-      if (filterSource === "partner" && !isPartner) return false
+      if (filterSource === "kho" && isPartner) return false
+      if (filterSource === "doi_tac" && !isPartner) return false
       return true
     })
     const matchName = (p: any) => productNameFilter === "all" || p.ten_san_pham === productNameFilter
@@ -753,6 +690,20 @@ export default function BanHangPage() {
     arr.sort((a,b) => sortOrder==='asc' ? cmp(a,b) : cmp(b,a))
     return arr
   }, [filteredSearchResults, sortKey, sortOrder])
+
+  // Chỉ MÁY trong danh sách đã lọc — dùng cho "Copy tổng" và chọn hàng loạt
+  // (phụ kiện không có IMEI/Serial và được quản lý ở tab Xử lý > Tồn phụ kiện).
+  const machineResults = useMemo(
+    () => sortedSearchResults.filter((p: any) => !!(p.imei || p.serial)),
+    [sortedSearchResults],
+  )
+
+  // Hành động quản lý (CNC / giao đối tác / đang xử lý / chuyển kho) chỉ áp được cho máy
+  // nằm trong sheet Kho_Hang. Máy kho ngoài vẫn bán được nhưng không chọn hàng loạt được.
+  const manageableIds = useMemo(() => {
+    const ids = new Set(allInventoryProducts.map((p: any) => String(p.id)))
+    return machineResults.filter((p: any) => ids.has(String(p.id))).map((p: any) => String(p.id))
+  }, [machineResults, allInventoryProducts])
 
   function toggleSort(k: SortKey){
     if (sortKey === k) setSortOrder(prev => prev==='asc' ? 'desc' : 'asc')
@@ -1283,14 +1234,25 @@ export default function BanHangPage() {
   // === UI ===
   return (
     <ProtectedRoute>
+      <PullToRefresh onRefresh={handleRefreshAll}>
       <div className="space-y-6 pb-28 md:pb-0">
+        {/* Thẻ số liệu chỉ hiện trên desktop: trên mobile ưu tiên ô tìm kiếm để bán hàng. */}
+        {!isMobile && <InventoryStats
+          {...inventoryStats}
+          onNavigate={(target) => {
+            if (target === "san-pham") { setActiveTab("ban-hang"); return }
+            setActiveTab("xu-ly")
+            setManageTab(target)
+          }}
+        />}
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="z-30 bg-card shadow-sm">
             <TabsTrigger
               value="ban-hang"
               className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500"
             >
-              Bán hàng
+              Bán hàng &amp; Kho
             </TabsTrigger>
             <TabsTrigger
               value="don-dat-coc"
@@ -1303,6 +1265,12 @@ export default function BanHangPage() {
                 </span>
               )}
             </TabsTrigger>
+            <TabsTrigger
+              value="xu-ly"
+              className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500"
+            >
+              Xử lý
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="ban-hang">
@@ -1311,6 +1279,95 @@ export default function BanHangPage() {
                 <Button size="sm" variant={mobileView==='san-pham'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('san-pham')}>Sản phẩm</Button>
                 <Button size="sm" variant={mobileView==='gio-hang'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('gio-hang')}>Giỏ hàng ({cart.length})</Button>
                 <Button size="sm" variant={mobileView==='thanh-toan'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('thanh-toan')}>Thanh toán</Button>
+              </div>
+            )}
+
+            {/* Toolbar quản lý kho — gộp từ trang Kho hàng cũ */}
+            {(!isMobile || mobileView === 'san-pham') && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => { setSelectedProduct(null); setIsProductDialogOpen(true) }}
+                    className="bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Nhập hàng
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    title="Chọn hàng loạt"
+                    className={isEditMode ? "bg-blue-50 text-blue-600 border-blue-200" : ""}
+                    onClick={() => { setIsEditMode(!isEditMode); setSelectedIds([]) }}
+                  >
+                    <ListChecks className="w-4 h-4" />
+                  </Button>
+                  <RefreshButton onRefresh={handleRefreshAll} loading={refreshing} className="h-10 w-10" />
+                  <Button
+                    variant="outline"
+                    className="border-sky-300 text-sky-700 hover:bg-sky-50 hover:text-sky-700 dark:border-sky-500/40 dark:text-sky-400 dark:hover:bg-sky-500/10 dark:hover:text-sky-300"
+                    title="Copy tin báo khách toàn bộ danh sách đã lọc"
+                    disabled={!machineResults.length}
+                    onClick={async () => {
+                      if (!machineResults.length) { sonnerToast.error("Không có máy nào trong danh sách để copy"); return }
+                      const ok = await copyTextToClipboard(buildCustomerQuoteList(machineResults))
+                      if (ok) sonnerToast.success(`Đã copy ${machineResults.length} máy để báo khách`)
+                      else sonnerToast.error("Không copy được, thử lại giúp mình")
+                    }}
+                  >
+                    <Copy className="w-4 h-4 mr-2" /> Copy tổng ({machineResults.length})
+                  </Button>
+                </div>
+
+                {isEditMode && selectedIds.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                    <Badge variant="secondary" className="h-9 rounded-md px-3">Đã chọn {selectedIds.length}</Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-700 dark:border-amber-500/40 dark:text-amber-400 dark:hover:bg-amber-500/10"
+                      onClick={() => setIsSendCNCDialogOpen(true)}
+                    >
+                      Gửi CNC
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-purple-300 text-purple-700 hover:bg-purple-50 hover:text-purple-700 dark:border-purple-500/40 dark:text-purple-400 dark:hover:bg-purple-500/10"
+                      onClick={() => setIsSendPartnerDialogOpen(true)}
+                    >
+                      Giao đối tác
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-yellow-300 text-yellow-700 hover:bg-yellow-50 hover:text-yellow-700 dark:border-yellow-500/40 dark:text-yellow-400 dark:hover:bg-yellow-500/10"
+                      disabled={isTogglingDangXuLy}
+                      onClick={() => {
+                        toggleDangXuLy({
+                          productIds: selectedIds,
+                          employeeName: me?.name || me?.employeeId || "NV-UNKNOWN",
+                        }).then(clearMachineSelection).catch(() => {})
+                      }}
+                    >
+                      Đang xử lý
+                    </Button>
+                    <Select onValueChange={(val) => {
+                      bulkUpdateNguon({
+                        productIds: selectedIds,
+                        nguon: val,
+                        employeeId: me?.employeeId || "NV-UNKNOWN",
+                      }).then(clearMachineSelection).catch(() => {})
+                    }}>
+                      <SelectTrigger className="h-9 w-[130px] border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/40 dark:text-emerald-400">
+                        <SelectValue placeholder="Chuyển kho" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card">
+                        <SelectItem value="Kho trong">Kho trong</SelectItem>
+                        <SelectItem value="Kho ngoài">Kho ngoài</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1347,6 +1404,38 @@ export default function BanHangPage() {
                   toast={toast}
                   isManager={isManager}
                   cartProductKeys={cartProductKeys}
+                  isEditMode={isEditMode}
+                  selectedIds={selectedIds}
+                  onSelect={(id) => {
+                    if (!allInventoryProducts.some((p: any) => String(p.id) === String(id))) {
+                      sonnerToast.error("Chỉ chọn được máy trong kho (Kho_Hang)")
+                      return
+                    }
+                    handleSelectMachine(id)
+                  }}
+                  onSelectAll={() => {
+                    if (selectedIds.length === manageableIds.length) setSelectedIds([])
+                    else setSelectedIds(manageableIds)
+                  }}
+                  onEditProduct={(p) => {
+                    // Chỉ máy trong sheet Kho_Hang mới sửa được (máy kho ngoài có id "DT-...")
+                    const inStock = allInventoryProducts.find((x: any) => x.id === p.id)
+                    if (!inStock) { sonnerToast.error("Chỉ sửa được máy trong kho (Kho_Hang)"); return }
+                    setSelectedProduct(inStock)
+                    setIsProductDialogOpen(true)
+                  }}
+                  onSendCNC={(p) => { setSelectedIds([p.id]); setIsSendCNCDialogOpen(true) }}
+                  onSendPartner={(p) => { setSelectedIds([p.id]); setIsSendPartnerDialogOpen(true) }}
+                  onToggleProcessing={(p) => {
+                    if (String(p.id).startsWith("DT-")) {
+                      sonnerToast.error("Chỉ đánh dấu được máy trong kho (Kho_Hang)")
+                      return
+                    }
+                    toggleDangXuLy({
+                      productIds: [p.id],
+                      employeeName: me?.name || me?.employeeId || "NV-UNKNOWN",
+                    }).catch(() => {})
+                  }}
                   advancedFilter={filterType === "phu_kien" || filterType === "sim_ghep"
                     ? null
                     : (
@@ -1355,19 +1444,6 @@ export default function BanHangPage() {
                         colors={advancedFilterOptions.colors}
                         capacities={advancedFilterOptions.capacities}
                         maxPrice={BH_MAX_PRICE}
-                        productNameFilter={productNameFilter}
-                        setProductNameFilter={setProductNameFilter}
-                        loaiMayFilter={loaiMayFilter}
-                        setLoaiMayFilter={setLoaiMayFilter}
-                        colorFilter={colorFilter}
-                        setColorFilter={setColorFilter}
-                        capacityFilter={capacityFilter}
-                        setCapacityFilter={setCapacityFilter}
-                        pinFilter={pinFilter}
-                        setPinFilter={setPinFilter}
-                        priceRange={priceRange}
-                        setPriceRange={setPriceRange}
-                        resetFilters={resetAdvancedFilters}
                       />
                     )}
                 />
@@ -1479,8 +1555,50 @@ export default function BanHangPage() {
               handleCancelDeposit={handleCancelDeposit}
             />
           </TabsContent>
+
+          {/* Xử lý: CNC / Bảo hành / Giao đối tác / Hàng đối tác / Tồn phụ kiện */}
+          <TabsContent value="xu-ly">
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {MANAGE_TABS.map((t) => (
+                  <Button
+                    key={t.key}
+                    size="sm"
+                    variant={manageTab === t.key ? "default" : "outline"}
+                    className={manageTab === t.key ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+                    onClick={() => setManageTab(t.key)}
+                  >
+                    {t.label}
+                  </Button>
+                ))}
+              </div>
+              <ManageTabs
+                tab={manageTab}
+                isManager={isManager}
+                onAddPartnerToCart={(products) => {
+                  // Chốt bán máy đối tác: đẩy thẳng vào giỏ của trang này.
+                  // Trước khi gộp phải ghi localStorage rồi reload sang trang Bán hàng.
+                  products.forEach((p: any) => addPartnerItemToCart({
+                    ...p,
+                    model: p.ten_san_pham || p.model,
+                    gia_goi_y_ban: typeof p.gia_ban === 'number' ? p.gia_ban : p.gia_goi_y_ban,
+                    gia_chuyen: typeof p.gia_nhap === 'number' ? p.gia_nhap : p.gia_chuyen,
+                    bo_nho: p.dung_luong || p.bo_nho,
+                    mau: p.mau_sac || p.mau,
+                    pin_pct: p.pin || p.pin_pct,
+                    sheet: p.partner_sheet || p.sheet,
+                    row_index: p.partner_row_index || p.row_index,
+                  }))
+                  setActiveTab("ban-hang")
+                  if (isMobile) setMobileView("gio-hang")
+                  sonnerToast.success(`Đã thêm ${products.length} máy vào giỏ hàng`)
+                }}
+              />
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
+      </PullToRefresh>
 
       <CustomerDialog
         isOpen={isCustomerDialogOpen}
@@ -1510,6 +1628,27 @@ export default function BanHangPage() {
         cartCount={cart.length}
         handleCheckout={handleCheckout}
         isLoading={isLoading}
+      />
+
+      {/* ===== Dialog quản lý kho (gộp từ trang Kho hàng) ===== */}
+      <ProductDialog
+        isOpen={isProductDialogOpen}
+        onClose={() => { setIsProductDialogOpen(false); setSelectedProduct(null) }}
+        product={selectedProduct}
+        onSuccess={() => { setReloadFlag((f) => f + 1) }}
+      />
+      <SendCNCDialog
+        isOpen={isSendCNCDialogOpen}
+        onClose={() => setIsSendCNCDialogOpen(false)}
+        selectedProducts={allInventoryProducts.filter((p: any) => selectedIds.includes(p.id))}
+        onSuccess={clearMachineSelection}
+      />
+      <SendPartnerDialog
+        open={isSendPartnerDialogOpen}
+        onOpenChange={setIsSendPartnerDialogOpen}
+        selectedProducts={allInventoryProducts.filter((p: any) => selectedIds.includes(p.id))}
+        employeeId={me?.employeeId}
+        onSuccess={clearMachineSelection}
       />
     </ProtectedRoute>
   )

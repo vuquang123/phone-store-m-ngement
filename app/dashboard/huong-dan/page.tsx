@@ -258,7 +258,7 @@ export default function HuongDanPage() {
             <li>• Dùng bộ lọc (nguồn, loại máy, giá, pin) + ô tìm kiếm để thu hẹp danh sách.</li>
           </ul>
           <div className="flex flex-wrap gap-2">
-            <Link href="/dashboard/kho-hang"><Button size="sm" variant="outline">Tới Kho hàng</Button></Link>
+            <Link href="/dashboard/ban-hang"><Button size="sm" variant="outline">Tới Bán hàng &amp; Kho</Button></Link>
           </div>
         </CardContent>
       </Card>

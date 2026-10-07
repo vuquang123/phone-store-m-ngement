@@ -1,8 +1,9 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useInventoryStore } from "@/lib/store/inventory-store"
+
+/** Đích điều hướng khi bấm vào một thẻ số liệu. */
+export type StatTarget = "san-pham" | "dang-cnc" | "bao-hanh" | "giao-doi-tac" | "phu-kien"
 
 interface InventoryStatsProps {
   soSanPhamCon: number
@@ -11,6 +12,7 @@ interface InventoryStatsProps {
   soSanPhamDoiTac: number
   soPhuKienDaHet: number
   soPhuKienSapHet: number
+  onNavigate: (target: StatTarget) => void
 }
 
 export function InventoryStats({
@@ -19,10 +21,9 @@ export function InventoryStats({
   soSanPhamBH,
   soSanPhamDoiTac,
   soPhuKienDaHet,
-  soPhuKienSapHet
+  soPhuKienSapHet,
+  onNavigate,
 }: InventoryStatsProps) {
-  const { setActiveTab } = useInventoryStore()
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <Card className="p-4 bg-card border-border shadow-sm">
@@ -33,28 +34,28 @@ export function InventoryStats({
           </div>
           <div className="grid grid-cols-4 gap-2">
               <button
-                onClick={() => setActiveTab("san-pham")}
+                onClick={() => onNavigate("san-pham")}
                 className="flex flex-col items-center p-2 bg-muted/50 rounded-lg border border-border hover:bg-muted transition-colors"
               >
                 <span className="text-xs text-muted-foreground mb-1">Còn hàng</span>
                 <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{soSanPhamCon}</span>
               </button>
               <button
-                onClick={() => setActiveTab("dang-cnc")}
+                onClick={() => onNavigate("dang-cnc")}
                 className="flex flex-col items-center p-2 bg-muted/50 rounded-lg border border-border hover:bg-muted transition-colors"
               >
                 <span className="text-xs text-muted-foreground mb-1">Đang CNC</span>
                 <span className="text-lg font-bold text-orange-600 dark:text-orange-400">{soSanPhamCNC}</span>
               </button>
               <button
-                onClick={() => setActiveTab("bao-hanh")}
+                onClick={() => onNavigate("bao-hanh")}
                 className="flex flex-col items-center p-2 bg-muted/50 rounded-lg border border-border hover:bg-muted transition-colors"
               >
                 <span className="text-xs text-muted-foreground mb-1">Bảo hành</span>
                 <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{soSanPhamBH}</span>
               </button>
               <button
-                onClick={() => setActiveTab("giao-doi-tac")}
+                onClick={() => onNavigate("giao-doi-tac")}
                 className="flex flex-col items-center p-2 bg-muted/50 rounded-lg border border-border hover:bg-muted transition-colors"
               >
                 <span className="text-xs text-muted-foreground mb-1">Đối tác</span>
@@ -72,14 +73,14 @@ export function InventoryStats({
           </div>
           <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => setActiveTab("phu-kien")}
+                onClick={() => onNavigate("phu-kien")}
                 className="flex flex-col items-center p-2 bg-muted/50 rounded-lg border border-border hover:bg-muted transition-colors"
               >
                 <span className="text-xs text-muted-foreground mb-1">Đã hết hàng</span>
                 <span className="text-lg font-bold text-rose-600 dark:text-rose-400">{soPhuKienDaHet}</span>
               </button>
               <button
-                onClick={() => setActiveTab("phu-kien")}
+                onClick={() => onNavigate("phu-kien")}
                 className="flex flex-col items-center p-2 bg-muted/50 rounded-lg border border-border hover:bg-muted transition-colors"
               >
                 <span className="text-xs text-muted-foreground mb-1">Sắp hết hàng</span>
@@ -89,22 +90,5 @@ export function InventoryStats({
           </div>
       </Card>
     </div>
-  )
-}
-
-export function InventoryTabs() {
-  const { activeTab, setActiveTab } = useInventoryStore()
-
-  return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 max-w-4xl bg-muted/50 p-1 rounded-xl h-auto sm:h-11">
-        <TabsTrigger value="san-pham" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">Sản phẩm</TabsTrigger>
-        <TabsTrigger value="phu-kien" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">Phụ kiện</TabsTrigger>
-        <TabsTrigger value="dang-cnc" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">CNC</TabsTrigger>
-        <TabsTrigger value="bao-hanh" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">Bảo hành</TabsTrigger>
-        <TabsTrigger value="giao-doi-tac" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">Đối tác</TabsTrigger>
-        <TabsTrigger value="hang-doi-tac" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 font-medium">Hàng đối tác</TabsTrigger>
-      </TabsList>
-    </Tabs>
   )
 }

@@ -2,6 +2,11 @@ export function normalizeStatus(s?: string) {
   return (s || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    // "đ"/"Đ" KHÔNG phải dấu tổ hợp nên NFD không tách ra được -> phải map tay.
+    // Thiếu dòng này thì mọi trạng thái bắt đầu bằng "Đ" ("Đang CNC", "Đã bán",
+    // "Đã đặt cọc", "Giao đối tác") đều cho ra "đ..." và không khớp target nào.
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "d")
     .toLowerCase()
     .replace(/\s+/g, "")
     .trim()

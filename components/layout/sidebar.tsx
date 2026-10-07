@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/sidebar"
 import {
   LayoutDashboard,
-  Package,
   ShoppingCart,
   Users,
   Settings,
@@ -46,15 +45,10 @@ const getNavigation = () => [
     items: [{ title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["quan_ly"] as Role[] }],
   },
   {
-    title: "Quản lý kho",
-    items: [
-      { title: "Kho hàng", href: "/dashboard/kho-hang", icon: Package, roles: ["quan_ly", "nhan_vien"] as Role[] },
-    ],
-  },
-  {
     title: "Bán hàng",
     items: [
-      { title: "Bán hàng", href: "/dashboard/ban-hang", icon: ShoppingCart, roles: ["quan_ly", "nhan_vien"] as Role[] },
+      // Kho hàng đã gộp vào trang Bán hàng (1 bảng máy + 1 bộ lọc dùng chung).
+      { title: "Bán hàng & Kho", href: "/dashboard/ban-hang", icon: ShoppingCart, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Đơn hàng", href: "/dashboard/ban-hang/don-hang", icon: Receipt, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Đơn online", href: "/dashboard/don-online", icon: Truck, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Khách hàng", href: "/dashboard/khach-hang", icon: Users, roles: ["quan_ly", "nhan_vien"] as Role[] },

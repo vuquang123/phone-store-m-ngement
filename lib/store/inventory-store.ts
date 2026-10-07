@@ -1,71 +1,72 @@
 import { create } from 'zustand'
 
-interface InventoryState {
-  // Filters
+// Store bộ lọc dùng CHUNG cho trang Kho hàng và trang Bán hàng.
+// Trước đây mỗi trang giữ một bộ state riêng với tên khác nhau cho cùng một bộ lọc
+// (trangThai/loaiMayFilter, sourceFilter/filterSource, searchTerm/searchQuery...), nên mọi
+// predicate lọc phải viết 2 lần. Gom về đây để 2 trang nhìn cùng một giá trị.
+
+export type SourceFilter = "all" | "kho" | "doi_tac"
+export type LoaiMayFilter = "all" | "Lock" | "Qte"
+export type PinFilter = "all" | "100" | "9x" | "8x" | "7x" | "lt70"
+/** Nhóm hàng đang xem ở trang Bán hàng. */
+export type FilterType = "all" | "iphone" | "ipad" | "phu_kien" | "sim_ghep"
+
+export const MAX_PRICE = 50000000
+
+/** Phần state có thể nạp lại từ localStorage theo lô (xem useFilterPersistence). */
+export interface InventoryFilters {
   searchTerm: string
-  trangThai: string
-  sourceFilter: "all" | "kho" | "doi_tac"
+  loaiMayFilter: LoaiMayFilter
+  sourceFilter: SourceFilter
+  filterType: FilterType
   productNameFilter: string
   colorFilter: string
   capacityFilter: string
-  pinFilter: "all" | "100" | "9x" | "8x" | "7x" | "lt70"
-  khoFilter: "all" | "co_san" | "khong_san"
+  pinFilter: PinFilter
   priceRange: [number, number]
-  conditionFilter: "all" | "nguyen_ban" | "cnc"
-  
-  // Tab state
-  activeTab: string
-  
+}
+
+interface InventoryState extends InventoryFilters {
   // Actions
   setSearchTerm: (term: string) => void
-  setTrangThai: (status: string) => void
-  setSourceFilter: (filter: "all" | "kho" | "doi_tac") => void
+  setLoaiMayFilter: (filter: LoaiMayFilter) => void
+  setSourceFilter: (filter: SourceFilter) => void
+  setFilterType: (filter: FilterType) => void
   setProductNameFilter: (filter: string) => void
   setColorFilter: (filter: string) => void
   setCapacityFilter: (filter: string) => void
-  setPinFilter: (filter: "all" | "100" | "9x" | "8x" | "7x" | "lt70") => void
-  setKhoFilter: (filter: "all" | "co_san" | "khong_san") => void
+  setPinFilter: (filter: PinFilter) => void
   setPriceRange: (range: [number, number]) => void
-  setConditionFilter: (filter: "all" | "nguyen_ban" | "cnc") => void
-  setActiveTab: (tab: string) => void
+  /** Nạp nhiều bộ lọc một lượt (dùng khi hydrate từ localStorage). */
+  setFilters: (filters: Partial<InventoryFilters>) => void
   resetFilters: () => void
 }
 
-export const useInventoryStore = create<InventoryState>((set) => ({
+const DEFAULT_FILTERS: InventoryFilters = {
   searchTerm: "",
-  trangThai: "all",
+  loaiMayFilter: "all",
   sourceFilter: "all",
+  filterType: "all",
   productNameFilter: "all",
   colorFilter: "all",
   capacityFilter: "all",
   pinFilter: "all",
-  khoFilter: "all",
-  priceRange: [0, 50000000],
-  conditionFilter: "all",
-  activeTab: "san-pham",
+  priceRange: [0, MAX_PRICE],
+}
+
+export const useInventoryStore = create<InventoryState>((set) => ({
+  ...DEFAULT_FILTERS,
 
   setSearchTerm: (searchTerm) => set({ searchTerm }),
-  setTrangThai: (trangThai) => set({ trangThai }),
+  setLoaiMayFilter: (loaiMayFilter) => set({ loaiMayFilter }),
   setSourceFilter: (sourceFilter) => set({ sourceFilter }),
+  setFilterType: (filterType) => set({ filterType }),
   setProductNameFilter: (productNameFilter) => set({ productNameFilter }),
   setColorFilter: (colorFilter) => set({ colorFilter }),
   setCapacityFilter: (capacityFilter) => set({ capacityFilter }),
   setPinFilter: (pinFilter) => set({ pinFilter }),
-  setKhoFilter: (khoFilter) => set({ khoFilter }),
   setPriceRange: (priceRange) => set({ priceRange }),
-  setConditionFilter: (conditionFilter) => set({ conditionFilter }),
-  setActiveTab: (activeTab) => set({ activeTab }),
-  
-  resetFilters: () => set({
-    searchTerm: "",
-    trangThai: "all",
-    sourceFilter: "all",
-    productNameFilter: "all",
-    colorFilter: "all",
-    capacityFilter: "all",
-    pinFilter: "all",
-    khoFilter: "all",
-    priceRange: [0, 50000000],
-    conditionFilter: "all",
-  }),
+
+  setFilters: (filters) => set(filters),
+  resetFilters: () => set({ ...DEFAULT_FILTERS }),
 }))
