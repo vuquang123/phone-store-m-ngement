@@ -1,8 +1,14 @@
 // Sinh tin nhắn báo khách từ 1 dòng sản phẩm trong kho.
 // Format mẫu: "15ProMax 256GB Quốc tế Blue 98.5 Pin 99%, 2 esim, giá 15.500K (44364)"
 // Số trong ngoặc cuối là ID máy, để tra lại đúng máy khi khách chốt.
+//
+// Máy trạng thái "Đang CNC" vẫn được phép bán (isSellableStatus) nên vẫn lọt vào tin
+// báo khách, nhưng thực tế máy đang ở xưởng độ sim chứ không có sẵn tại kho -> gắn
+// thêm tag CNC_TAG để khách biết phải chờ, tránh hẹn nhầm lấy máy ngay.
 
-import { formatPinDisplay, getLoaiMayLabel } from "@/lib/utils/inventory-helpers"
+import { formatPinDisplay, getLoaiMayLabel, isDangCncStatus } from "@/lib/utils/inventory-helpers"
+
+const CNC_TAG = "[ĐANG ĐỘ SIM]"
 
 // "iPhone 15 Pro Max" -> "15ProMax"; tên không phải iPhone giữ nguyên.
 function compactProductName(name: string): string {
@@ -47,6 +53,7 @@ export function buildCustomerQuote(p: {
   loai_may?: string
   gia_ban?: number
   giam_gia?: number
+  trang_thai?: string
 }): string {
   const head = [
     compactProductName(p.ten_san_pham || ""),
@@ -67,8 +74,10 @@ export function buildCustomerQuote(p: {
   if (price) parts.push(`giá ${price}`)
 
   const line = parts.join(", ")
+  // Tag đứng sau giá, trước ID máy: khách đọc tới giá là thấy ngay cảnh báo.
+  const withTag = isDangCncStatus(p.trang_thai) ? `${line} ${CNC_TAG}` : line
   const id = String(p.id ?? "").trim()
-  return id ? `${line} (${id})` : line
+  return id ? `${withTag} (${id})` : withTag
 }
 
 // Từ 2 máy trở lên: chừa 1 dòng trống giữa các máy cho dễ đọc khi gửi khách.

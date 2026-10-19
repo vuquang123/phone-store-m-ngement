@@ -20,6 +20,16 @@ export function isConHangProduct(p: any) {
   return isConHangStatus(p.trang_thai)
 }
 
+// Máy đang nằm ở xưởng CNC (độ sim) — vẫn bán được nhưng KHÔNG có sẵn tại kho,
+// khách phải chờ. Dùng để gắn cảnh báo trong tin báo khách.
+export function isDangCncStatus(s?: string) {
+  return normalizeStatus(s) === "dangcnc"
+}
+
+export function isDangCncProduct(p: any) {
+  return isDangCncStatus(p?.trang_thai)
+}
+
 // Máy được phép bán: "Còn hàng" hoặc "Đang CNC".
 // So sánh sau khi bỏ dấu + viết thường vì Trạng Thái trong sheet hay bị gõ tay
 // lệch hoa/thường ("Còn Hàng", "CÒN HÀNG"...) khiến so sánh chuỗi cứng trượt hết.
