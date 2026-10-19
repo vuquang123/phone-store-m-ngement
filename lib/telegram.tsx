@@ -643,7 +643,14 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   const cocNum = parseVietnameseNumber(rawCoc)
   const isDeposit = type === "new" && cocNum > 0
   const isSettlement = !!order.is_settlement
-  const action = isSettlement ? "TẤT TOÁN ĐƠN ĐẶT CỌC" : (isDeposit ? "ĐƠN ĐẶT CỌC MỚI" : (type === "new" ? "TẠO ĐƠN HÀNG MỚI" : "HOÀN TRẢ ĐƠN HÀNG"))
+
+  // Loại đơn (online/offline) dùng cho cả tiêu đề lẫn dòng "Loại đơn".
+  const loaiDonRaw = String(order.loai_don || order.order_type || order.type || order.loai_don_ban || "").trim()
+  // Tiêu đề nêu thẳng ONLINE/OFFLINE để nhìn tiêu đề là biết loại đơn.
+  // Không nhận ra loại đơn thì giữ tiêu đề chung như trước.
+  const loaiDonTitle = /onl/i.test(loaiDonRaw) ? "ONLINE" : /off/i.test(loaiDonRaw) ? "OFFLINE" : ""
+  const newOrderTitle = loaiDonTitle ? `ĐƠN ${loaiDonTitle} MỚI` : "TẠO ĐƠN HÀNG MỚI"
+  const action = isSettlement ? "TẤT TOÁN ĐƠN ĐẶT CỌC" : (isDeposit ? "ĐƠN ĐẶT CỌC MỚI" : (type === "new" ? newOrderTitle : "HOÀN TRẢ ĐƠN HÀNG"))
 
   // Chuẩn hóa danh sách sản phẩm (nếu có)
   const products = Array.isArray(order.products)
@@ -714,9 +721,9 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   const warrantyCodes = order.warrantyPackages || order.warranty_packages || order.goi_bao_hanh || order["Gói BH"]
   let warrantyLine = ""
   if (Array.isArray(warrantyCodes) && warrantyCodes.length) {
-    warrantyLine = `\n <b>Gói bảo hành:</b> ${warrantyCodes.join(", ")}`
+    warrantyLine = ` <b>Gói bảo hành:</b> ${warrantyCodes.join(", ")}`
   } else if (typeof warrantyCodes === "string" && warrantyCodes.trim()) {
-    warrantyLine = `\n <b>Gói bảo hành:</b> ${warrantyCodes}`
+    warrantyLine = ` <b>Gói bảo hành:</b> ${warrantyCodes}`
   }
 
   // Lý do hoàn (nếu có)
@@ -725,10 +732,10 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   // Lưu ý: giới hạn hiển thị 10 dòng sản phẩm để tránh message quá dài
   // Nếu có sản phẩm thì luôn render tiêu đề và danh sách, không render nếu không có sản phẩm
   const productSection = productLines.length
-    ? `\n📦 <b>Sản phẩm:</b>\n${productLines.join("\n")}${enrichedProducts.length > 10 ? "\n…" : ""}`
+    ? `📦 <b>Sản phẩm:</b>\n${productLines.join("\n")}${enrichedProducts.length > 10 ? "\n…" : ""}`
     : ""
 
-  const reasonLine = reason ? `\n <b>Lý do hoàn:</b> ${reason}` : ""
+  const reasonLine = reason ? ` <b>Lý do hoàn:</b> ${reason}` : ""
 
   // Phụ kiện: ưu tiên mảng accessories; fallback từ "Chi Tiết PK" (JSON) hoặc chuỗi phu_kien
   // Nếu không có Chi Tiết PK (JSON), lấy từ cột Phụ Kiện (chuỗi, phân tách bằng dấu phẩy)
@@ -792,7 +799,7 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   })()
   // Chỉ render phụ kiện nếu thực sự có phụ kiện, không render dòng thừa
   const accessoriesSection = accessoryLines.length
-    ? `\n🧩 <b>Phụ kiện:</b>\n${accessoryLines.join('\n')}${(Array.isArray(accessoriesArr) && accessoriesArr.length > 20) ? "\n…" : ""}`
+    ? `🧩 <b>Phụ kiện:</b>\n${accessoryLines.join('\n')}${(Array.isArray(accessoriesArr) && accessoriesArr.length > 20) ? "\n…" : ""}`
     : ''
 
   // Tổng tiền: ưu tiên tổng cuối cùng nếu có, sau đó đến tong_tien/total
@@ -801,12 +808,12 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
   }
   const totalCandidates = [order.final_total, order.finalThanhToan, order.tong_tien, order.total, order["Tổng Thu"]]
   const totalVal = totalCandidates.map(parseAmount).find(n => n > 0) || 0
-  const totalLine = `\n <b>Tổng tiền:</b> ${totalVal > 0 ? totalVal.toLocaleString('vi-VN') + ' VNĐ' : 'N/A'}`
+  const totalLine = `<b>Tổng tiền:</b> ${totalVal > 0 ? totalVal.toLocaleString('vi-VN') + ' VNĐ' : 'N/A'}`
   // Dòng chi tiết đặt cọc nếu có
   const coc = parseAmount(order.so_tien_coc)
   const conLai = parseAmount(order.so_tien_con_lai)
   const depositLine = (coc > 0 || conLai > 0)
-    ? `\n <b>Chi tiết:</b> Đã cọc ${coc > 0 ? ('₫' + coc.toLocaleString('vi-VN')) : '₫0'} | Còn lại ${conLai > 0 ? ('₫' + conLai.toLocaleString('vi-VN')) : '₫0'}`
+    ? ` <b>Chi tiết:</b> Đã cọc ${coc > 0 ? ('₫' + coc.toLocaleString('vi-VN')) : '₫0'} | Còn lại ${conLai > 0 ? ('₫' + conLai.toLocaleString('vi-VN')) : '₫0'}`
     : ''
 
   // Chi tiết thanh toán: nếu có mảng payments thì render đầy đủ; nếu không, dùng chuỗi tóm tắt có sẵn
@@ -862,50 +869,53 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     || order.van_chuyen
     || order.vc
     || ''
-  const shippingSection = (address || shipMethod)
-    ? `\n <b>Địa chỉ nhận:</b> ${address || '-'}${shipMethod ? `\n <b>Vận chuyển:</b> ${shipMethod}` : ''}`
-    : ''
-
   // Ghi chú đơn hàng (nếu có)
   const rawNote = order.ghi_chu || order["Ghi Chú"] || order.note || order.ghiChu
   const noteText = typeof rawNote === 'string' ? rawNote.trim() : (rawNote ?? '')
-  const noteLine = noteText ? `\n <b>Ghi chú:</b> ${noteText}` : ''
+  const noteLine = noteText ? ` <b>Ghi chú:</b> ${noteText}` : ''
 
-  // Gom các section, loại bỏ dòng trống nếu không có phụ kiện hoặc sản phẩm
   // Always include ma_don_hang (fallback to idDonHang, id, or order.id if missing)
   // Luôn hiển thị mã đơn hàng, nếu không có thì ghi rõ "(chưa có)"
   const maDonHang = (typeof order.ma_don_hang === 'string' && order.ma_don_hang.trim())
     ? order.ma_don_hang.trim()
     : (order.idDonHang || order.id || order.maDonHang || '(chưa có)')
   // Luôn hiển thị địa chỉ nhận & vận chuyển nếu có
-  const addressFull = address
-  const shipMethodFull = shipMethod
-  const shippingSectionFull = (addressFull || shipMethodFull)
-    ? `\n <b>Địa chỉ nhận:</b> ${addressFull || '-'}${shipMethodFull ? `\n <b>Vận chuyển:</b> ${shipMethodFull}` : ''}`
+  const shippingSectionFull = (address || shipMethod)
+    ? ` <b>Địa chỉ nhận:</b> ${address || '-'}${shipMethod ? `\n <b>Vận chuyển:</b> ${shipMethod}` : ''}`
     : ''
 
-  let messageSections = [
-    `${emoji} <b>${action}</b>`,
-  `\n <b>Mã đơn hàng:</b> ${maDonHang}`,
+  // Khối "ai bán - bán cho ai": gom chung nên đọc 1 mạch, không bị chèn giữa.
+  const customerBlock = [
     ` <b>Nhân viên:</b> ${order.nhan_vien_ban || order.employeeName || order.employeeId || "N/A"}`,
     ` <b>Khách hàng:</b> ${order.khach_hang?.ten || order.khach_hang?.ho_ten || order.customerName || "Khách lẻ"}`,
     ` <b>SĐT:</b> ${order.khach_hang?.so_dien_thoai || order.khach_hang?.sdt || order.customerPhone || "N/A"}`,
-    ...(order.loai_don || order.order_type || order.type || order.loai_don_ban ? [` <b>Loại đơn:</b> ${order.loai_don || order.order_type || order.type || order.loai_don_ban}`] : []),
+    ...(loaiDonRaw ? [` <b>Loại đơn:</b> ${loaiDonRaw}`] : []),
     ...(order.han_thanh_toan || order.hanThanhToan || order.due_date ? [` <b>Hạn thanh toán:</b> ${order.han_thanh_toan || order.hanThanhToan || order.due_date}`] : []),
     shippingSectionFull,
+  ].filter(Boolean).join('\n')
+
+  const paymentBlock = paymentLines.length
+    ? paymentLines.join('\n')
+    : ` <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || 'N/A'}`
+
+  const timeLine = ` <b>Thời gian:</b> ${new Date(order.ngay_tao || Date.now()).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })}`
+
+  // Mỗi phần tử là MỘT KHỐI, nối bằng 1 dòng trống cho dễ đọc trên điện thoại.
+  // Thứ tự: đơn gì -> bán máy nào, bao nhiêu tiền -> ai bán/bán cho ai -> phụ kiện
+  // -> giấy tờ kèm theo -> tiền nong -> thời gian. Khối rỗng tự bị loại bỏ.
+  const messageBlocks = [
+    `${emoji} <b>${action}</b>`,
+    ` <b>Mã đơn hàng:</b> ${maDonHang}`,
     productSection,
+    totalLine,
+    customerBlock,
     accessoriesSection,
     warrantyLine,
     reasonLine,
     noteLine,
-    totalLine,
     depositLine,
-    !paymentLines.length
-      ? ` <b>Thanh toán:</b> ${order.phuong_thuc_thanh_toan || order.paymentMethod || 'N/A'}`
-      : '',
-    paymentLines.length ? `\n${paymentLines.join('\n')}` : '',
-    `\n <b>Thời gian:</b> ${new Date(order.ngay_tao || Date.now()).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })}`
+    paymentBlock,
+    timeLine,
   ]
-  messageSections = messageSections.filter(s => typeof s === 'string' && s.trim())
-  return messageSections.join('\n')
+  return messageBlocks.filter(block => typeof block === 'string' && block.trim()).join('\n\n')
 }
