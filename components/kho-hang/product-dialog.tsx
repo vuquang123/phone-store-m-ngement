@@ -17,8 +17,15 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
+import {
+  DEVICE_NAME_OPTIONS,
+  STORAGE_OPTIONS,
+  getColorOptions,
+  getLoaiMayOptions,
+} from "@/lib/constants/apple-devices"
 
 interface Product {
   id: string
@@ -49,8 +56,9 @@ interface ProductDialogProps {
 }
 
 export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDialogProps) {
-  // Bảng màu cho từng dòng máy
-  // Helper: Đảm bảo giá trị truyền vào Select luôn có trong options
+  // Helper: Đảm bảo giá trị truyền vào Select luôn có trong options.
+  // Nhờ nó, máy cũ trong sheet đang mang tên/màu không còn trong danh mục
+  // (vd "iPhone 17 E" trước khi đổi sang "iPhone 17e") vẫn sửa được bình thường.
   function ensureOption(options: string[], value: string) {
     if (value && !options.includes(value)) {
       return [value, ...options]
@@ -58,48 +66,17 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     return options
   }
 
-  const colorOptions: Record<string, string[]> = {
-    "iPhone 17": ["Black", "Lavender", "Mist Blue", "Sage", "White"],
-    "iPhone 17 Pro Max": ["Deep Blue", "Cosmic Orange", "Silver"],
-    "iPhone 17 Pro": ["Deep Blue", "Cosmic Orange", "Silver"],
-    "iPhone 17 Air": ["Cloud White", "Light Gold", "Sky Blue", "Space Black"],
-    "iPhone 17 E": ["Soft Pink", "Black", "White"],
-    "iPhone 16 Pro Max": ["Black Titanium", "Natural Titanium", "White Titanium", "Desert Titanium"],
-    "iPhone 16 Pro": ["Black Titanium", "Natural Titanium", "White Titanium", "Desert Titanium"],
-    "iPhone 16 Plus": ["Black", "White", "Pink", "Teal", "Ultramarine"],
-    "iPhone 16": ["Black", "White", "Pink", "Teal", "Ultramarine"],
-    "iPhone 16 E": ["Black", "White"],
-    "iPhone 15 Pro Max": ["Black Titanium", "White Titanium", "Blue Titanium", "Natural Titanium"],
-    "iPhone 15 Pro": ["Black Titanium", "White Titanium", "Blue Titanium", "Natural Titanium"],
-    "iPhone 15 Plus": ["Pink", "Yellow", "Green", "Blue", "Black"],
-    "iPhone 15": ["Pink", "Yellow", "Green", "Blue", "Black"],
-    "iPhone 14 Pro Max": ["Silver", "Gold", "Space Black", "Deep Purple"],
-    "iPhone 14 Pro": ["Silver", "Gold", "Space Black", "Deep Purple"],
-    "iPhone 14 Plus": ["Midnight", "Starlight", "(PRODUCT)RED", "Blue", "Purple", "Yellow"],
-    "iPhone 14": ["Midnight", "Starlight", "(PRODUCT)RED", "Blue", "Purple", "Yellow"],
-    "iPhone 13 Pro Max": ["Graphite", "Gold", "Silver", "Sierra Blue", "Alpine Green"],
-    "iPhone 13 Pro": ["Graphite", "Gold", "Silver", "Sierra Blue", "Alpine Green"],
-    "iPhone 13 Mini": ["(PRODUCT)RED", "Starlight", "Midnight", "Blue", "Pink", "Green"],
-    "iPhone 13": ["(PRODUCT)RED", "Starlight", "Midnight", "Blue", "Pink", "Green"],
-    "iPhone 12 Pro Max": ["Silver", "Graphite", "Gold", "Pacific Blue"],
-    "iPhone 12 Pro": ["Silver", "Graphite", "Gold", "Pacific Blue"],
-    "iPhone 12": ["Black", "White", "(PRODUCT)RED", "Green", "Blue", "Purple"],
-    "iPhone 11 Pro Max": ["Silver", "Space Gray", "Gold", "Midnight Green"],
-    "iPhone 11 Pro": ["Silver", "Space Gray", "Gold", "Midnight Green"],
-    "iPhone 11": ["Purple", "Green", "Yellow", "Black", "White", "(PRODUCT)RED"],
+  // Đổi tên máy -> màu và Loại máy của đời cũ có thể không còn hợp lệ
+  // (vd đang chọn iPhone/"Lock" rồi đổi sang iPad, hoặc màu "Teal" đổi sang đời
+  // không có màu đó). Xoá những ô đã lệch để nhân viên buộc phải chọn lại,
+  // thay vì lưu nhầm "iPad Pro M4 / Lock / Ultramarine".
+  function resetOnNameChange(prev: { mau_sac: string; loai_phu_kien: string }, nextName: string) {
+    const patch: Partial<{ mau_sac: string; loai_phu_kien: string }> = {}
+    if (prev.mau_sac && !getColorOptions(nextName).includes(prev.mau_sac)) patch.mau_sac = ""
+    if (prev.loai_phu_kien && !getLoaiMayOptions(nextName).includes(prev.loai_phu_kien)) patch.loai_phu_kien = ""
+    return patch
   }
 
-  const productNameOptions = [
-    "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17", "iPhone 17 Air", "iPhone 17 E",
-    "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16", "iPhone 16 E",
-    "iPhone 15 Pro Max", "iPhone 15 Pro", "iPhone 15 Plus", "iPhone 15",
-    "iPhone 14 Pro Max", "iPhone 14 Pro", "iPhone 14 Plus", "iPhone 14",
-    "iPhone 13 Pro Max", "iPhone 13 Pro", "iPhone 13 Mini", "iPhone 13",
-    "iPhone 12 Pro Max", "iPhone 12 Pro", "iPhone 12 Plus", "iPhone 12",
-    "iPhone 11 Pro Max", "iPhone 11 Pro", "iPhone 11",
-  ]
-
-  const storageOptions = ["64GB", "128GB", "256GB", "512GB", "1TB"]
   const [formData, setFormData] = useState({
     ten_san_pham: "",
     loai_phu_kien: "",
@@ -473,24 +450,33 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                     const setField = (key: keyof BulkRow, value: string) => {
                       setBulkRows(prev => prev.map(r => r.rowId === row.rowId ? { ...r, [key]: value } : r))
                     }
+                    const setName = (value: string) => {
+                      setBulkRows(prev => prev.map(r => r.rowId === row.rowId
+                        ? { ...r, ten_san_pham: value, ...resetOnNameChange(r, value) }
+                        : r))
+                    }
                     return (
                       <tr key={row.rowId} className="bg-card border-b border-slate-100 hover:bg-accent transition-colors">
                         <td className="px-1 py-1">
-                          <Select value={row.ten_san_pham} onValueChange={(v) => setField("ten_san_pham", v)}>
-                            <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[150px]"><SelectValue placeholder="Chọn..." /></SelectTrigger>
-                            <SelectContent className="bg-card max-h-72 overflow-y-auto">
-                              {ensureOption(productNameOptions, row.ten_san_pham).map((item) => (
-                                <SelectItem key={item} value={item} className="text-xs">{item}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelect
+                            value={row.ten_san_pham}
+                            onValueChange={setName}
+                            options={ensureOption(DEVICE_NAME_OPTIONS, row.ten_san_pham)}
+                            placeholder="Chọn..."
+                            searchPlaceholder="Gõ tên máy..."
+                            emptyText="Không khớp."
+                            className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[150px] px-2"
+                            contentClassName="min-w-[260px]"
+                            itemClassName="text-xs"
+                          />
                         </td>
                         <td className="px-1 py-1">
                           <Select value={row.loai_phu_kien} onValueChange={(v) => setField("loai_phu_kien", v)}>
                             <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[100px]"><SelectValue placeholder="Loại" /></SelectTrigger>
                             <SelectContent className="bg-card">
-                              <SelectItem value="Lock" className="text-xs">Lock</SelectItem>
-                              <SelectItem value="Quốc tế" className="text-xs">Quốc tế</SelectItem>
+                              {ensureOption(getLoaiMayOptions(row.ten_san_pham), row.loai_phu_kien).map((item) => (
+                                <SelectItem key={item} value={item} className="text-xs">{item}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </td>
@@ -498,7 +484,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                           <Select value={row.dung_luong} onValueChange={(v) => setField("dung_luong", v)}>
                             <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[90px]"><SelectValue placeholder="D.lượng" /></SelectTrigger>
                             <SelectContent className="bg-card">
-                              {ensureOption(storageOptions, row.dung_luong).map((item) => (
+                              {ensureOption(STORAGE_OPTIONS, row.dung_luong).map((item) => (
                                 <SelectItem key={item} value={item} className="text-xs">{item}</SelectItem>
                               ))}
                             </SelectContent>
@@ -508,7 +494,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                           <Select value={row.mau_sac} onValueChange={(v) => setField("mau_sac", v)}>
                             <SelectTrigger className="h-8 text-xs border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 w-full min-w-[100px]"><SelectValue placeholder="Màu" /></SelectTrigger>
                             <SelectContent className="bg-card max-h-64 overflow-y-auto">
-                              {ensureOption(colorOptions[row.ten_san_pham] || [], row.mau_sac).map((color) => (
+                              {ensureOption(getColorOptions(row.ten_san_pham), row.mau_sac).map((color) => (
                                 <SelectItem key={color} value={color} className="text-xs">{color}</SelectItem>
                               ))}
                             </SelectContent>
@@ -642,24 +628,15 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="ten_san_pham_select" className="text-sm font-medium">Tên sản phẩm <span className="text-red-500">*</span></Label>
-                    <Select value={formData.ten_san_pham} onValueChange={(value) => setFormData({ ...formData, ten_san_pham: value })}>
-                      <SelectTrigger id="ten_san_pham_select" className="w-full">
-                        <SelectValue placeholder="Chọn sản phẩm" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-muted">
-                        {ensureOption([
-                          "iPhone 17 Pro Max", "iPhone 17 Pro", "iPhone 17", "iPhone 17 Air", "iPhone 17 E",
-                          "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16", "iPhone 16 E",
-                          "iPhone 15 Pro Max", "iPhone 15 Pro", "iPhone 15 Plus", "iPhone 15",
-                          "iPhone 14 Pro Max", "iPhone 14 Pro", "iPhone 14 Plus", "iPhone 14",
-                          "iPhone 13 Pro Max", "iPhone 13 Pro", "iPhone 13 Mini", "iPhone 13",
-                          "iPhone 12 Pro Max", "iPhone 12 Pro", "iPhone 12 Plus", "iPhone 12",
-                          "iPhone 11 Pro Max", "iPhone 11 Pro", "iPhone 11",
-                        ], formData.ten_san_pham).map((item) => (
-                          <SelectItem key={item} value={item}>{item}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      id="ten_san_pham_select"
+                      value={formData.ten_san_pham}
+                      onValueChange={(value) => setFormData({ ...formData, ten_san_pham: value, ...resetOnNameChange(formData, value) })}
+                      options={ensureOption(DEVICE_NAME_OPTIONS, formData.ten_san_pham)}
+                      placeholder="Chọn sản phẩm"
+                      searchPlaceholder="Gõ tên máy, vd: 15 pro max"
+                      emptyText="Không có máy nào khớp."
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="mau_sac_select">Màu sắc <span className="text-red-500">*</span></Label>
@@ -668,7 +645,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                         <SelectValue placeholder="Chọn màu sắc" />
                       </SelectTrigger>
                       <SelectContent className="bg-muted">
-                        {ensureOption(colorOptions[formData.ten_san_pham] || [], formData.mau_sac).map((color) => (
+                        {ensureOption(getColorOptions(formData.ten_san_pham), formData.mau_sac).map((color) => (
                           <SelectItem key={color} value={color}>{color}</SelectItem>
                         ))}
                       </SelectContent>
@@ -681,8 +658,9 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                         <SelectValue placeholder="Chọn loại máy" />
                       </SelectTrigger>
                       <SelectContent className="bg-muted">
-                        <SelectItem value="Lock">Lock</SelectItem>
-                        <SelectItem value="Quốc tế">Quốc tế</SelectItem>
+                        {ensureOption(getLoaiMayOptions(formData.ten_san_pham), formData.loai_phu_kien).map((item) => (
+                          <SelectItem key={item} value={item}>{item}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -693,7 +671,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                         <SelectValue placeholder="Chọn dung lượng" />
                       </SelectTrigger>
                       <SelectContent className="bg-muted">
-                        {storageOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                        {ensureOption(STORAGE_OPTIONS, formData.dung_luong).map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
