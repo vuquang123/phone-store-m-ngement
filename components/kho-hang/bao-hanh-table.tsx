@@ -61,7 +61,7 @@ export function BaoHanhTable({
                 </Badge>
               </div>
             </TableHead>
-            <TableHead className="font-semibold text-foreground">IMEI</TableHead>
+            <TableHead className="font-semibold text-foreground">IMEI / Serial</TableHead>
             <TableHead className="font-semibold text-foreground hidden md:table-cell">Lỗi</TableHead>
             <TableHead className="font-semibold text-foreground">Trạng thái</TableHead>
             <TableHead className="font-semibold text-foreground hidden lg:table-cell">Ngày gửi</TableHead>
@@ -70,7 +70,9 @@ export function BaoHanhTable({
         </TableHeader>
         <TableBody>
           {products.map((p, idx) => {
-            const id = `${p["IMEI"] || p.imei || "bh"}-${idx}`
+            // iPad bản Wi-Fi không có IMEI -> hiển thị Serial thay thế.
+            const deviceId = p["IMEI"] || p.imei || p["Serial"] || p.serial || ""
+            const id = `${deviceId || "bh"}-${idx}`
             return (
               <TableRow key={id} className="hover:bg-accent/50 transition-colors">
                 {isEditMode && (
@@ -87,7 +89,7 @@ export function BaoHanhTable({
                     <span className="text-xs text-muted-foreground">{p["Màu Sắc"] || p.mau_sac} • {p["Loại Máy"] || p.loai_may}</span>
                   </div>
                 </TableCell>
-                <TableCell className="text-sm font-mono text-muted-foreground">{p["IMEI"] || p.imei}</TableCell>
+                <TableCell className="text-sm font-mono text-muted-foreground">{deviceId}</TableCell>
                 <TableCell className="hidden md:table-cell text-sm text-red-600 truncate max-w-[200px]">{p["Lỗi"] || p.loi}</TableCell>
                 <TableCell>
                   <Badge className={`${getTrangThaiColor(p["Trạng Thái"] || p.trang_thai)} border-none text-[11px]`}>

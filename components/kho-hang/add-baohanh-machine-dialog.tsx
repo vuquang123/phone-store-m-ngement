@@ -13,7 +13,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuthMe } from "@/hooks/use-auth-me"
-import { IPHONE_NAMES } from "@/lib/constants/apple-devices"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { DEVICE_NAME_OPTIONS, getLoaiMayOptions } from "@/lib/constants/apple-devices"
 
 interface AddBaoHanhMachineDialogProps {
   isOpen: boolean
@@ -27,21 +28,22 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
 
   // Dropdown tên sản phẩm
   const [productNames, setProductNames] = useState<string[]>([])
-  // Form bảo hành vẫn bắt buộc IMEI nên chỉ liệt kê iPhone; iPad đã nhập kho
-  // sẽ tự xuất hiện qua danh sách lấy từ /api/kho-hang bên dưới.
-  const defaultIphoneNames = IPHONE_NAMES as readonly string[]
+  // iPhone + iPad: form đã nhận Serial nên iPad bản Wi-Fi gửi bảo hành được.
   useEffect(() => {
     fetch("/api/kho-hang")
       .then(res => res.json())
       .then(data => {
         const names = Array.from(new Set((data.data || []).map((p: any) => p.ten_san_pham).filter(Boolean)))
-        const allNames = [...defaultIphoneNames].concat((names as string[]).filter((n: string) => !defaultIphoneNames.includes(n)))
+        const allNames = [...DEVICE_NAME_OPTIONS].concat(
+          (names as string[]).filter((n: string) => !DEVICE_NAME_OPTIONS.includes(n)),
+        )
         setProductNames(allNames as string[])
       })
   }, [])
 
   const [tenSanPham, setTenSanPham] = useState("")
   const [imei, setImei] = useState("")
+  const [serial, setSerial] = useState("")
   const [mauSac, setMauSac] = useState("")
   const [loaiMay, setLoaiMay] = useState("")
   const [tinhTrang, setTinhTrang] = useState("")
@@ -79,6 +81,7 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
       body: JSON.stringify({
         ten_san_pham: tenSanPham,
         imei,
+        serial,
         mau_sac: mauSac,
         loai_may: loaiMay,
         tinh_trang: tinhTrang,
@@ -114,20 +117,41 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-foreground">Tên Sản Phẩm</Label>
-            <Select value={tenSanPham} onValueChange={v => setTenSanPham(v)}>
-              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
-                <SelectValue placeholder="Chọn sản phẩm" />
-              </SelectTrigger>
-              <SelectContent className="bg-card border border-border shadow-lg text-foreground">
-                {productNames.map(name => (
-                  <SelectItem key={name} value={name}>{name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={tenSanPham}
+              onValueChange={v => {
+                setTenSanPham(v)
+                // Đổi sang dòng máy khác -> Loại máy cũ có thể không còn hợp lệ
+                // (vd đang "Lock" mà chuyển sang iPad).
+                if (loaiMay && !getLoaiMayOptions(v).includes(loaiMay)) setLoaiMay("")
+              }}
+              options={productNames}
+              placeholder="Chọn sản phẩm"
+              searchPlaceholder="Gõ tên máy, vd: 15 pro max"
+              emptyText="Không có máy nào khớp."
+              className="h-9 bg-card font-medium"
+            />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-foreground">IMEI</Label>
-            <Input value={imei} onChange={e => setImei(e.target.value)} required placeholder="Nhập IMEI" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            <Label className="font-medium text-foreground">IMEI / Serial</Label>
+            <div className="flex gap-2">
+              <Input
+                value={imei}
+                onChange={e => setImei(e.target.value.replace(/\D/g, "").slice(0, 15))}
+                placeholder="IMEI (15 số)"
+                className="px-3 py-1.5 border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <Input
+                value={serial}
+                onChange={e => {
+                  const v = e.target.value.toUpperCase()
+                  if (/^[A-Z0-9-]*$/.test(v) && v.length <= 30) setSerial(v)
+                }}
+                placeholder="Serial"
+                className="px-3 py-1.5 border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Điền một trong hai — iPad bản Wi-Fi chỉ có Serial.</p>
           </div>
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-foreground">Màu Sắc</Label>
@@ -140,8 +164,9 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
                 <SelectValue placeholder="Chọn loại máy" />
               </SelectTrigger>
               <SelectContent className="bg-card border border-border shadow-lg text-foreground">
-                <SelectItem value="Lock">Lock</SelectItem>
-                <SelectItem value="Qte">Qte</SelectItem>
+                {getLoaiMayOptions(tenSanPham).map(item => (
+                  <SelectItem key={item} value={item}>{item}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -216,7 +241,7 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
         </div>
         <DialogFooter className="mt-6 flex gap-3 justify-end">
           <Button onClick={onClose} variant="outline" className="rounded-lg px-5">Hủy</Button>
-          <Button onClick={handleAdd} disabled={isLoading || !tenSanPham || !imei || !loaiMay || !tinhTrang || !loi || !diaChiBaoHanh || !tenKhachHang || !soDienThoai} className="bg-blue-600 text-white font-semibold rounded-lg px-5 shadow hover:bg-blue-700">Thêm máy bảo hành</Button>
+          <Button onClick={handleAdd} disabled={isLoading || !tenSanPham || !(imei || serial) || !loaiMay || !tinhTrang || !loi || !diaChiBaoHanh || !tenKhachHang || !soDienThoai} className="bg-blue-600 text-white font-semibold rounded-lg px-5 shadow hover:bg-blue-700">Thêm máy bảo hành</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

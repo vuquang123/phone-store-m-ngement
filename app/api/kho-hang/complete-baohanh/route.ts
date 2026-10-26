@@ -19,11 +19,19 @@ export async function POST(req: Request) {
       const idxIMEI = colIndex(header, "IMEI")
       const idxSerial = colIndex(header, "Serial")
 
+      // Lọc bỏ ô rỗng trước khi so: dòng iPad có IMEI trống, để "" lọt vào
+      // phép so là mọi dòng trống IMEI đều bị gom nhầm vào tin báo Telegram.
+      const wanted = new Set((ids as any[]).map(v => String(v || "").trim().toUpperCase()).filter(Boolean))
+      const hit = (v: any) => {
+        const s = String(v || "").trim().toUpperCase()
+        return !!s && (wanted.has(s) || wanted.has(s.slice(-5)))
+      }
       devices = rows
         .filter(r => {
           const idVal = idxId !== -1 ? r[idxId] : ""
           const imeiVal = idxIMEI !== -1 ? r[idxIMEI] : ""
-          return ids.includes(idVal) || ids.includes(imeiVal) || ids.includes(String(imeiVal).slice(-5))
+          const serialVal = idxSerial !== -1 ? r[idxSerial] : ""
+          return hit(idVal) || hit(imeiVal) || hit(serialVal)
         })
         .map(r => ({
           name: idxTen !== -1 ? r[idxTen] : undefined,

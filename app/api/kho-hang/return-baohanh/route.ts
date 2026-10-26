@@ -15,16 +15,25 @@ export async function POST(req: Request) {
     await logProductHistory(productIds, "Bảo hành", employeeId)
 
     // Thêm mới từng sản phẩm vào sheet Bao_Hanh
-    const { header } = await import("@/lib/google-sheets").then(m => m.readFromGoogleSheets("Bao_Hanh"))
-    const appendToGoogleSheets = (await import("@/lib/google-sheets")).appendToGoogleSheets
+    const sheetsLib = await import("@/lib/google-sheets")
+    // Máy iPad Wi-Fi chỉ có Serial — bổ sung cột Serial cho Bao_Hanh khi cần,
+    // nếu không thì định danh của nó mất hẳn khi chuyển sang bảo hành.
+    if ((products as any[])?.some((p: any) => String(p?.serial || "").trim())) {
+      await sheetsLib.ensureColumn("Bao_Hanh", "Serial")
+    }
+    const { header } = await sheetsLib.readFromGoogleSheets("Bao_Hanh", undefined, { force: true })
+    const appendToGoogleSheets = sheetsLib.appendToGoogleSheets
     for (const p of products as any[]) {
       // Map các trường đúng thứ tự header
-      const row = header.map((col: string) => {
+      const row = header.map((rawCol: string) => {
+        const col = String(rawCol || "").trim()
         switch (col) {
           case "ID Máy": return p.id || ""
           case "Tên Sản Phẩm": return p.ten_san_pham || ""
           case "Loại Máy": return p.loai_may || ""
           case "IMEI": return p.imei || ""
+          case "Serial": return String(p.serial || "").trim().toUpperCase()
+          case "Màu Sắc": return p.mau_sac || p["Màu Sắc"] || ""
           case "Nguồn": return p.nguon || ""
           case "Tình trạng": return p.tinh_trang || ""
           case "Lỗi": return p.loi || ""

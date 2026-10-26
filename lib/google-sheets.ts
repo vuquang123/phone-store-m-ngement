@@ -57,17 +57,45 @@ export function nguonNhapColIndex(header: string[]) {
 }
 
 
-// Cập nhật trạng thái bảo hành cho nhiều sản phẩm trong sheet Bao_Hanh
-export async function updateBaoHanhStatus(imeis: string[], employeeId: string) {
+/**
+ * Bổ sung MỘT cột vào cuối sheet nếu chưa có, rồi trả về chỉ số cột.
+ *
+ * Khác `ensureSheetHeader` (ghi đè nguyên dòng tiêu đề): hàm này chỉ ghi đúng
+ * một ô ở hàng 1, nên tiêu đề đang có — kể cả những ô bị gõ tay lệch khoảng
+ * trắng — không bị đụng tới.
+ */
+export async function ensureColumn(sheetName: string, columnName: string) {
+  const { header } = await readFromGoogleSheets(sheetName, undefined, { force: true })
+  const existing = colIndex(header, columnName)
+  if (existing !== -1) return existing
+  const newIndex = header.length
+  await updateRangeValues(
+    `${escapeSheetName(sheetName)}!${toColumnLetter(newIndex + 1)}1`,
+    [[columnName]],
+  )
+  invalidateSheetCache(sheetName)
+  return newIndex
+}
+
+// Cập nhật trạng thái bảo hành cho nhiều sản phẩm trong sheet Bao_Hanh.
+// `deviceIds` là IMEI hoặc Serial (máy iPad bản Wi-Fi chỉ có Serial).
+export async function updateBaoHanhStatus(deviceIds: string[], employeeId: string) {
   const { header, rows } = await readFromGoogleSheets("Bao_Hanh")
-  const idxIMEI = header.findIndex(h => h.trim().toLowerCase() === "imei")
-  const idxTrangThai = header.findIndex(h => h.trim().toLowerCase() === "trạng thái")
-  const idxNgayNhanLai = header.findIndex(h => h.trim().toLowerCase() === "ngày nhận lại")
+  const idxIMEI = colIndex(header, "IMEI")
+  const idxSerial = colIndex(header, "Serial")
+  const idxTrangThai = colIndex(header, "Trạng Thái")
+  const idxNgayNhanLai = colIndex(header, "Ngày nhận lại")
   if (idxIMEI === -1 || idxTrangThai === -1) return { success: false, error: "Không tìm thấy cột IMEI hoặc Trạng Thái" }
   const nowVN = DateTime.now().setZone('Asia/Ho_Chi_Minh').toFormat('HH:mm:ss dd/MM/yyyy')
   const ngayNhanLai = nowVN
+  // Bỏ chuỗi rỗng: máy iPad Wi-Fi có ô IMEI trống, nếu để "" lọt vào danh sách
+  // thì mọi dòng trống IMEI đều bị khớp và bị đánh dấu hoàn thành oan.
+  const wanted = new Set(deviceIds.map(v => String(v || "").trim().toUpperCase()).filter(Boolean))
   const updatedRows = rows.map(row => {
-    if (imeis.includes(row[idxIMEI])) {
+    const imei = String(row[idxIMEI] || "").trim().toUpperCase()
+    const serial = idxSerial !== -1 ? String(row[idxSerial] || "").trim().toUpperCase() : ""
+    const hit = (imei && wanted.has(imei)) || (serial && wanted.has(serial))
+    if (hit) {
       row[idxTrangThai] = "Hoàn thành bảo hành"
       if (idxNgayNhanLai !== -1) {
         row[idxNgayNhanLai] = ngayNhanLai
@@ -77,8 +105,8 @@ export async function updateBaoHanhStatus(imeis: string[], employeeId: string) {
   })
   await syncToGoogleSheets("Bao_Hanh", updatedRows)
   // Ghi lịch sử trạng thái máy
-  await logProductHistory(imeis, "Hoàn thành bảo hành", employeeId)
-  return { success: true, count: imeis.length }
+  await logProductHistory(deviceIds, "Hoàn thành bảo hành", employeeId)
+  return { success: true, count: deviceIds.length }
 }
 // Lấy danh sách sản phẩm bảo hành hiện tại từ sheet Bao_Hanh
 export async function getBaoHanhProducts() {

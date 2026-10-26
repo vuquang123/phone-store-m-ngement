@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
-import { appendToGoogleSheets, logProductHistory } from "@/lib/google-sheets";
+import { appendToGoogleSheets, ensureColumn, logProductHistory } from "@/lib/google-sheets";
+import { getDeviceId, last5FromDeviceId } from "@/lib/device-id";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    // Các trường cần: ten_san_pham, loai_may, dung_luong, tinh_trang, imei, dia_chi_bao_hanh, ngay_gui, khach_hang, employeeId
+    // Các trường cần: ten_san_pham, loai_may, dung_luong, tinh_trang, imei|serial, dia_chi_bao_hanh, ngay_gui, khach_hang, employeeId
     const {
       ten_san_pham,
       loai_may,
       dung_luong,
       tinh_trang,
       imei,
+      serial,
       dia_chi_bao_hanh,
       ngay_gui,
       khach_hang,
@@ -18,18 +20,33 @@ export async function POST(req: Request) {
       employeeId,
       loi
     } = body;
-    // Tạo ID Máy là 5 số cuối của IMEI
-    const id_may = imei ? imei.slice(-5) : "";
-    if (!ten_san_pham || !imei || !dia_chi_bao_hanh || !ngay_gui || !khach_hang || !so_dien_thoai) {
-      return NextResponse.json({ success: false, error: "Thiếu thông tin bắt buộc" }, { status: 400 });
+
+    const imeiStr = String(imei || "").trim();
+    const serialStr = String(serial || "").trim().toUpperCase();
+    // iPad bản Wi-Fi không có IMEI -> chấp nhận Serial thay thế.
+    const deviceId = getDeviceId({ IMEI: imeiStr, Serial: serialStr });
+    // ID Máy = 5 ký tự cuối của định danh (IMEI nếu có, không thì Serial).
+    const id_may = deviceId ? last5FromDeviceId(deviceId) : "";
+
+    if (!ten_san_pham || !deviceId || !dia_chi_bao_hanh || !ngay_gui || !khach_hang || !so_dien_thoai) {
+      return NextResponse.json({ success: false, error: "Thiếu thông tin bắt buộc (cần IMEI hoặc Serial)" }, { status: 400 });
     }
+
+    // Sheet Bao_Hanh vốn chỉ có cột IMEI. Chỉ thêm cột Serial khi thực sự có
+    // serial để ghi, và chỉ nối thêm vào cuối nên các cột cũ không bị đụng.
+    if (serialStr) {
+      await ensureColumn("Bao_Hanh", "Serial");
+    }
+
     // Đọc header sheet Bao_Hanh để map đúng thứ tự cột
-    const { header } = await import("@/lib/google-sheets").then(m => m.readFromGoogleSheets("Bao_Hanh"));
+    const { header } = await import("@/lib/google-sheets").then(m => m.readFromGoogleSheets("Bao_Hanh", undefined, { force: true }));
     const newRow = header.map(col => {
-      switch (col) {
+      switch (col.trim()) {
         case "ID Máy": return id_may;
         case "Tên Sản Phẩm": return ten_san_pham;
-        case "IMEI": return imei;
+        case "IMEI": return imeiStr;
+        case "Serial": return serialStr;
+        case "Màu Sắc": return body.mau_sac || "";
         case "Nguồn": return body.nguon || "Khách ngoài";
         case "Tình trạng": return tinh_trang || "";
         case "Loại Máy": return loai_may || "";
