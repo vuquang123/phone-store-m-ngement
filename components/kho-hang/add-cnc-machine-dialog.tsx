@@ -13,6 +13,7 @@ import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { IPHONE_NAMES } from "@/lib/constants/apple-devices"
 
 export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { isOpen: boolean, onClose: () => void, onSuccess: () => void }) {
@@ -62,15 +63,14 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
 
   const [productNames, setProductNames] = useState<string[]>([])
   // Máy đi CNC là máy độ sim -> chỉ iPhone, không liệt kê iPad.
-  const defaultIphoneNames = IPHONE_NAMES as readonly string[]
   useEffect(() => {
     fetch("/api/kho-hang")
       .then(res => res.json())
       .then(data => {
         const names = Array.from(new Set((data.data || []).map((p: any) => p.ten_san_pham).filter(Boolean)))
         // Luôn giữ danh sách mặc định, không bị ghi đè bởi kho hàng
-        const allNames = [...defaultIphoneNames].concat((names as string[]).filter((n: string) => !defaultIphoneNames.includes(n)))
-        setProductNames(allNames as string[])
+        const base: string[] = [...IPHONE_NAMES]
+        setProductNames(base.concat((names as string[]).filter((n: string) => !base.includes(n))))
       })
   }, [])
   const [isLoading, setIsLoading] = useState(false)
@@ -110,16 +110,15 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-foreground">Tên Sản Phẩm</Label>
-            <Select value={form.ten_san_pham} onValueChange={v => setForm(f => ({ ...f, ten_san_pham: v }))}>
-              <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
-                <SelectValue placeholder="Chọn sản phẩm" />
-              </SelectTrigger>
-              <SelectContent className="bg-card border border-border shadow-lg text-foreground">
-                {productNames.map(name => (
-                  <SelectItem key={name} value={name}>{name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={form.ten_san_pham}
+              onValueChange={v => setForm(f => ({ ...f, ten_san_pham: v }))}
+              options={productNames}
+              placeholder="Chọn sản phẩm"
+              searchPlaceholder="Gõ tên máy, vd: 15 pro max"
+              emptyText="Không có máy nào khớp."
+              className="h-9 bg-card font-medium"
+            />
           </div>
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-foreground">IMEI</Label>
