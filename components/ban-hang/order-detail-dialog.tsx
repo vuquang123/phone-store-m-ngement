@@ -89,39 +89,52 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
   const [warranties, setWarranties] = useState<WarrantyRow[]>([])
   const [warrantyLoading, setWarrantyLoading] = useState(false)
   const [returnLoading, setReturnLoading] = useState(false)
-  const [returnImei, setReturnImei] = useState("")
+  // Máy được chọn để hoàn trả, định danh bằng IMEI (iPhone) HOẶC Serial (iPad wifi,
+  // Watch... không có IMEI). Giá trị lưu ở đây là "khoá máy" = imei || serial.
+  const [returnDeviceKey, setReturnDeviceKey] = useState("")
   const [returnReason, setReturnReason] = useState("")
   const [returnAmount, setReturnAmount] = useState("")
   const [isPartner, setIsPartner] = useState(false)
   const [note, setNote] = useState("")
 
-  // Helper: lấy giá bán theo IMEI từ order
-  const getPriceByImei = (imei: string) => {
-    if (!order) return 0
-    const item = (order.chi_tiet || []).find(i => i.san_pham?.imei === imei)
+  // Khoá định danh của 1 dòng máy: IMEI nếu có, không thì Serial (iPad wifi...).
+  const deviceKeyOf = (sp?: { imei?: string; serial?: string }) =>
+    String(sp?.imei || sp?.serial || '').trim()
+
+  // Các dòng MÁY có thể hoàn trả: cần ít nhất IMEI hoặc Serial (bỏ qua dòng phụ kiện).
+  const returnableItems = (order?.chi_tiet ?? []).filter(i => deviceKeyOf(i.san_pham))
+
+  const findItemByDeviceKey = (key: string) =>
+    returnableItems.find(i => deviceKeyOf(i.san_pham) === key)
+
+  // Helper: lấy giá bán của máy theo khoá định danh
+  const getPriceByDeviceKey = (key: string) => {
+    const item = findItemByDeviceKey(key)
     if (!item) return 0
     // Ưu tiên thanh_tien nếu có, fallback gia_ban
     return Number(item.thanh_tien || item.gia_ban || 0)
   }
 
   // Xác định có phải hàng kho ngoài từ nguồn hàng của dòng
-  const isPartnerSourceByImei = (imei: string) => {
-    if (!order) return false
-    const item = (order.chi_tiet || []).find(i => i.san_pham?.imei === imei)
+  const isPartnerSourceByDeviceKey = (key: string) => {
+    const item = findItemByDeviceKey(key)
     const src = (item as any)?.nguon_hang ? String((item as any).nguon_hang).toLowerCase() : ''
-    return src.includes('kho ngoài') || src.includes('kho ngoài') || src.includes('doi tac') || src.includes('partner')
+    return src.includes('kho ngoài') || src.includes('doi tac') || src.includes('partner')
+  }
+
+  // Chọn máy -> tự điền số tiền hoàn + cờ hàng kho ngoài
+  const selectReturnDevice = (key: string) => {
+    setReturnDeviceKey(key)
+    const price = getPriceByDeviceKey(key)
+    setReturnAmount(price > 0 ? String(price) : "")
+    setIsPartner(isPartnerSourceByDeviceKey(key))
   }
 
   // Prefill khi chỉ có 1 thiết bị trong đơn
   useEffect(() => {
     if (!order) return
-    const devices = (order.chi_tiet || []).filter(i => i.san_pham?.imei)
-    if (devices.length === 1) {
-      const imei = devices[0].san_pham!.imei
-      setReturnImei(imei)
-      const price = getPriceByImei(imei)
-      setReturnAmount(price > 0 ? String(price) : "")
-      setIsPartner(isPartnerSourceByImei(imei))
+    if (returnableItems.length === 1) {
+      selectReturnDevice(deviceKeyOf(returnableItems[0].san_pham))
     }
   }, [order])
   const EXPIRING_DAYS = 7
@@ -335,7 +348,12 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
 
   // Gửi yêu cầu hoàn trả (dùng chung cho nút desktop + mobile). Hiện lỗi THẬT từ API.
   const submitReturn = async () => {
-    if (!order || !returnImei) return
+    if (!order || !returnDeviceKey) return
+    // Gửi CẢ imei lẫn serial của đúng dòng đã chọn: máy iPad chỉ có serial, API dùng
+    // serial để khớp dòng Ban_Hang, nhập lại kho và huỷ hợp đồng bảo hành.
+    const device = findItemByDeviceKey(returnDeviceKey)?.san_pham
+    const deviceImei = String(device?.imei || '').trim()
+    const deviceSerial = String(device?.serial || '').trim()
     try {
       setReturnLoading(true)
       const res = await fetch('/api/hoan-tra', {
@@ -345,7 +363,8 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
           ma_don_hang: order.ma_don_hang,
           khach_hang: order.khach_hang?.ho_ten,
           so_dien_thoai: order.khach_hang?.so_dien_thoai,
-          imei: returnImei,
+          imei: deviceImei,
+          serial: deviceSerial,
           ly_do: returnReason,
           so_tien_hoan: returnAmount ? Number(returnAmount) : undefined,
           nguoi_xu_ly: order.nhan_vien?.ho_ten,
@@ -761,24 +780,24 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm">Chọn IMEI</Label>
+                  <Label className="text-sm">Chọn máy (IMEI/Serial)</Label>
                   <select
                     className="mt-1 w-full border rounded px-3 py-2 text-sm"
-                    value={returnImei}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      setReturnImei(v)
-                      const price = getPriceByImei(v)
-                      setReturnAmount(price > 0 ? String(price) : "")
-                      setIsPartner(isPartnerSourceByImei(v))
-                    }}
+                    value={returnDeviceKey}
+                    onChange={(e) => selectReturnDevice(e.target.value)}
                   >
-                    <option value="">-- Chọn IMEI --</option>
-                    {(order.chi_tiet ?? []).filter(i => i.san_pham?.imei).map(i => (
-                      <option key={i.san_pham!.imei} value={i.san_pham!.imei}>
-                        {i.san_pham!.imei} — {i.san_pham!.ten_san_pham}
-                      </option>
-                    ))}
+                    <option value="">-- Chọn máy --</option>
+                    {returnableItems.map(i => {
+                      const key = deviceKeyOf(i.san_pham)
+                      // Ghi rõ IMEI hay Serial để nhân viên không nhầm khi đơn có cả
+                      // iPhone lẫn iPad.
+                      const label = i.san_pham?.imei ? `IMEI ${i.san_pham.imei}` : `Serial ${i.san_pham?.serial}`
+                      return (
+                        <option key={key} value={key}>
+                          {label} — {i.san_pham!.ten_san_pham}
+                        </option>
+                      )
+                    })}
                   </select>
                 </div>
                 <div>
@@ -808,14 +827,14 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
               </div>
 
               <div className="mt-4 hidden md:flex justify-end">
-                <Button disabled={returnLoading || !returnImei} onClick={submitReturn}>
+                <Button disabled={returnLoading || !returnDeviceKey} onClick={submitReturn}>
                   {returnLoading ? (<span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Đang hoàn trả...</span>) : 'Xác nhận hoàn trả'}
                 </Button>
               </div>
               {/* Sticky action bar for mobile */}
               {isMobile && (
                 <div className="md:hidden sticky bottom-0 left-0 right-0 bg-card border-t mt-2 py-3 flex justify-end">
-                  <Button disabled={returnLoading || !returnImei} onClick={submitReturn}>
+                  <Button disabled={returnLoading || !returnDeviceKey} onClick={submitReturn}>
                     {returnLoading ? (<span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Đang hoàn trả...</span>) : 'Xác nhận hoàn trả'}
                   </Button>
                 </div>

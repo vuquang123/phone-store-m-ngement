@@ -4,7 +4,7 @@ import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGo
 import { DateTime } from "luxon"
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { addNotification } from "@/lib/notifications"
-import { cancelContractsByIMEIs } from "@/lib/warranty"
+import { cancelContractsByDeviceIds } from "@/lib/warranty"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
 import { Journal } from "@/lib/tx/journal"
 import { peekIdempotentDone, beginIdempotent, completeIdempotent, failIdempotent } from "@/lib/tx/idempotency"
@@ -112,6 +112,7 @@ export async function GET(req: NextRequest) {
       const { header: HH, rows: HR } = await getHoanTraSheet(force)
       const h = {
         imei: colIndex(HH, "IMEI"),
+        serial: colIndex(HH, "Serial"),
         lyDo: colIndex(HH, "Lý Do"),
         trangThai: colIndex(HH, "Trạng Thái"),
         nguoiXL: colIndex(HH, "Người Xử Lý"),
@@ -124,6 +125,10 @@ export async function GET(req: NextRequest) {
         const mDon = note.match(/Mã\s*đơn:\s*(DH\d+)/i)
         const maDon = mDon ? mDon[1] : ""
         const imeiV = h.imei !== -1 ? String(r[h.imei] || "") : ""
+        const serialV = h.serial !== -1 ? String(r[h.serial] || "") : ""
+        // Khoá máy = IMEI nếu có, không thì Serial (iPad wifi...). Dùng chung cho cả
+        // 2 chiều ghép nên dòng hoàn trả của iPad cũng tra được thông tin xử lý.
+        const deviceKey = imeiV || serialV
         const rec = {
           ly_do: h.lyDo !== -1 ? r[h.lyDo] : "",
           trang_thai: h.trangThai !== -1 ? r[h.trangThai] : "",
@@ -132,8 +137,8 @@ export async function GET(req: NextRequest) {
           ngay_yeu_cau: h.ngayYC !== -1 ? r[h.ngayYC] : "",
           ghi_chu: note,
         }
-        if (maDon) htMap.set(`${maDon}::${imeiV}`, rec)
-        if (imeiV && !htMap.has(`::${imeiV}`)) htMap.set(`::${imeiV}`, rec)
+        if (maDon) htMap.set(`${maDon}::${deviceKey}`, rec)
+        if (deviceKey && !htMap.has(`::${deviceKey}`)) htMap.set(`::${deviceKey}`, rec)
       }
     } catch (e) {
       console.warn("[HOAN-TRA GET] enrich từ Hoan_Tra lỗi (bỏ qua):", e)
@@ -147,7 +152,9 @@ export async function GET(req: NextRequest) {
       .map(({ r, i }) => {
         const maDon = b.idDon !== -1 ? String(r[b.idDon] || "") : ""
         const imeiV = b.imei !== -1 ? String(r[b.imei] || "") : ""
-        const enrich = htMap.get(`${maDon}::${imeiV}`) || htMap.get(`::${imeiV}`) || {}
+        const serialV = b.serial !== -1 ? String(r[b.serial] || "") : ""
+        const deviceKey = imeiV || serialV
+        const enrich = htMap.get(`${maDon}::${deviceKey}`) || htMap.get(`::${deviceKey}`) || {}
         const bGhiChu = b.ghiChu !== -1 ? String(r[b.ghiChu] || "") : ""
         // Lý do: ưu tiên Hoan_Tra; fallback parse từ Ghi Chú Ban_Hang ("Hoàn trả: RT.. - lý do")
         let lyDo = enrich.ly_do || ""
@@ -160,7 +167,7 @@ export async function GET(req: NextRequest) {
         if (mHoan) soTien = parsePrice(mHoan[1])
         const tenSP = b.tenSP !== -1 ? String(r[b.tenSP] || "") : ""
         return {
-          id: `${maDon}-${imeiV || i}`,
+          id: `${maDon}-${deviceKey || i}`,
           ma_don_hang: maDon,
           khach_hang: b.tenKH !== -1 ? r[b.tenKH] : "",
           so_dien_thoai: b.sdt !== -1 ? r[b.sdt] : "",
@@ -170,7 +177,7 @@ export async function GET(req: NextRequest) {
           mau_sac: b.mauSac !== -1 ? r[b.mauSac] : "",
           san_pham: tenSP, // backward compat / tìm kiếm
           imei: imeiV,
-          serial: b.serial !== -1 ? r[b.serial] : "",
+          serial: serialV,
           ly_do: lyDo,
           trang_thai: enrich.trang_thai || "Hoàn trả",
           so_tien_hoan: soTien,
@@ -219,6 +226,7 @@ export async function POST(req: NextRequest) {
       sdt: colIndex(header, "Số Điện Thoại"),
       sp: colIndex(header, "Sản Phẩm"),
       imei: colIndex(header, "IMEI"),
+      serial: colIndex(header, "Serial"),
       lyDo: colIndex(header, "Lý Do"),
       trangThai: colIndex(header, "Trạng Thái"),
       nguoiXL: colIndex(header, "Người Xử Lý"),
@@ -247,27 +255,31 @@ export async function POST(req: NextRequest) {
     }
 
     // ===== VALIDATE — natural idempotency: chặn hoàn trả 2 lần theo MÃ ĐƠN HÀNG =====
-    // Mã đơn hàng là DUY NHẤT; IMEI có thể trùng giữa nhiều đơn (1 máy bán lại nhiều
-    // lần vẫn còn trong sheet) nên KHÔNG dùng IMEI đứng một mình để chặn.
+    // Mã đơn hàng là DUY NHẤT; IMEI/Serial có thể trùng giữa nhiều đơn (1 máy bán lại
+    // nhiều lần vẫn còn trong sheet) nên KHÔNG dùng đứng một mình để chặn.
     if (ma_don_hang) {
       try {
         const { header: BH, rows: BR } = await readFromGoogleSheets("Ban_Hang")
         const bIdDon = colIndex(BH, "ID Đơn Hàng")
         const bImei = colIndex(BH, "IMEI")
+        const bSerial = colIndex(BH, "Serial")
         const bTrang = colIndex(BH, "Trạng Thái")
         if (bIdDon !== -1 && bTrang !== -1) {
           const already = BR.some((r) => {
             if (String(r[bIdDon] || "") !== String(ma_don_hang)) return false
-            // Nếu chỉ hoàn 1 máy trong đơn, thu hẹp theo IMEI để không chặn nhầm máy khác cùng đơn
+            // Chỉ hoàn 1 máy trong đơn -> thu hẹp theo IMEI (iPhone) hoặc Serial (iPad)
+            // để không chặn nhầm máy khác cùng đơn.
             if (imei && bImei !== -1 && String(r[bImei] || "") !== String(imei)) return false
+            if (serial && bSerial !== -1 && String(r[bSerial] || "") !== String(serial)) return false
             return String(r[bTrang] || "").trim() === "Hoàn trả"
           })
           if (already) {
+            const deviceLabel = imei ? ` (IMEI ${imei})` : serial ? ` (Serial ${serial})` : ""
             return NextResponse.json(
               {
                 ok: false,
                 code: "ALREADY_RETURNED",
-                error: `Đơn ${ma_don_hang}${imei ? ` (IMEI ${imei})` : ""} đã được hoàn trả trước đó`,
+                error: `Đơn ${ma_don_hang}${deviceLabel} đã được hoàn trả trước đó`,
               },
               { status: 409 },
             )
@@ -285,6 +297,9 @@ export async function POST(req: NextRequest) {
     if (H.sdt !== -1) line[H.sdt] = so_dien_thoai ? normalizePhone(String(so_dien_thoai)) : ""
     if (H.sp !== -1) line[H.sp] = san_pham || ""
     if (H.imei !== -1) line[H.imei] = imei || ""
+    // Máy không có IMEI (iPad wifi, Watch...) định danh bằng Serial — phải ghi lại,
+    // nếu không thì dòng hoàn trả mất dấu máy và Telegram/đối soát không tra được.
+    if (H.serial !== -1) line[H.serial] = serial || ""
     if (H.lyDo !== -1) line[H.lyDo] = ly_do || ""
     if (H.trangThai !== -1) line[H.trangThai] = trang_thai || "Đang xử lý"
     if (H.nguoiXL !== -1) line[H.nguoiXL] = nguoi_xu_ly || ""
@@ -352,7 +367,7 @@ export async function POST(req: NextRequest) {
     try {
       await addNotification({
         tieu_de: "Tạo yêu cầu hoàn trả",
-        noi_dung: `${khach_hang || 'Khách lẻ'} • ${imei || san_pham || newId}`,
+        noi_dung: `${khach_hang || 'Khách lẻ'} • ${imei || serial || san_pham || newId}`,
         loai: "hoan_tra",
         nguoi_gui_id: nguoi_xu_ly || "system",
         nguoi_nhan_id: "all",
@@ -361,7 +376,7 @@ export async function POST(req: NextRequest) {
 
     // 1) Mark Ban_Hang rows as Hoàn trả; zero out Lãi & Tổng Thu; add note; and reconstruct Kho_Hang row for in-house items
     try {
-      if (ma_don_hang || imei) {
+      if (ma_don_hang || imei || serial) {
         const { header: BH, rows: BR } = await readFromGoogleSheets('Ban_Hang')
         const bIdx = {
           idDon: colIndex(BH, 'ID Đơn Hàng'),
@@ -500,10 +515,11 @@ export async function POST(req: NextRequest) {
       console.warn('[RETURN] Mark Ban_Hang failed:', err)
     }
 
-    // 2) Cancel/Update warranty contracts for returned IMEI
+    // 2) Huỷ hợp đồng bảo hành của máy vừa hoàn (khớp theo IMEI hoặc Serial)
     try {
-      if (imei) {
-        await cancelContractsByIMEIs([String(imei)], { reason: 'return', actor: nguoi_xu_ly || '' })
+      const deviceIds = [imei, serial].map((v) => String(v || '').trim()).filter(Boolean)
+      if (deviceIds.length) {
+        await cancelContractsByDeviceIds(deviceIds, { reason: 'return', actor: nguoi_xu_ly || '' })
       }
     } catch (err) {
       console.warn('[RETURN] Cancel warranties failed:', err)

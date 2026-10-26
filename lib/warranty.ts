@@ -255,9 +255,12 @@ export async function loadWarrantyContracts(filter: WarrantyContractFilter = {})
   return filtered
 }
 
-// Cancel/update warranty contracts by IMEI list
-export async function cancelContractsByIMEIs(
-  imeis: string[],
+// Huỷ/cập nhật hợp đồng bảo hành theo danh sách ĐỊNH DANH MÁY.
+// Định danh = IMEI (iPhone) hoặc Serial (iPad wifi, Watch... không có IMEI), vì vậy
+// phải dò cả 2 cột — chỉ khớp IMEI thì hợp đồng của iPad không bao giờ bị huỷ khi
+// khách hoàn máy.
+export async function cancelContractsByDeviceIds(
+  deviceIds: string[],
   options?: { reason?: string; actor?: string }
 ) {
   function toColumnLetter(colNum: number) {
@@ -269,22 +272,28 @@ export async function cancelContractsByIMEIs(
     }
     return letter
   }
-  if (!imeis || imeis.length === 0) return { success: true, updated: 0 }
+  if (!deviceIds || deviceIds.length === 0) return { success: true, updated: 0 }
   const { header, rows } = await readFromGoogleSheets(CONTRACT_SHEET)
   const idx = (name: string) => header.indexOf(name)
   const C = {
     imei: idx('IMEI'),
+    serial: idx('Serial'),
     status: idx('Trạng Thái'),
     note: idx('Ghi Chú')
   }
-  if (C.imei === -1 || C.status === -1) return { success: false, error: 'Missing IMEI or Trạng Thái column' }
-  const set = new Set(imeis.map(x => String(x)))
+  if ((C.imei === -1 && C.serial === -1) || C.status === -1) {
+    return { success: false, error: 'Missing IMEI/Serial or Trạng Thái column' }
+  }
+  // Serial hay bị lệch hoa/thường giữa lúc bán và lúc hoàn -> so sau khi chuẩn hoá.
+  const norm = (v: any) => String(v || '').trim().toUpperCase()
+  const set = new Set(deviceIds.map(norm).filter(Boolean))
   let updated = 0
   const nowVN = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i]
-    const im = r[C.imei]
-    if (!im || !set.has(String(im))) continue
+    const im = C.imei !== -1 ? norm(r[C.imei]) : ''
+    const sr = C.serial !== -1 ? norm(r[C.serial]) : ''
+    if (!(im && set.has(im)) && !(sr && set.has(sr))) continue
     const curStatus = r[C.status] || ''
     if (String(curStatus).toLowerCase() === 'canceled') continue
     const rowNum = i + 2
