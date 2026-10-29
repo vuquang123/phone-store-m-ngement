@@ -32,6 +32,7 @@ import {
   Truck,
   StickyNote,
   ChartNoAxesCombined,
+  ClipboardList,
 } from "lucide-react"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
@@ -42,7 +43,11 @@ type Role = "quan_ly" | "nhan_vien"
 const getNavigation = () => [
   {
     title: "Tổng quan",
-    items: [{ title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["quan_ly"] as Role[] }],
+    items: [
+      { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["quan_ly"] as Role[] },
+      // Bàn giao ca: nhân viên mở đầu ca để biết ca trước làm gì, còn việc gì.
+      { title: "Tổng kết ca", href: "/nhanvien/dashboard", icon: ClipboardList, roles: ["quan_ly", "nhan_vien"] as Role[] },
+    ],
   },
   {
     title: "Bán hàng",

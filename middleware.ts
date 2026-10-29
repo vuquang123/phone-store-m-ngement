@@ -68,6 +68,9 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Chỉ chạy middleware cho 2 nhóm này; các route công khai loại trừ trong code.
-  matcher: ["/dashboard/:path*", "/api/:path*"],
+  // Chỉ chạy middleware cho các nhóm này; route công khai loại trừ trong code.
+  // /nhanvien/* (trang tổng kết ca) BẮT BUỘC phải có mặt ở đây: nó hiện doanh
+  // thu, số điện thoại và địa chỉ khách — thiếu một dòng này là trang mở cho
+  // bất kỳ ai không cần đăng nhập.
+  matcher: ["/dashboard/:path*", "/nhanvien/:path*", "/api/:path*"],
 }

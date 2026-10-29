@@ -2,7 +2,8 @@
 // app/api/ban-hang/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { sendTelegramMessage, formatOrderMessage, deleteTelegramMessage } from "@/lib/telegram"
-import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, batchUpdateRangeValues, readRangeValuesFresh, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
+import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, batchUpdateRangeValues, readRangeValuesFresh, syncToGoogleSheets, colIndex, norm, ensureColumn } from "@/lib/google-sheets"
+import { GIO_BAN_COL } from "@/lib/shift"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
@@ -614,7 +615,15 @@ export async function POST(request: NextRequest) {
     }
 
   // Đọc header sheet để map đúng thứ tự cột
-  const { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
+  let { header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
+  // Sheet chỉ có "Ngày bán" (d/M/yyyy, không giờ) nên trước đây không thể biết
+  // đơn thuộc ca làm nào. Bổ sung cột "Giờ bán" (nối vào cuối, không đụng cột cũ)
+  // để trang tổng kết ca chia được theo ca. Đơn cũ không có giờ -> vẫn hiện,
+  // nhưng nằm ở nhóm "Chưa ghi giờ".
+  if (colIndex(header, GIO_BAN_COL) === -1) {
+    await ensureColumn(SHEETS.BAN_HANG, GIO_BAN_COL)
+    ;({ header, rows } = await readFromGoogleSheets(SHEETS.BAN_HANG, undefined, { force: true }))
+  }
   // Xác định cột mở rộng (nếu admin đã thêm thủ công): Phí BH, Tổng Thu, Gói BH, Chi Tiết PK (JSON)
   const idxPhiBH = header.indexOf('Phí BH')
   const idxTongThu = header.indexOf('Tổng Thu')
@@ -801,6 +810,10 @@ export async function POST(request: NextRequest) {
           k === "Mã Đơn" ||
           k === "ID"
         ) return idDonHang;
+        if (k.trim() === GIO_BAN_COL) {
+          // Giờ tạo đơn theo giờ VN. Dùng để xếp đơn vào ca làm.
+          return DateTime.now().setZone("Asia/Ho_Chi_Minh").toFormat("HH:mm:ss")
+        }
         if (norm(k) === "ngay_ban" || norm(k) === "ngay_xuat") {
           // FE gửi khoá "Ngày Xuất"; sheet dùng cột "Ngày bán" -> chấp nhận cả hai.
           return (
