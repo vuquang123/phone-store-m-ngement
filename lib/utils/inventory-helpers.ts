@@ -96,27 +96,45 @@ export function getLoaiMayBadgeClass(loai?: string) {
   return "bg-muted text-muted-foreground border-transparent"
 }
 
-// Ph\u1ea7n "%" pin (s\u1ee9c kho\u1ebb): s\u1ed1 TR\u01af\u1edaC d\u1ea5u "/" n\u1ebfu c\u00f3 (vd "100/165" -> 100)
-export function parsePinHealth(pin?: string | number): number {
-  const first = String(pin ?? "").trim().split("/")[0]
-  const num = Number(first.replace(/[^\d.]/g, ""))
-  return Number.isFinite(num) ? num : 0
+// \u00d4 "Pin (%)" \u0111\u01b0\u1ee3c g\u00f5 tay n\u00ean trong sheet \u0111ang t\u1ed3n t\u1ea1i 5 d\u1ea1ng kh\u00e1c nhau:
+//   "83"  "100"            -> ch\u1ec9 c\u00f3 % pin
+//   "100/3L"  "96/42L"     -> % pin / s\u1ed1 l\u1ea7n s\u1ea1c
+//   "100%/1L" "100%/74L"   -> nh\u01b0 tr\u00ean nh\u01b0ng c\u00f3 th\u00eam d\u1ea5u %
+//   "100%162l" "100%58l"   -> C\u00d3 % nh\u01b0ng KH\u00d4NG c\u00f3 d\u1ea5u "/"  <-- d\u1ea1ng t\u1eebng g\u00e2y l\u1ed7i
+//
+// D\u1ea1ng cu\u1ed1i tr\u01b0\u1edbc \u0111\u00e2y r\u01a1i v\u00e0o nh\u00e1nh "b\u1ecf m\u1ecdi k\u00fd t\u1ef1 kh\u00f4ng ph\u1ea3i s\u1ed1" n\u00ean
+// "100%171l" b\u1ecb d\u00ednh th\u00e0nh "100171" r\u1ed3i in ra "Pin 100171%" trong tin b\u00e1o kh\u00e1ch.
+const PIN_RE = /^\s*(\d+(?:[.,]\d+)?)\s*%?\s*\/?\s*(\d+)?\s*[lL]?\s*$/
+
+/** T\u00e1ch \u00f4 pin th\u00e0nh % s\u1ee9c kho\u1ebb v\u00e0 s\u1ed1 l\u1ea7n s\u1ea1c (`cycles` = null n\u1ebfu kh\u00f4ng ghi). */
+export function parsePin(pin?: string | number): { health: number; cycles: number | null } {
+  const s = String(pin ?? "").trim()
+  if (!s) return { health: 0, cycles: null }
+  const m = s.match(PIN_RE)
+  if (!m) {
+    // Kh\u00f4ng kh\u1edbp m\u1eabu n\u00e0o -> l\u1ea5y s\u1ed1 \u0111\u1ea7u ti\u00ean l\u00e0m % pin, kh\u00f4ng \u0111o\u00e1n s\u1ed1 l\u1ea7n s\u1ea1c.
+    const first = s.match(/\d+(?:[.,]\d+)?/)
+    return { health: first ? Number(first[0].replace(",", ".")) || 0 : 0, cycles: null }
+  }
+  return {
+    health: Number(m[1].replace(",", ".")) || 0,
+    cycles: m[2] ? Number(m[2]) : null,
+  }
 }
 
-// Hi\u1ec3n th\u1ecb pin: "100/165" -> "100% (165L)" (L = l\u1ea7n s\u1ea1c); "93" -> "93%"; r\u1ed7ng -> "-"
-export function formatPinDisplay(pin?: string | number): string { 
+// Ph\u1ea7n "%" pin (s\u1ee9c kho\u1ebb) \u2014 d\u00f9ng cho ng\u01b0\u1ee1ng m\u00e0u.
+export function parsePinHealth(pin?: string | number): number {
+  return parsePin(pin).health
+}
+
+// Hi\u1ec3n th\u1ecb pin: "100%171l" / "100/171L" -> "100% (171L)" (L = l\u1ea7n s\u1ea1c);
+// "93" -> "93%"; r\u1ed7ng -> "-".
+export function formatPinDisplay(pin?: string | number): string {
   const s = String(pin ?? "").trim()
   if (!s) return "-"
-  if (s.includes("/")) {
-    const [a, b] = s.split("/")
-    const health = (a || "").replace(/[^\d.]/g, "")
-    const cycles = (b || "").replace(/[^\d.]/g, "")
-    if (health && cycles) return `${health}% (${cycles}L)`
-    if (health) return `${health}%`
-    return s
-  }
-  const n = s.replace(/[^\d.]/g, "")
-  return n ? `${n}%` : s
+  const { health, cycles } = parsePin(s)
+  if (!health) return s
+  return cycles !== null ? `${health}% (${cycles}L)` : `${health}%`
 }
 
 // M\u00e0u ch\u1eef pin theo % (s\u1ee9c kho\u1ebb): >=90 xanh l\u00e1, 80-89 v\u00e0ng, <80 \u0111\u1ecf
