@@ -1,6 +1,7 @@
 "use client"
 
 import dayjs from "dayjs"
+import { parsePaymentBreakdown, isRefundPart } from "@/lib/utils/payment"
 import customParseFormat from "dayjs/plugin/customParseFormat"
 dayjs.extend(customParseFormat)
 
@@ -284,66 +285,6 @@ export function OrderDetailDialog({ isOpen, onClose, orderId }: OrderDetailDialo
     if (s.includes('thẻ') || s.includes('the')) return 'bg-orange-100 text-orange-800'
     if (s.includes('trả góp') || s.includes('tra gop') || s.includes('góp')) return 'bg-amber-100 text-amber-800'
     return 'bg-muted text-foreground'
-  }
-
-  // Khoản shop trả LẠI cho khách (thu máy xuống đời) — chuỗi này cũng chứa
-  // "tiền mặt"/"chuyển khoản" nên mọi chỗ nhận diện phương thức phải xét nó trước.
-  const isRefundPart = (t: string) =>
-    String(t || '')
-      .normalize('NFD')
-      // @ts-ignore - diacritic char class in modern runtimes
-      .replace(/\p{Diacritic}/gu, '')
-      .toLowerCase()
-      .includes('tra lai khach')
-
-  // Tách các dòng thanh toán có số tiền từ chuỗi tổng hợp.
-  // Hỗ trợ nhiều biến thể: "Tiền mặt: ₫x | Chuyển khoản: ₫y", "CK 15.500.000", "The: 1,000,000đ"...
-  const parsePaymentBreakdown = (raw: string): Array<{label: string; amount: number}> => {
-    const s = String(raw || '').trim()
-    if (!s) return []
-    const parts = s.split(/\|/).map(p => p.trim()).filter(Boolean)
-    const out: Array<{label: string; amount: number}> = []
-
-    const normalize = (t: string) => t
-      .normalize('NFD')
-      // @ts-ignore - diacritic char class in modern runtimes
-      .replace(/\p{Diacritic}/gu, '')
-      .toLowerCase()
-
-    const friendlyLabel = (t: string) => {
-      const n = normalize(t)
-      if (isRefundPart(t)) return /(chuyen\s*khoan)/.test(n) ? 'Trả lại khách (CK)' : 'Trả lại khách (tiền mặt)'
-      if (/(chuyen\s*khoan|\bck\b|bank|stk)/.test(n)) return 'Chuyển khoản'
-      if (/(tien\s*mat|cash)/.test(n)) return 'Tiền mặt'
-      if (/(\bthe\b|pos|card)/.test(n)) return 'Thẻ'
-      if (/(tra\s*gop|tragop|installment|credit|gop)/.test(n)) return 'Trả góp'
-      return (t.includes(':') ? t.split(':')[0] : t).trim()
-    }
-
-    for (const p of parts) {
-      const label = friendlyLabel(p)
-      // Tìm số tiền đầu tiên trong đoạn
-      const numMatch = p.match(/\d[\d\.,]*/)
-      let amount = 0
-      if (numMatch) {
-        const amtStr = numMatch[0].replace(/[\.,](?=\d{3}\b)/g, '').replace(/[^\d-]/g, '')
-        const n = Number(amtStr)
-        amount = Number.isFinite(n) ? n : 0
-      } else {
-        // cũng thử mẫu sau dấu ':' nếu có
-        const m = p.match(/:(.*)$/)
-        if (m) {
-          const num2 = m[1].match(/\d[\d\.,]*/)
-          if (num2) {
-            const amtStr = num2[0].replace(/[\.,](?=\d{3}\b)/g, '').replace(/[^\d-]/g, '')
-            const n = Number(amtStr)
-            amount = Number.isFinite(n) ? n : 0
-          }
-        }
-      }
-      if (label) out.push({ label, amount: isRefundPart(p) ? -amount : amount })
-    }
-    return out
   }
 
   // Gửi yêu cầu hoàn trả (dùng chung cho nút desktop + mobile). Hiện lỗi THẬT từ API.
