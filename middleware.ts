@@ -26,6 +26,12 @@ const PUBLIC_API_EXACT = ["/api/login", "/api/logout", "/api/health"]
 function isPublicApi(pathname: string): boolean {
   // Catalog cho Zalo Mini App — tự xác thực bằng API key riêng trong route.
   if (pathname.startsWith("/api/public")) return true
+  // Cron của Vercel gửi "Authorization: Bearer <CRON_SECRET>" và KHÔNG có cookie
+  // phiên. Middleware chỉ xét cookie nên sẽ trả 401 trước khi route kịp kiểm
+  // tra secret -> cron không bao giờ chạy được. Cho qua ở đây; route tự gác
+  // bằng isInternalRequestAuthorized() (Bearer CRON_SECRET, hoặc phiên quản lý),
+  // nên request không có gì trong tay vẫn bị chặn ở lớp đó.
+  if (pathname === "/api/cron" || pathname.startsWith("/api/cron/")) return true
   return PUBLIC_API_EXACT.some((p) => pathname === p || pathname.startsWith(p + "/"))
 }
 
