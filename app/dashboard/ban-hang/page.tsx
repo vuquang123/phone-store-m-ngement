@@ -346,12 +346,31 @@ export default function BanHangPage() {
 
         // Ưu tiên dữ liệu cache (kho/đối tác/phụ kiện) vì đầy đủ field (nguon, serial, ...);
         // kết quả từ /api/search-products chỉ bổ sung máy không có sẵn trong cache.
+        // Khử trùng lặp theo IMEI/Serial trước, ID sau: /api/search-products đọc thẳng sheet
+        // nên khi header lệch (thừa dấu cách) cột "ID Máy" trả về rỗng -> trước đây so theo id
+        // không khớp với cache và cùng một máy bị hiện 2 dòng.
+        const seen = new Set<string>()
         const allProducts = [...filteredKho, ...filteredPartner, ...filteredAccessories, ...results]
           .reduce((acc: any[], item: any) => {
-            if (!acc.some((p: any) => p.id === item.id)) {
-              if (!item.type && item.imei) item.type = 'product'
-              acc.push(item)
-            }
+            const imei = String(item?.imei ?? '').trim()
+            const serial = String(item?.serial ?? '').trim()
+            const id = String(item?.id ?? '').trim()
+            // Phụ kiện không có IMEI/Serial; nếu sheet trả về ID rỗng thì gộp theo tên + giá
+            // để không hiện lặp. Máy không định danh được thì cứ hiện (thà thừa còn hơn giấu).
+            const isAccessory = item?.type === 'accessory' || (!imei && !serial && (item?.loai_phu_kien != null || item?.ten_phu_kien != null))
+            const key = imei
+              ? `imei:${imei}`
+              : serial
+                ? `serial:${serial}`
+                : id
+                  ? `id:${id}`
+                  : isAccessory
+                    ? `pk:${String(item?.ten_san_pham ?? item?.ten_phu_kien ?? '').trim().toLowerCase()}|${item?.gia_ban ?? ''}`
+                    : ''
+            if (key && seen.has(key)) return acc
+            if (key) seen.add(key)
+            if (!item.type && item.imei) item.type = 'product'
+            acc.push(item)
             return acc
           }, [])
         setSearchResults(allProducts)

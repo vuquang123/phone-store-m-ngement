@@ -64,9 +64,15 @@ async function readSheetAll(sheetName: string) {
 }
 
 const norm = (s: any) => String(s ?? "").toLowerCase().trim()
+// Header trong sheet hay bị gõ tay lệch (thừa dấu cách, khác hoa/thường) nên phải so khớp
+// sau khi chuẩn hoá; nếu so khớp y nguyên thì cột không tìm thấy -> field trả về rỗng.
+const normHeader = (s: any) => String(s ?? "").replace(/\s+/g, " ").trim().toLowerCase()
 const idxMap = (headers: string[]) => {
   const m: Record<string, number> = {}
-  headers.forEach((h, i) => (m[h] = i))
+  headers.forEach((h, i) => {
+    const k = normHeader(h)
+    if (k && m[k] === undefined) m[k] = i
+  })
   return m
 }
 
@@ -98,7 +104,7 @@ export async function GET(request: NextRequest) {
     if (pAll.length) {
       const header = pAll[0]
       const pIdx = idxMap(header)
-      const h = (k: (typeof PRODUCT_HEADERS)[number]) => pIdx[k] ?? -1
+      const h = (k: (typeof PRODUCT_HEADERS)[number]) => pIdx[normHeader(k)] ?? -1
 
       const nameCol = h("Tên Sản Phẩm")
       const loaiCol = h("Loại Máy")
@@ -112,11 +118,11 @@ export async function GET(request: NextRequest) {
       const idMayCol = h("ID Máy")
       const trangThaiCol = h("Trạng Thái")
       const doSimCol = h("Dạng Sim")
-      const serialCol = header.findIndex((x) => String(x).trim() === "Serial")
+      const serialCol = pIdx[normHeader("Serial")] ?? -1
       // Cột nguồn kho (Kho trong / Kho ngoài). Sheet hiện dùng "Trạng Thái Kho".
-      const nguonCol = header.findIndex((x) =>
-        ["Nguồn", "Nguồn Hàng", "Trạng Thái Kho", "Trạng thái kho"].includes(String(x).trim())
-      )
+      const nguonCol = ["Nguồn", "Nguồn Hàng", "Trạng Thái Kho"]
+        .map((k) => pIdx[normHeader(k)] ?? -1)
+        .find((i) => i >= 0) ?? -1
 
       productResults = pAll
         .slice(1)
@@ -134,7 +140,7 @@ export async function GET(request: NextRequest) {
         .map((row) => {
           const giaNhapRaw = giaNhapCol >= 0 ? row[giaNhapCol] : ""
           const giaBanRaw = giaBanCol >= 0 ? row[giaBanCol] : ""
-          const ghiChuCol = header.findIndex(h => h === "Ghi Chú")
+          const ghiChuCol = pIdx[normHeader("Ghi Chú")] ?? -1
           const ghiChu = ghiChuCol >= 0 ? row[ghiChuCol] : ""
           // Xử lý giá: loại bỏ dấu chấm ngăn cách hàng nghìn trước khi ép kiểu số
           const gia_nhap = Number(String(giaNhapRaw).replace(/\./g, "").replace(/[^\d.-]/g, "")) || 0
@@ -166,7 +172,7 @@ export async function GET(request: NextRequest) {
     if (aAll.length) {
       const header = aAll[0]
       const aIdx = idxMap(header)
-      const h = (k: (typeof ACCESSORY_HEADERS)[number]) => aIdx[k] ?? -1
+      const h = (k: (typeof ACCESSORY_HEADERS)[number]) => aIdx[normHeader(k)] ?? -1
 
       const tenCol = h("Tên Sản Phẩm")
       const loaiCol = h("Loại")

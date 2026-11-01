@@ -4,7 +4,6 @@ import { ProtectedRoute } from "@/components/auth/protected-route"
 import { useState } from "react"
 import { BarChart } from "@/components/dashboard/bar-chart"
 import { StatsCards } from "@/components/dashboard/stats-cards"
-import { RecentSummaries } from "@/components/dashboard/recent-summaries"
 import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -114,9 +113,7 @@ export default function DashboardPage() {
                 
               </CardContent>
             </Card>
-          ) : (
-            <RecentSummaries />
-          )}
+          ) : null}
         </div>
       </TooltipProvider>
     </ProtectedRoute>
