@@ -20,6 +20,15 @@ type DeviceSummary = {
   loai_may?: string
 }
 
+// Mỗi máy chỉ lưu MỘT loại định danh (iPhone -> IMEI, iPad Wi-Fi/Watch -> Serial),
+// nên mọi tin nhắn Telegram chỉ hiện một dòng: IMEI nếu có, không thì Serial.
+function pickIdentifier(imei: any, serial: any): { label: "IMEI" | "Serial"; value: string } | null {
+  const im = String(imei ?? "").trim()
+  if (im) return { label: "IMEI", value: im }
+  const sr = String(serial ?? "").trim()
+  return sr ? { label: "Serial", value: sr } : null
+}
+
 function formatPinLabel(pin: string | number | undefined) {
   const raw = String(pin ?? "").trim()
   if (!raw) return ""
@@ -38,8 +47,8 @@ function formatDeviceSummaryLine(device: DeviceSummary, index: number) {
   const name = String(device.name || "Máy").trim()
   const specs = [device.mau_sac, device.dung_luong].map((v) => String(v ?? "").trim()).filter(Boolean)
   const details: string[] = []
-  if (device.imei) details.push(`IMEI: ${device.imei}`)
-  if (device.serial) details.push(`Serial: ${device.serial}`)
+  const ident = pickIdentifier(device.imei, device.serial)
+  if (ident) details.push(`${ident.label}: ${ident.value}`)
   if (device.tinh_trang) details.push(`Tình trạng: ${device.tinh_trang}`)
   const pinLabel = formatPinLabel(device.pin)
   if (pinLabel) details.push(`Pin: ${pinLabel}`)
@@ -131,6 +140,7 @@ export type ProcessingDevice = {
   id?: string
   dang_xu_ly?: string
   imei?: string
+  serial?: string
   name?: string
   mau_sac?: string
   dung_luong?: string
@@ -155,7 +165,8 @@ export async function sendProcessingDeviceMessage(d: ProcessingDevice, employee:
 
     const title = [d.name || "Máy", d.dung_luong, d.mau_sac].filter(Boolean).join(" • ")
     const lines = [`⏳ <b>Nhận xử lý máy</b>`, `Nhân viên: ${employee}`, title]
-    if (d.imei) lines.push(`IMEI: <code>${d.imei}</code>`)
+    const ident = pickIdentifier(d.imei, d.serial)
+    if (ident) lines.push(`${ident.label}: <code>${ident.value}</code>`)
     if (d.tinh_trang) lines.push(`Tình trạng: ${d.tinh_trang}`)
     const gia = formatGia(d.gia_ban)
     if (gia) lines.push(`Giá: ${gia}`)
@@ -680,12 +691,8 @@ export function formatOrderMessage(order: any, type: "new" | "return") {
     const nguonStr = p.nguon ? ` [${p.nguon}]` : ""
     const head = thongSo ? `${tenSanPham} (${thongSo})${nguonStr}` : `${tenSanPham}${nguonStr}`
     const idLine = (() => {
-      const imei = p.imei || p.IMEI
-      const serial = p.serial || p.Serial
-      const parts = []
-      if (imei) parts.push(`IMEI: ${imei}`)
-      if (serial) parts.push(`Serial: ${serial}`)
-      return parts.length ? ` | ${parts.join(" - ")}` : ""
+      const ident = pickIdentifier(p.imei || p.IMEI, p.serial || p.Serial)
+      return ident ? ` | ${ident.label}: ${ident.value}` : ""
     })()
 
     // Tình trạng + Pin của máy

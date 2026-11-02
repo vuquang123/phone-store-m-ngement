@@ -250,8 +250,11 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to save product");
+        const error = await response.json().catch(() => ({} as any));
+        // API trả kèm `raw` (chi tiết lỗi từ Google Sheets) — hiện luôn để khỏi phải mò log,
+        // vì "Internal server error" một mình không nói được gì.
+        const detail = [error?.error || "Failed to save product", error?.raw].filter(Boolean).join(" — ");
+        throw new Error(detail);
       }
 
       toast({

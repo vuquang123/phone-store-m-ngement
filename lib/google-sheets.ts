@@ -497,14 +497,68 @@ export async function readRangeValuesFresh(range: string): Promise<any[][]> {
   return (res.data.values || []) as any[][]
 }
 
+/**
+ * Mỗi sheet có một "lưới" (grid) với số dòng cố định. Khi dữ liệu lấp đầy đúng tới dòng
+ * cuối của lưới (vd Kho_Hang: 94 dòng dữ liệu / rowCount 94), ghi sang dòng kế tiếp sẽ bị
+ * Google trả về lỗi "exceeds grid limits" -> route bắt được và trả 500 "Internal server error".
+ * Người dùng thấy: nhập kho/hoàn trả/chuyển máy về kho đều lỗi mà không rõ lý do.
+ *
+ * Trả về `true` nếu đã nới thêm dòng cho sheet.
+ */
+async function expandSheetRows(sheetName: string, minRows: number): Promise<boolean> {
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+    fields: "sheets(properties(sheetId,title,gridProperties(rowCount)))",
+  })
+  const target = (meta.data.sheets || []).find(
+    (sh: any) => String(sh?.properties?.title || "") === sheetName
+  )
+  const sheetId = target?.properties?.sheetId
+  if (sheetId === undefined || sheetId === null) return false
+  const current = Number(target?.properties?.gridProperties?.rowCount || 0)
+  if (current >= minRows) return false
+  // Nới dư ra một ít để không phải gọi lại ở mỗi lần nhập hàng tiếp theo.
+  const length = Math.max(minRows - current, 200)
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+    requestBody: {
+      requests: [{ appendDimension: { sheetId, dimension: "ROWS", length } }],
+    },
+  })
+  return true
+}
+
+/** Tách tên sheet + dòng lớn nhất mà một range sẽ ghi tới (để biết cần bao nhiêu dòng). */
+function rangeTarget(range: string, rowsWritten: number): { sheetName: string; lastRow: number } | null {
+  const m = String(range).match(/^'?(.*?)'?!(.+)$/)
+  if (!m) return null
+  const sheetName = m[1].replace(/''/g, "'")
+  const rowNums = (m[2].match(/\d+/g) || []).map(Number).filter((n) => Number.isFinite(n))
+  if (!rowNums.length) return null
+  const start = Math.min(...rowNums)
+  const end = Math.max(...rowNums, start + Math.max(rowsWritten, 1) - 1)
+  return { sheetName, lastRow: end }
+}
+
+const isGridLimitError = (e: any) =>
+  /exceeds grid limits|beyond the last row|above the last row/i.test(String(e?.message || e?.errors?.[0]?.message || ""))
+
 export async function updateRangeValues(range: string, values: any[][]) {
   // Dùng client singleton (getSheetsClient) thay vì tạo google.sheets() mới mỗi lần.
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
-    range,
-    valueInputOption: "RAW",
-    requestBody: { values },
-  })
+  const write = () =>
+    sheets.spreadsheets.values.update({
+      spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+      range,
+      valueInputOption: "RAW",
+      requestBody: { values },
+    })
+  try {
+    await write()
+  } catch (error: any) {
+    const target = isGridLimitError(error) ? rangeTarget(range, values.length) : null
+    if (!target || !(await expandSheetRows(target.sheetName, target.lastRow))) throw error
+    await write()
+  }
   try {
     const m = range.match(/^'?(.*?)'?!/)
     if (m && m[1]) invalidateSheetCache(m[1].replace(/''/g, "'"))
@@ -517,16 +571,34 @@ export async function batchUpdateRangeValues(
 ) {
   if (!items.length) return { success: true }
 
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
-    requestBody: {
-      valueInputOption: "RAW",
-      data: items.map((item) => ({
-        range: item.range,
-        values: item.values,
-      })),
-    },
-  })
+  const write = () =>
+    sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+      requestBody: {
+        valueInputOption: "RAW",
+        data: items.map((item) => ({
+          range: item.range,
+          values: item.values,
+        })),
+      },
+    })
+  try {
+    await write()
+  } catch (error: any) {
+    if (!isGridLimitError(error)) throw error
+    // Gom theo sheet: mỗi sheet chỉ nới 1 lần tới dòng xa nhất cần ghi.
+    const needed = new Map<string, number>()
+    for (const item of items) {
+      const t = rangeTarget(item.range, item.values.length)
+      if (t) needed.set(t.sheetName, Math.max(needed.get(t.sheetName) || 0, t.lastRow))
+    }
+    let expanded = false
+    for (const [sheetName, lastRow] of needed) {
+      if (await expandSheetRows(sheetName, lastRow)) expanded = true
+    }
+    if (!expanded) throw error
+    await write()
+  }
 
   try {
     const touchedSheets = new Set<string>()
@@ -801,6 +873,8 @@ export async function updateProductsDangXuLy(productIds: string[], employeeName?
 
   // Index các cột thông tin máy (dùng cho thông báo Telegram)
   const idxIMEI = colIndex(header, "IMEI")
+  // Máy không có IMEI (iPad Wi-Fi, Watch...) chỉ có Serial -> gửi kèm để tin Telegram có định danh.
+  const idxSerial = colIndex(header, "Serial")
   const idxTenSP = colIndex(header, "Tên Sản Phẩm")
   const idxMauSac = colIndex(header, "Màu Sắc")
   const idxDungLuong = colIndex(header, "Dung Lượng")
@@ -812,7 +886,7 @@ export async function updateProductsDangXuLy(productIds: string[], employeeName?
 
   const updated: {
     id: string; dang_xu_ly: string; tg_msg_id: string; tg_msg_cell: string;
-    imei: string; name: string; mau_sac: string;
+    imei: string; serial: string; name: string; mau_sac: string;
     dung_luong: string; tinh_trang: string; gia_ban: string; nguon: string; do_sim: string;
   }[] = []
 
@@ -838,6 +912,7 @@ export async function updateProductsDangXuLy(productIds: string[], employeeName?
       tg_msg_id: oldTgMsg,
       tg_msg_cell: tgMsgCell,
       imei: cell(row, idxIMEI),
+      serial: cell(row, idxSerial),
       name: cell(row, idxTenSP),
       mau_sac: cell(row, idxMauSac),
       dung_luong: cell(row, idxDungLuong),
