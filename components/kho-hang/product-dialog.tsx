@@ -213,13 +213,13 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
       return
     }
 
-    // Validate identifier: require either a valid IMEI (15 digits) or a valid Serial (6-10 alphanumeric)
+    // Validate identifier: require either a valid IMEI (15 digits) or a valid Serial (6-12 alphanumeric)
     const hasImei = !!formData.imei && /^\d{15}$/.test(formData.imei)
-    const hasSerial = !!formData.serial && /^[A-Za-z0-9-]{6,10}$/.test(formData.serial)
+    const hasSerial = !!formData.serial && /^[A-Za-z0-9-]{6,12}$/.test(formData.serial)
     if (!hasImei && !hasSerial) {
       toast({
         title: "Thiếu định danh thiết bị",
-        description: "Nhập IMEI 15 số hoặc Serial (6-10 ký tự chữ/số).",
+        description: "Nhập IMEI 15 số hoặc Serial (6-12 ký tự chữ/số).",
         variant: "destructive",
       })
       return
@@ -293,13 +293,13 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
     const errors: string[] = []
     usableRows.forEach((r, idx) => {
       const hasImei = r.imei && /^\d{15}$/.test(r.imei)
-      const hasSerial = r.serial && /^[A-Za-z0-9-]{6,10}$/.test(r.serial)
+      const hasSerial = r.serial && /^[A-Za-z0-9-]{6,12}$/.test(r.serial)
       const required = [r.ten_san_pham, r.loai_phu_kien, r.dung_luong, r.mau_sac, r.tinh_trang, r.gia_nhap, r.gia_ban, r.ngay_nhap]
       if (required.some(v => !v)) {
         errors.push(`Dòng ${idx + 1}: thiếu trường bắt buộc.`)
       }
       if (!hasImei && !hasSerial) {
-        errors.push(`Dòng ${idx + 1}: cần IMEI 15 số hoặc Serial 6-10 ký tự.`)
+        errors.push(`Dòng ${idx + 1}: cần IMEI 15 số hoặc Serial 6-12 ký tự.`)
       }
     })
     if (errors.length) {
@@ -411,7 +411,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2 text-right">
-                <div className="text-xs text-muted-foreground">Cần IMEI 15 số hoặc Serial 6-10 ký tự</div>
+                <div className="text-xs text-muted-foreground">Cần IMEI 15 số hoặc Serial 6-12 ký tự</div>
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => setBulkRows([newBulkRow(), newBulkRow()])}>
                     Làm mới bảng
@@ -532,7 +532,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                               onChange={(e) => {
                                 const val = e.target.value.toUpperCase()
                                 if (!/^[A-Z0-9-]*$/.test(val)) return
-                                setField("serial", val.slice(0, 10))
+                                setField("serial", val.slice(0, 12))
                               }}
                               placeholder="Serial"
                               className="font-mono h-8 text-[11px] border-transparent shadow-none hover:bg-card focus:ring-1 focus:ring-blue-500 px-2 w-[85px]"
@@ -712,8 +712,8 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="serial">Serial</Label>
-                    <Input id="serial" value={formData.serial} onChange={(e) => { const v = e.target.value.toUpperCase(); if (/^[A-Z0-9-]*$/.test(v) && v.length <= 10) setFormData({ ...formData, serial: v }) }} placeholder="Nhập Serial" maxLength={10} className="font-mono" />
-                    <p className="text-xs text-muted-foreground">{(formData.serial || "").length}/10 ký tự</p>
+                    <Input id="serial" value={formData.serial} onChange={(e) => { const v = e.target.value.toUpperCase(); if (/^[A-Z0-9-]*$/.test(v) && v.length <= 12) setFormData({ ...formData, serial: v }) }} placeholder="Nhập Serial" maxLength={12} className="font-mono" />
+                    <p className="text-xs text-muted-foreground">{(formData.serial || "").length}/12 ký tự</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">

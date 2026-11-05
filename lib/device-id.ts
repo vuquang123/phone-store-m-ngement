@@ -38,7 +38,7 @@ export function isImeiLike(id: string): boolean {
   return /^\d{15}$/.test(String(id || ''))
 }
 
-// Validate Serial: alphanumeric (and hyphen) 6..10 chars
+// Validate Serial: alphanumeric (and hyphen) 6..12 chars
 export function isSerialLike(id: string): boolean {
-  return /^[A-Za-z0-9-]{6,10}$/.test(String(id || ''))
+  return /^[A-Za-z0-9-]{6,12}$/.test(String(id || ''))
 }

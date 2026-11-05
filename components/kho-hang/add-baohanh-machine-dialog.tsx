@@ -145,13 +145,14 @@ export default function AddBaoHanhMachineDialog({ isOpen, onClose, onSuccess }: 
                 value={serial}
                 onChange={e => {
                   const v = e.target.value.toUpperCase()
-                  if (/^[A-Z0-9-]*$/.test(v) && v.length <= 30) setSerial(v)
+                  if (/^[A-Z0-9-]*$/.test(v) && v.length <= 12) setSerial(v)
                 }}
                 placeholder="Serial"
+                maxLength={12}
                 className="px-3 py-1.5 border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
-            <p className="text-xs text-muted-foreground">Điền một trong hai — iPad bản Wi-Fi chỉ có Serial.</p>
+            <p className="text-xs text-muted-foreground">Điền một trong hai — iPad bản Wi-Fi chỉ có Serial (tối đa 12 ký tự).</p>
           </div>
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-foreground">Màu Sắc</Label>
