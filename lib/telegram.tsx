@@ -268,6 +268,22 @@ const ORDER_TYPE_CHAT_MAP: Record<string, number> = {
   note: parseEnvChat('TELEGRAM_CHAT_NOTE', DEFAULT_CHAT),
 }
 
+/** Cắt thời gian chờ api.telegram.org để không treo luồng nghiệp vụ. */
+const TG_TIMEOUT_MS = 10_000
+
+/** Biến lỗi fetch thành câu tiếng Việt đọc được, để hiện thẳng lên giao diện. */
+function describeTelegramError(error: unknown): string {
+  const name = (error as any)?.name
+  const msg = String((error as any)?.message || error)
+  if (name === "TimeoutError" || name === "AbortError") {
+    return `Không kết nối được api.telegram.org trong ${TG_TIMEOUT_MS / 1000}s (mạng chặn hoặc quá chậm)`
+  }
+  if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN/i.test(msg)) {
+    return `Không kết nối được api.telegram.org: ${msg}`
+  }
+  return msg
+}
+
 export async function sendTelegramMessage(message: string, orderType?: OrderType, options?: TelegramOptions) {
   try {
     const botToken = getBotToken()
@@ -298,7 +314,11 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        // fetch KHÔNG tự timeout. Nếu mạng chặn api.telegram.org (hay gặp ở một
+        // số ISP VN) thì request treo rất lâu -> việc lưu ghi chú/đơn hàng cũng
+        // đứng theo. Cắt ở 10s rồi báo lỗi rõ ràng.
+        signal: AbortSignal.timeout(TG_TIMEOUT_MS),
       })
       const json = await response.json()
       return { json, status: response.status, statusText: response.statusText, payload }
@@ -323,7 +343,7 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
     return { success: false, error: first?.json?.description || "Unknown Telegram error" }
   } catch (error) {
     console.error("Lỗi gửi Telegram:", error)
-    return { success: false, error }
+    return { success: false, error: describeTelegramError(error) }
   }
 }
 

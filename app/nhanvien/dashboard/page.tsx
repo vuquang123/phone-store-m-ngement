@@ -13,18 +13,18 @@ import {
   Clock,
   Package,
   RotateCcw,
-  StickyNote,
   Truck,
   Wallet,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { DatePickerVN } from "@/components/ui/date-picker-vn"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ShiftNotes } from "@/components/ghi-chu/shift-notes"
 import { SHIFTS, BUCKET_LABEL, currentShift } from "@/lib/shift"
 
 const money = (n: number) => `₫${Number(n || 0).toLocaleString("vi-VN")}`
@@ -76,13 +76,12 @@ export default function TongKetCaPage() {
         <div className="flex gap-2">
           <div className="space-y-1">
             <Label htmlFor="ngay" className="text-xs text-muted-foreground">Ngày</Label>
-            <Input
+            <DatePickerVN
               id="ngay"
-              type="date"
               value={date}
               max={todayISO()}
-              onChange={(e) => setDate(e.target.value)}
-              className="h-9 w-[150px]"
+              onChange={setDate}
+              className="w-[150px]"
             />
           </div>
           <div className="space-y-1">
@@ -140,7 +139,16 @@ export default function TongKetCaPage() {
             <StatCard icon={Clock} label="Việc còn tồn" value={String(tongViecTon)}
               sub="Cần xử lý, không phân ca" highlight={tongViecTon > 0} />
           </div>
+        </>
+      )}
 
+      {/* Ghi chú bàn giao — nằm ngay dưới 4 thẻ số. Để NGOÀI khối `data &&` để
+          vẫn hiện khi phần tổng kết ca đang tải hoặc lỗi; ghi chú không phụ
+          thuộc ngày/ca đang chọn. */}
+      <ShiftNotes />
+
+      {data && (
+        <>
           {/* Tiền theo phương thức */}
           <Card>
             <CardHeader className="pb-2">
@@ -265,13 +273,6 @@ export default function TongKetCaPage() {
                   <div className="font-medium">{o.khach} · {o.trang_thai}</div>
                   <div className="text-xs text-muted-foreground">{o.san_pham}</div>
                   <div className="text-xs text-muted-foreground">{o.sdt} · {o.ly_do}</div>
-                </>
-              )} />
-            <PendingCard icon={StickyNote} title="Ghi chú chưa hoàn thành" items={canXuLy.ghi_chu_chua_xong}
-              render={(o: any) => (
-                <>
-                  <div className="font-medium">{o.noi_dung}</div>
-                  <div className="text-xs text-muted-foreground">{o.nguoi_tao} · {o.tao_luc}</div>
                 </>
               )} />
           </div>
