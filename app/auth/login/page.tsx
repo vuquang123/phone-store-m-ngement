@@ -3,12 +3,11 @@
 import type React from "react"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Smartphone } from "lucide-react"
+import { Smartphone, Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -19,6 +18,7 @@ useEffect(() => {
   setExpired(new URLSearchParams(window.location.search).get("expired") === "1")
 }, [])
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
 
 const handleLogin = async (e: React.FormEvent) => {
@@ -63,104 +63,120 @@ const handleLogin = async (e: React.FormEvent) => {
 }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
-      {/* Ảnh nền cửa hàng DEV PỒ */}
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/bgdevpo.jpg')" }}
-      />
-      {/* Lớp phủ tối + blur nhẹ để form đăng nhập nổi & chữ dễ đọc */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
-
-      <div className="w-full max-w-md relative z-10">
-        <div className="text-center mb-8 animate-fade-in">
-          <div className="flex justify-center mb-6">
-            <div className="h-32 w-32 rounded-2xl overflow-hidden shadow-lg transform hover:scale-105 transition-transform duration-200 bg-card">
-              <img
-                src="/apple-touch-icon.png"
-                alt="DEV PỒ Logo"
-                className="h-full w-full object-cover scale-[1.2]"
-              />
-            </div>
-          </div>
-         
+    <div className="fixed inset-0 overflow-y-auto bg-slate-50 text-foreground dark:bg-slate-950">
+      {/* Nền động nhẹ nhàng: mảng màu mờ trôi chậm + lưới chấm */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="login-aurora">
+          <span />
+          <span />
+          <span />
+          <span />
         </div>
+        <div className="login-grid" />
+      </div>
 
-        <Card className="backdrop-blur-sm bg-card/80 border-0 shadow-2xl animate-slide-up">
-          <CardHeader className="text-center pb-4">
-            <CardTitle className="text-2xl font-semibold text-foreground">Đăng nhập hệ thống</CardTitle>
-            <CardDescription className="text-muted-foreground">Nhập thông tin để truy cập vào hệ thống</CardDescription>
+      <main className="relative flex min-h-full items-center justify-center px-4 py-10">
+        <div className="w-full max-w-[400px]">
+          <div className="login-rise mb-7 flex flex-col items-center text-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25">
+              <Smartphone className="h-6 w-6" strokeWidth={1.75} />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Đăng nhập</h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Hệ thống quản lý cửa hàng</p>
+          </div>
+
+          <div
+            className="login-rise rounded-2xl border border-white/70 bg-white/75 p-6 shadow-xl shadow-slate-900/5 backdrop-blur-xl sm:p-7 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-black/30"
+            style={{ animationDelay: "80ms" }}
+          >
             {expired ? (
-              <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-950 dark:text-amber-200">
+              <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/60 dark:text-amber-200">
                 Phiên đăng nhập đã hết 4 tiếng. Vui lòng đăng nhập lại.
               </div>
             ) : null}
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium text-foreground">
-                  Địa chỉ Email
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Email
                 </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Nhập tài khoản email"
-                  required
-                  autoComplete="email"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 border-border focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
-                />
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="ten@email.com"
+                    required
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-11 rounded-lg border-slate-200 bg-white/90 pl-9 text-[15px] focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-0 dark:border-slate-700 dark:bg-slate-950/60"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium text-foreground">
+
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-sm font-medium text-slate-700 dark:text-slate-200">
                   Mật khẩu
                 </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Nhập mật khẩu"
-                  required
-                  autoComplete="current-password"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 border-border focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
-                />
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Nhập mật khẩu"
+                    required
+                    autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-11 rounded-lg border-slate-200 bg-white/90 pl-9 pr-10 text-[15px] focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-0 dark:border-slate-700 dark:bg-slate-950/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
+
               {error && (
-                <div className="text-sm text-red-600 bg-red-50 border border-red-200 p-4 rounded-lg animate-shake">
+                <div
+                  role="alert"
+                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-950/60 dark:text-red-300"
+                >
                   {error}
                 </div>
               )}
+
               <Button
                 type="submit"
-                className="w-full h-12 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
+                className="h-11 w-full rounded-lg bg-emerald-600 text-[15px] font-medium text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 hover:shadow-lg active:scale-[0.99] disabled:opacity-70"
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Đang đăng nhập...
-                  </div>
+                  </span>
                 ) : (
                   "Đăng nhập"
                 )}
               </Button>
             </form>
-          </CardContent>
-        </Card>
-
-
-              <p>
-              </p>
-              <p>
-              </p>
-            </div>
           </div>
+
+          <p className="login-rise mt-6 text-center text-xs text-slate-400 dark:text-slate-500" style={{ animationDelay: "160ms" }}>
+            Quên mật khẩu? Liên hệ chủ shop hoặc quản lý để được cấp lại.
+          </p>
+        </div>
+      </main>
+    </div>
   )
 }

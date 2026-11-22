@@ -156,3 +156,80 @@ body {
     padding-left: env(safe-area-inset-left);
   }
 }
+
+/* ===================== Nền động trang đăng nhập =====================
+   Các mảng màu mờ trôi chậm + lưới chấm mờ. Thuần CSS, không tốn JS.
+   Người dùng bật "giảm chuyển động" trong máy thì đứng yên. */
+.login-aurora {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  filter: blur(72px);
+}
+.login-aurora span {
+  position: absolute;
+  border-radius: 9999px;
+  opacity: 0.75;
+  will-change: transform;
+}
+.login-aurora span:nth-child(1) {
+  width: 46vmax; height: 46vmax; left: 8%; top: 4%;
+  background: radial-gradient(circle at 30% 30%, #34d399, transparent 65%);
+  animation: login-drift-a 26s ease-in-out infinite alternate;
+}
+.login-aurora span:nth-child(2) {
+  width: 40vmax; height: 40vmax; right: 6%; top: 18%;
+  background: radial-gradient(circle at 60% 40%, #38bdf8, transparent 65%);
+  animation: login-drift-b 32s ease-in-out infinite alternate;
+}
+.login-aurora span:nth-child(3) {
+  width: 38vmax; height: 38vmax; left: 30%; bottom: 0%;
+  background: radial-gradient(circle at 50% 50%, #a78bfa, transparent 65%);
+  opacity: 0.5;
+  animation: login-drift-c 38s ease-in-out infinite alternate;
+}
+.login-aurora span:nth-child(4) {
+  width: 28vmax; height: 28vmax; right: 24%; bottom: 10%;
+  background: radial-gradient(circle at 50% 50%, #2dd4bf, transparent 65%);
+  opacity: 0.5;
+  animation: login-drift-a 44s ease-in-out infinite alternate-reverse;
+}
+.dark .login-aurora span { opacity: 0.32; }
+.dark .login-aurora span:nth-child(3),
+.dark .login-aurora span:nth-child(4) { opacity: 0.2; }
+
+.login-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgb(15 23 42 / 0.12) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 30%, transparent 75%);
+}
+.dark .login-grid { background-image: radial-gradient(rgb(255 255 255 / 0.08) 1px, transparent 1px); }
+
+@keyframes login-drift-a {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(8vmax, 6vmax, 0) scale(1.08); }
+  100% { transform: translate3d(-4vmax, 10vmax, 0) scale(0.96); }
+}
+@keyframes login-drift-b {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-10vmax, 4vmax, 0) scale(1.1); }
+  100% { transform: translate3d(-4vmax, -6vmax, 0) scale(1); }
+}
+@keyframes login-drift-c {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(6vmax, -8vmax, 0) scale(1.06); }
+  100% { transform: translate3d(-8vmax, -3vmax, 0) scale(0.94); }
+}
+@keyframes login-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.login-rise { animation: login-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-aurora span, .login-rise { animation: none !important; }
+}
