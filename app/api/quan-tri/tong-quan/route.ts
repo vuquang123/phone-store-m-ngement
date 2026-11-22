@@ -5,6 +5,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { DateTime } from "luxon"
 import { getServerUser } from "@/lib/auth"
+import { isOwnerRole } from "@/lib/roles"
+import { logAdminChanges } from "@/lib/audit-log"
 import { readFromGoogleSheets, colIndex } from "@/lib/google-sheets"
 import { parseVietnameseNumber } from "@/lib/number"
 import { createCashFlowPayable, payCashFlowPayable, updateCashFlowPayable } from "@/lib/cash-flow/sheets"
@@ -83,7 +85,8 @@ function groupKey(name: string, cap: string, type: string) {
 function guard(req: NextRequest) {
   const user = getServerUser(req)
   if (!user) return { error: NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 }) }
-  if (user.role !== "quan_ly") return { error: NextResponse.json({ error: "Chỉ quản lý mới xem được" }, { status: 403 }) }
+  // Tổng quan (doanh thu, công nợ) chỉ dành cho chủ shop
+  if (!isOwnerRole(user.role)) return { error: NextResponse.json({ error: "Chỉ chủ shop mới xem được Tổng quan" }, { status: 403 }) }
   return { user }
 }
 
@@ -389,6 +392,7 @@ export async function POST(req: NextRequest) {
         dueDate: str(body.dueDate),
         note: str(body.note),
       })
+      await logAdminChanges(user, [{ table: "DongTien_PhaiTra", action: "Thêm nợ", key: creditor, column: "Số Tiền Gốc", newValue: `${amount} · hạn ${str(body.dueDate)}${str(body.description) ? ` · ${str(body.description)}` : ""}` }])
       return NextResponse.json({ ok: true })
     }
     if (body.action === "update_payable") {
@@ -405,6 +409,7 @@ export async function POST(req: NextRequest) {
         dueDate: body.dueDate !== undefined ? str(body.dueDate) : undefined,
         note: body.note !== undefined ? str(body.note) : undefined,
       })
+      await logAdminChanges(user, [{ table: "DongTien_PhaiTra", action: "Sửa nợ", key: str(body.creditor) || id, column: "(khoản nợ)", newValue: JSON.stringify({ hạn: body.dueDate, gốc: body.principalAmount, nội_dung: body.description, ghi_chú: body.note }) }])
       return NextResponse.json({ ok: true })
     }
     if (body.action === "pay_payable") {
@@ -415,6 +420,7 @@ export async function POST(req: NextRequest) {
         note: str(body.note),
         actor: user.email,
       })
+      await logAdminChanges(user, [{ table: "DongTien_PhaiTra", action: "Trả nợ", key: str(body.id), column: "Đã Thanh Toán", newValue: `+${Math.round(num(body.amount))} từ ${str(body.accountId)}${str(body.note) ? ` · ${str(body.note)}` : ""}` }])
       return NextResponse.json({ ok: true })
     }
     return NextResponse.json({ error: "Thao tác không hợp lệ" }, { status: 400 })

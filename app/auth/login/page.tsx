@@ -7,13 +7,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Smartphone } from "lucide-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
+const [expired, setExpired] = useState(false)
+useEffect(() => {
+  setExpired(new URLSearchParams(window.location.search).get("expired") === "1")
+}, [])
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
@@ -86,6 +90,11 @@ const handleLogin = async (e: React.FormEvent) => {
           <CardHeader className="text-center pb-4">
             <CardTitle className="text-2xl font-semibold text-foreground">Đăng nhập hệ thống</CardTitle>
             <CardDescription className="text-muted-foreground">Nhập thông tin để truy cập vào hệ thống</CardDescription>
+            {expired ? (
+              <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-950 dark:text-amber-200">
+                Phiên đăng nhập đã hết 4 tiếng. Vui lòng đăng nhập lại.
+              </div>
+            ) : null}
           </CardHeader>
           <CardContent className="space-y-6">
             <form onSubmit={handleLogin} className="space-y-5">

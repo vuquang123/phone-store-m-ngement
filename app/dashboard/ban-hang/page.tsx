@@ -1,5 +1,6 @@
 "use client"
 
+import { isManagerRole } from "@/lib/roles"
 import { useState, useEffect, useRef, useMemo } from "react"
 import { ProtectedRoute, getAuthHeaders } from "@/components/auth/protected-route"
 import { CustomerDialog } from "@/components/ban-hang/customer-dialog"
@@ -59,7 +60,7 @@ export default function BanHangPage() {
   const { toast } = useToast()
   const isMobile = useIsMobile()
   const { me } = useAuthMe()
-  const isManager = me?.role === "quan_ly"
+  const isManager = isManagerRole(me?.role)
   const [mobileView, setMobileView] = useState<"san-pham" | "gio-hang" | "thanh-toan">("san-pham")
   // Bộ lọc dùng CHUNG với trang Kho hàng (useInventoryStore) — xem lib/store/inventory-store.ts.
   const BH_MAX_PRICE = MAX_PRICE

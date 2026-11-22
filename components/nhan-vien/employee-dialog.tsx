@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-type Role = "quan_ly" | "nhan_vien"
+type Role = "chu_shop" | "quan_ly" | "nhan_vien"
 type Status = "hoat_dong" | "ngung_hoat_dong"
 
 export interface Employee {
@@ -180,6 +180,7 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
                 <SelectContent>
                   <SelectItem value="nhan_vien">Nhân viên</SelectItem>
                   <SelectItem value="quan_ly">Quản lý</SelectItem>
+                  <SelectItem value="chu_shop">Chủ shop</SelectItem>
                 </SelectContent>
               </Select>
             </div>

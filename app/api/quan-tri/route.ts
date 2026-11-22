@@ -7,6 +7,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { DateTime } from "luxon"
 import { getServerUser } from "@/lib/auth"
+import { isManagerRole } from "@/lib/roles"
+import { logAdminChanges, readAdminHistory, summarizeRow, type AuditEntry } from "@/lib/audit-log"
 import {
   readFromGoogleSheets,
   batchUpdateRangeValues,
@@ -53,8 +55,8 @@ const same = (a: unknown, b: unknown) => String(a ?? "").trim() === String(b ?? 
 function guard(req: NextRequest) {
   const user = getServerUser(req)
   if (!user) return { error: NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 }) }
-  if (user.role !== "quan_ly") {
-    return { error: NextResponse.json({ error: "Chỉ quản lý mới dùng được trang này" }, { status: 403 }) }
+  if (!isManagerRole(user.role)) {
+    return { error: NextResponse.json({ error: "Chỉ chủ shop / quản lý mới dùng được trang này" }, { status: 403 }) }
   }
   return { user }
 }
@@ -69,6 +71,12 @@ function tableOf(req: NextRequest, bodyTable?: string) {
 export async function GET(req: NextRequest) {
   const g = guard(req)
   if (g.error) return g.error
+
+  if (req.nextUrl.searchParams.get("history")) {
+    const t = req.nextUrl.searchParams.get("table") || undefined
+    const limit = Math.min(2000, Number(req.nextUrl.searchParams.get("limit")) || 500)
+    return NextResponse.json({ entries: await readAdminHistory({ table: t, limit }) })
+  }
 
   if (req.nextUrl.searchParams.get("list")) {
     return NextResponse.json({
@@ -119,6 +127,11 @@ export async function POST(req: NextRequest) {
       header.map((h, i) => (HIDDEN_COLUMNS.includes(String(h).trim().toLowerCase()) ? i : -1)).filter((i) => i >= 0),
     )
     const cell = (rowNumber: number, col: number) => String(rows[rowNumber - 2]?.[col] ?? "")
+    const keyCol = EDITABLE_TABLES[table].key.map((k) => colIndex(header, k)).find((i) => i !== -1) ?? -1
+    const keyOf = (r: unknown[] | undefined) => (keyCol === -1 || !r ? "" : String(r[keyCol] ?? "").trim())
+    const colName = (c: number) => String(header[c] ?? "").trim()
+    const cellEntries = (list: Change[], action: string): AuditEntry[] =>
+      list.map((c) => ({ table, action, row: c.row, key: keyOf(rows[c.row - 2]), column: colName(c.col), oldValue: c.old, newValue: c.value }))
 
     /* ---------- sửa ô ---------- */
     if (body.action === "update") {
@@ -139,6 +152,7 @@ export async function POST(req: NextRequest) {
           ok.map((c) => ({ range: `${q(table)}!${colLetter(c.col)}${c.row}`, values: [[c.value]] })),
         )
         await logKhoStatus(table, header, rows, ok, user.employeeId || user.email)
+        await logAdminChanges(user, cellEntries(ok, "Sửa"))
       }
       return NextResponse.json({ ok: true, saved: ok.length, conflicts })
     }
@@ -151,6 +165,7 @@ export async function POST(req: NextRequest) {
       const data = list.map(toRow).filter((r) => r.some((v) => v !== ""))
       if (!data.length) return NextResponse.json({ ok: true, added: 0 })
       await appendMultipleToGoogleSheets(table, data)
+      await logAdminChanges(user, data.map((r) => ({ table, action: "Thêm", key: keyOf(r), column: "(cả dòng)", newValue: summarizeRow(header, r) })))
       return NextResponse.json({ ok: true, added: data.length })
     }
 
@@ -167,7 +182,9 @@ export async function POST(req: NextRequest) {
         else okRows.push(row)
       }
       // Xoá từ dưới lên để số dòng phía trên không bị lệch
+      const deletedSnap = okRows.map((r) => ({ row: r, cells: rows[r - 2] || [] }))
       for (const r of okRows.sort((a, b) => b - a)) await deleteSheetRows(table, r, 1)
+      await logAdminChanges(user, deletedSnap.map((d) => ({ table, action: "Xoá", row: d.row, key: keyOf(d.cells), column: "(cả dòng)", oldValue: summarizeRow(header.map((h, i) => (hidden.has(i) ? null : h)), d.cells) })))
       return NextResponse.json({ ok: true, deleted: okRows.length, conflicts })
     }
 
@@ -206,6 +223,10 @@ export async function POST(req: NextRequest) {
         await logKhoStatus(table, header, rows, updates, user.employeeId || user.email)
       }
       if (appends.length) await appendMultipleToGoogleSheets(table, appends)
+      await logAdminChanges(user, [
+        ...cellEntries(updates, "Nhập file"),
+        ...appends.map((r) => ({ table, action: "Nhập file", key: keyOf(r), column: "(dòng mới)", newValue: summarizeRow(header, r) })),
+      ])
       return NextResponse.json({ ok: true, key: header[keyIdx], updatedCells: updates.length, updatedRows: new Set(updates.map((u) => u.row)).size, added: appends.length })
     }
 

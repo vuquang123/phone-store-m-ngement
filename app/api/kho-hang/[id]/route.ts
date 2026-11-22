@@ -223,7 +223,7 @@ export async function DELETE(request: NextRequest, ctx: { params: Promise<{ id: 
     const rowUser = ur.find((r) => String(r[emailIdx]).trim().toLowerCase() === email.trim().toLowerCase())
     const role = rowUser ? String(rowUser[roleIdx] || "").trim().toLowerCase() : ""
     const roleNorm = norm(role)
-    const isManager = ["quan_ly", "manager", "admin"].some((k) => roleNorm.includes(k))
+    const isManager = ["quan_ly", "chu_shop", "manager", "admin"].some((k) => roleNorm.includes(k))
     if (!isManager) {
       return NextResponse.json({ error: "Chỉ quản lý mới có thể xóa sản phẩm" }, { status: 403 })
     }

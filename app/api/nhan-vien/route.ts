@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     // Quyền: chỉ quản lý
     const callerRow = rows.find((r) => norm(r[C.email]) === norm(callerEmail))
     const callerRoleNorm = norm(callerRow ? String(callerRow[C.role] || "") : "")
-    const isManager = ["quan_ly", "manager", "admin"].some((k) => callerRoleNorm.includes(k))
+    const isManager = ["quan_ly", "chu_shop", "manager", "admin"].some((k) => callerRoleNorm.includes(k))
     if (!isManager) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     // Lọc & sắp xếp

@@ -20,16 +20,19 @@ export const HDR_ROLE = "x-user-role"
 export const HDR_NAME = "x-user-name"
 export const HDR_EMPLOYEE = "x-user-employee-id"
 
-// Thời hạn phiên. Hạ xuống "1d" / "12h" nếu muốn việc khoá tài khoản có hiệu
-// lực nhanh hơn (xem ghi chú "Cửa sổ khoá tài khoản" trong hướng dẫn).
-export const TOKEN_TTL = "7d"
-export const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7
+// Thời hạn phiên: 4 tiếng kể từ lúc đăng nhập, hết hạn là bắt đăng nhập lại
+// (không tự gia hạn khi đang dùng). Trình duyệt cũng tự đưa về trang đăng nhập
+// đúng lúc hết hạn (components/auth/session-timer.tsx).
+export const TOKEN_TTL_SECONDS = 4 * 60 * 60
+export const TOKEN_TTL = `${TOKEN_TTL_SECONDS}s`
 
 export type SessionUser = {
   email: string
   role: string
   name?: string
   employeeId?: string
+  /** Thời điểm phiên hết hạn (ms), chỉ có khi đọc từ token. */
+  expiresAt?: number
 }
 
 function getSecret(): Uint8Array {
@@ -60,7 +63,12 @@ export async function verifySession(token: string): Promise<SessionUser | null> 
     const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] })
     const email = String(payload.sub || "")
     if (!email) return null
+    // Tính hạn theo lúc đăng nhập (iat) để cả token cũ cấp trước khi đổi sang 4 tiếng cũng hết hạn đúng.
+    const iat = Number(payload.iat || 0)
+    const expiresAt = Math.min(Number(payload.exp || Infinity), iat ? iat + TOKEN_TTL_SECONDS : Infinity) * 1000
+    if (!Number.isFinite(expiresAt) || Date.now() >= expiresAt) return null
     return {
+      expiresAt,
       email,
       role: String((payload as any).role || ""),
       name: String((payload as any).name || ""),

@@ -1,3 +1,4 @@
+import { isManagerRole } from "@/lib/roles"
 import { type NextRequest, NextResponse } from "next/server"
 import {
   readFromGoogleSheets,
@@ -50,7 +51,7 @@ async function isManager(request: NextRequest): Promise<boolean> {
       (r) => String(r[idxEmail] || "").trim().toLowerCase() === String(email).trim().toLowerCase()
     )
     if (!userRow) return false
-    return String(userRow[idxRole] || "").trim().toLowerCase() === "quan_ly"
+    return isManagerRole(userRow[idxRole])
   } catch {
     return false
   }

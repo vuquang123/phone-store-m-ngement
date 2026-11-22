@@ -3,17 +3,21 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { useAuthMe } from "@/hooks/use-auth-me"
+import { isOwnerRole } from "@/lib/roles"
 
 const TABS = [
-  { href: "/dashboard/quan-tri", label: "Tổng quan" },
+  { href: "/dashboard/quan-tri", label: "Tổng quan", ownerOnly: true },
   { href: "/dashboard/quan-tri/du-lieu", label: "Sửa dữ liệu" },
 ]
 
 export function QuanTriTabs() {
   const pathname = usePathname()
+  const { me } = useAuthMe()
+  const tabs = TABS.filter((t) => !t.ownerOnly || isOwnerRole(me?.role))
   return (
     <div className="inline-flex rounded-lg border bg-card p-0.5">
-      {TABS.map((t) => (
+      {tabs.map((t) => (
         <Link
           key={t.href}
           href={t.href}

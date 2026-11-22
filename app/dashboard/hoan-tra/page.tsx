@@ -1,5 +1,6 @@
 "use client"
 
+import { isManagerRole } from "@/lib/roles"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -114,7 +115,7 @@ export default function HoanTraPage() {
         const res = await fetch("/api/auth/me", { cache: "no-store", headers: getAuthHeaders() })
         if (res.ok) {
           const me = await res.json()
-          setIsManager(me?.role === "quan_ly")
+          setIsManager(isManagerRole(me?.role))
         } else {
           setIsManager(false)
         }

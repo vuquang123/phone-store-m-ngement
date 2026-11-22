@@ -152,7 +152,7 @@ const td = "border-b border-border/60 px-2 py-1.5 align-top tabular-nums"
 /* ============================== trang ============================== */
 export default function TongQuanPage() {
   return (
-    <ProtectedRoute requiredRole="quan_ly">
+    <ProtectedRoute requiredRole="chu_shop" redirectTo="/dashboard/quan-tri/du-lieu">
       <TongQuan />
     </ProtectedRoute>
   )

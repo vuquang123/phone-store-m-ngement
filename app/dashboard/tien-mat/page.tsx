@@ -1,6 +1,7 @@
 // app/dashboard/tien-mat/page.tsx
 "use client"
 
+import { isManagerRole } from "@/lib/roles"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
@@ -83,7 +84,7 @@ export default function TienMatPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { me } = useAuthMe()
-  const isManager = me?.role === "quan_ly" // Chỉ Quản lý mới xem Tổng thu/chi + biểu đồ
+  const isManager = isManagerRole(me?.role) // Chỉ Quản lý mới xem Tổng thu/chi + biểu đồ
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   const { data, isLoading, isFetching, refetch } = useQuery<CashResponse>({

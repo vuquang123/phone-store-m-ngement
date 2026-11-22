@@ -1,5 +1,6 @@
 "use client"
 
+import { isManagerRole } from "@/lib/roles"
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -49,7 +50,7 @@ export default function CaiDatPage() {
         const res = await fetch("/api/auth/me", { cache: "no-store", headers: email ? { "x-user-email": email } : {} })
         if (!res.ok) return router.replace("/auth/login")
         const me = await res.json()
-        if (mounted && me?.role !== "quan_ly") {
+        if (mounted && !isManagerRole(me?.role)) {
           router.replace("/dashboard")
         }
       } catch (e) {

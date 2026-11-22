@@ -1,3 +1,4 @@
+import { isManagerRole } from "@/lib/roles"
 import { NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
 import {
@@ -41,7 +42,7 @@ async function isAllowedManager(email: string) {
   if (emailIdx === -1 || roleIdx === -1) return false
   const user = rows.find((row) => normalize(String(row[emailIdx] || "")) === normalize(email))
   if (!user) return false
-  return normalize(String(user[roleIdx] || "")) === "quan_ly"
+  return isManagerRole(user[roleIdx])
 }
 
 async function authorize(request: NextRequest) {

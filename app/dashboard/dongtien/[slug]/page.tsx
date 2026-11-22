@@ -1,5 +1,6 @@
 "use client"
 
+import { isManagerRole } from "@/lib/roles"
 import { type ComponentType, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
@@ -43,7 +44,7 @@ export default function CashFlowDailyReportPage() {
   useEffect(() => {
     if (authLoading) return
     if (!me) return
-    if (me.role !== "quan_ly" || me.email !== ALLOWED_EMAIL) {
+    if (!isManagerRole(me.role) || me.email !== ALLOWED_EMAIL) {
       router.replace("/dashboard")
       return
     }

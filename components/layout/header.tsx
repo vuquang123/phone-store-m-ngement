@@ -1,5 +1,6 @@
 "use client"
 
+import { isManagerRole, roleLabel } from "@/lib/roles"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 
@@ -158,10 +159,10 @@ export function Header({ title, onMenuClick }: HeaderProps) {
                       <span
                         className={cn(
                           "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
-                          me.role === "quan_ly" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800",
+                          isManagerRole(me.role) ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800",
                         )}
                       >
-                        {me.role === "quan_ly" ? "Quản lý" : "Nhân viên"}
+                        {roleLabel(me.role)}
                       </span>
                       <span className="text-xs text-muted-foreground">({me.role})</span>
                     </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
+import { SESSION_COOKIE, verifySession } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   // Lấy email từ header xác thực (ví dụ: x-user-email)
@@ -39,5 +40,9 @@ export async function GET(request: NextRequest) {
     role: idxRole !== -1 ? String(userRow[idxRole] ?? "").trim().toLowerCase() : "",
     status: idxStatus !== -1 ? userRow[idxStatus] : "",
     employeeId: idxEmployeeId !== -1 ? userRow[idxEmployeeId] : "",
+    sessionExpiresAt: await (async () => {
+      const t = request.cookies.get(SESSION_COOKIE)?.value
+      return t ? (await verifySession(t))?.expiresAt ?? null : null
+    })(),
   })
 }

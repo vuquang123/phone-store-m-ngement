@@ -5,6 +5,7 @@ import type React from "react"
 import { AppSidebar } from "./sidebar"
 import { Header } from "./header"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { SessionTimer } from "@/components/auth/session-timer"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -14,6 +15,7 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children, title }: DashboardLayoutProps) {
   return (
     <SidebarProvider className="h-dvh">
+      <SessionTimer />
       <AppSidebar />
       <SidebarInset className="flex h-dvh min-h-0 flex-col overflow-hidden bg-sidebar">
         <Header title={title} />

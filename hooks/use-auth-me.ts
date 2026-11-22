@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { getAuthHeaders } from "@/components/auth/protected-route"
 
-export type Role = "quan_ly" | "nhan_vien"
+export type Role = "chu_shop" | "quan_ly" | "nhan_vien"
 
 export type AuthMe = {
   id?: string
@@ -12,6 +12,8 @@ export type AuthMe = {
   role?: Role
   status?: string
   employeeId?: string
+  /** Lúc phiên đăng nhập hết hạn (ms) */
+  sessionExpiresAt?: number | null
 }
 
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes

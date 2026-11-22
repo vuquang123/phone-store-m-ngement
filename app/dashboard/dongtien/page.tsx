@@ -1,5 +1,6 @@
 "use client"
 
+import { isManagerRole } from "@/lib/roles"
 import { type ComponentType, type Dispatch, type SetStateAction, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DateTime } from "luxon"
@@ -151,7 +152,7 @@ export default function DongTienPage() {
   useEffect(() => {
     if (authLoading) return
     if (!me) return
-    if (me.role !== "quan_ly" || me.email !== ALLOWED_EMAIL) {
+    if (!isManagerRole(me.role) || me.email !== ALLOWED_EMAIL) {
       router.replace("/dashboard")
       return
     }

@@ -74,7 +74,22 @@ select "Tên Sản Phẩm", count(*) from "Kho_Hang" where "Trạng Thái" ilike
 
 ## 4b. Trang "Quản trị dữ liệu" trong web (khuyên dùng thay Table Editor)
 
-Menu **Quản lý > Quản trị dữ liệu** (chỉ tài khoản quản lý) có 2 tab.
+Menu **Quản lý > Quản trị dữ liệu**. Phân quyền theo cột **Vai Trò** trong bảng USERS:
+
+| Vai Trò | Tổng quan | Sửa dữ liệu | Ghi chú |
+|---|---|---|---|
+| `chu_shop` (Chủ shop) | Có | Có | Có mọi quyền của quản lý |
+| `quan_ly` (Quản lý) | Không | Có | |
+| `nhan_vien` (Nhân viên) | Không | Không | Không thấy mục này |
+
+Đổi vai trò: sửa ô Vai Trò trong USERS, người đó **đăng nhập lại** mới có hiệu lực.
+Mọi tài khoản tự đăng xuất **4 tiếng sau khi đăng nhập** (báo trước 5 phút) và phải đăng nhập lại.
+
+**Lịch sử sửa**: nút "Lịch sử sửa" ở tab Sửa dữ liệu. Mỗi lần sửa ô, thêm, xoá, nhập file (và thêm/sửa/trả nợ ở Tổng quan)
+được ghi: thời gian, email + tên + vai trò người sửa, bảng, mã máy/khoá, cột, giá trị cũ, giá trị mới.
+Dữ liệu lưu ở bảng `Lich_Su_Quan_Tri` (tự tạo).
+
+Có 2 tab.
 
 **Tab Tổng quan** (xem mỗi ngày, số liệu tính trực tiếp từ dữ liệu, không cần nhập):
 - Bán hàng hôm nay / 7 ngày / 30 ngày: số đơn, doanh thu, lãi.

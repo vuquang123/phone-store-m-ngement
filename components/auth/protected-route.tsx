@@ -6,11 +6,21 @@ import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
+import { isManagerRole, isOwnerRole } from "@/lib/roles"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  /** Nếu truyền, chỉ cho phép role này truy cập */
-  requiredRole?: "quan_ly" | "nhan_vien"
+  /** Nếu truyền, chỉ cho phép role này truy cập.
+   *  "quan_ly" = quản lý hoặc chủ shop; "chu_shop" = chỉ chủ shop. */
+  requiredRole?: "chu_shop" | "quan_ly" | "nhan_vien"
+  /** Trang chuyển tới khi không đủ quyền (mặc định /dashboard, có báo lỗi). Truyền thì chuyển êm, không báo. */
+  redirectTo?: string
+}
+
+function hasRole(role: unknown, required: "chu_shop" | "quan_ly" | "nhan_vien") {
+  if (required === "chu_shop") return isOwnerRole(role)
+  if (required === "quan_ly") return isManagerRole(role)
+  return String(role ?? "") === required
 }
 
 /** Lấy headers xác thực từ localStorage (phù hợp sheets-auth của bạn) */
@@ -27,7 +37,7 @@ export function getAuthHeaders(): Record<string, string> {
   return email ? { "x-user-email": String(email) } : {}
 }
 
-export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requiredRole, redirectTo }: ProtectedRouteProps) {
   const [isAuthorized, setIsAuthorized] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
@@ -47,14 +57,18 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
       return
     }
 
-    if (requiredRole && me?.role !== requiredRole) {
+    if (requiredRole && !hasRole(me?.role, requiredRole)) {
+      if (redirectTo) {
+        router.replace(redirectTo)
+        return
+      }
       toast({ title: "Không đủ quyền", description: "Bạn không thể truy cập trang này" })
       router.replace("/dashboard")
       return
     }
 
     setIsAuthorized(true)
-  }, [isLoading, me, error, toast, router, requiredRole])
+  }, [isLoading, me, error, toast, router, requiredRole, redirectTo])
 
   if (isLoading) {
     return (

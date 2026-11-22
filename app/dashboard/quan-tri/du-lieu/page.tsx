@@ -31,10 +31,12 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  History,
 } from "lucide-react"
 
 type Row = { rowNumber: number; cells: string[] }
 type TableData = { table: string; label: string; header: (string | null)[]; rows: Row[]; loadedAt: string }
+type HistoryRow = { time: string; email: string; name: string; role: string; table: string; action: string; row: string; key: string; column: string; oldValue: string; newValue: string }
 type Edits = Record<string, string> // key `${rowNumber}:${col}` -> giá trị mới
 
 const PAGE_SIZE = 100
@@ -120,6 +122,11 @@ function DataAdmin() {
   const [edits, setEdits] = useState<Edits>({})
   const [search, setSearch] = useState("")
   const [colFilters, setColFilters] = useState<Record<number, string[]>>({})
+  const [histOpen, setHistOpen] = useState(false)
+  const [histAll, setHistAll] = useState(false)
+  const [histQ, setHistQ] = useState("")
+  const [histLoading, setHistLoading] = useState(false)
+  const [hist, setHist] = useState<HistoryRow[]>([])
   const [extraCols, setExtraCols] = useState<number[]>([])
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -180,6 +187,25 @@ function DataAdmin() {
     window.addEventListener("beforeunload", h)
     return () => window.removeEventListener("beforeunload", h)
   }, [dirtyCount])
+
+  const loadHistory = useCallback(async (all: boolean) => {
+    setHistLoading(true)
+    try {
+      const r = await api(undefined, `?history=1&limit=1000${all ? "" : `&table=${encodeURIComponent(table)}`}`)
+      setHist(r.entries || [])
+    } catch (e: any) {
+      toast({ title: "Không tải được lịch sử", description: e.message, variant: "destructive" })
+    } finally {
+      setHistLoading(false)
+    }
+  }, [table, toast])
+  useEffect(() => {
+    if (histOpen) loadHistory(histAll)
+  }, [histOpen, histAll, loadHistory])
+  const histShown = useMemo(() => {
+    const t = cellKey(histQ)
+    return t ? hist.filter((h) => cellKey(Object.values(h).join(" ")).includes(t)) : hist
+  }, [hist, histQ])
 
   const header = useMemo(() => data?.header || [], [data])
   const visibleCols = useMemo(() => header.map((h, i) => (h === null ? -1 : i)).filter((i) => i >= 0), [header])
@@ -432,6 +458,54 @@ function DataAdmin() {
 
   return (
     <div className="space-y-3 p-2 md:p-4">
+      <Dialog open={histOpen} onOpenChange={setHistOpen}>
+        <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>Lịch sử chỉnh sửa</DialogTitle>
+            <DialogDescription>Mọi lần sửa, thêm, xoá, nhập file ở trang này (và thêm/sửa/trả nợ ở Tổng quan), mới nhất ở trên.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-full max-w-xs">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-8" placeholder="Tìm người sửa, mã máy, cột…" value={histQ} onChange={(e) => setHistQ(e.target.value)} />
+            </div>
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={histAll} onChange={(e) => setHistAll(e.target.checked)} /> Tất cả các bảng
+            </label>
+            <span className="text-sm text-muted-foreground">{histLoading ? "Đang tải…" : `${histShown.length} thay đổi`}</span>
+          </div>
+          <div className="max-h-[62vh] overflow-auto rounded border">
+            <table className="w-full text-[13px]">
+              <thead className="sticky top-0 bg-card">
+                <tr>
+                  {["Thời gian", "Người sửa", "Bảng", "Thao tác", "Mã", "Cột", "Giá trị cũ", "Giá trị mới"].map((h) => (
+                    <th key={h} className="whitespace-nowrap border-b px-2 py-1.5 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {histShown.map((h, i) => (
+                  <tr key={i} className="align-top hover:bg-muted/60">
+                    <td className="whitespace-nowrap border-b px-2 py-1 tabular-nums">{h.time}</td>
+                    <td className="border-b px-2 py-1"><div className="font-medium">{h.name || h.email}</div><div className="text-xs text-muted-foreground">{h.role}{h.name ? ` · ${h.email}` : ""}</div></td>
+                    <td className="whitespace-nowrap border-b px-2 py-1">{tables.find((t) => t.id === h.table)?.label || h.table}</td>
+                    <td className="whitespace-nowrap border-b px-2 py-1">
+                      <span className={`rounded px-1.5 py-px text-xs font-medium ${h.action.startsWith("Xoá") ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" : h.action.startsWith("Thêm") ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"}`}>{h.action}</span>
+                    </td>
+                    <td className="whitespace-nowrap border-b px-2 py-1 font-mono text-xs">{h.key || "—"}</td>
+                    <td className="whitespace-nowrap border-b px-2 py-1">{h.column}</td>
+                    <td className="max-w-[260px] border-b px-2 py-1 text-muted-foreground line-through decoration-red-400/60"><div className="line-clamp-3" title={h.oldValue}>{h.oldValue}</div></td>
+                    <td className="max-w-[260px] border-b px-2 py-1"><div className="line-clamp-3" title={h.newValue}>{h.newValue}</div></td>
+                  </tr>
+                ))}
+                {!histLoading && histShown.length === 0 ? (
+                  <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Chưa có thay đổi nào</td></tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
       <div className="flex flex-wrap items-center gap-2">
         <QuanTriTabs />
         <Select
@@ -450,6 +524,9 @@ function DataAdmin() {
         </Select>
         <Button variant="outline" size="sm" onClick={() => load()} disabled={loading}>
           {loading ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-4 w-4" />} Tải lại
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setHistOpen(true)}>
+          <History className="mr-1 h-4 w-4" /> Lịch sử sửa
         </Button>
         <div className="ml-auto flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => setAddOpen(true)} disabled={!data}>

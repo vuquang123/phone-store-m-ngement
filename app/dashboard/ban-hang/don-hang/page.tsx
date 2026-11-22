@@ -1,5 +1,6 @@
 "use client"
 
+import { isManagerRole, roleLabel } from "@/lib/roles"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,7 +43,7 @@ interface Order {
 export default function DonHangPage() {
   const isMobile = useIsMobile()
   const { me } = useAuthMe()
-  const isManager = me?.role === "quan_ly"
+  const isManager = isManagerRole(me?.role)
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -442,7 +443,7 @@ export default function DonHangPage() {
                                   <div className="font-medium">{order.nhan_vien?.name || order.nhan_vien?.id}</div>
                                   {order.nhan_vien?.role && (
                                     <div className="text-xs text-muted-foreground">
-                                      {order.nhan_vien.role === "quan_ly" ? "Quản lý" : "Nhân viên"}
+                                      {roleLabel(order.nhan_vien.role)}
                                     </div>
                                   )}
                                 </div>

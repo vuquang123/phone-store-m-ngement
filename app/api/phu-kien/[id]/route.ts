@@ -69,7 +69,7 @@ function normalizeRole(v?: string | null) {
   if (!v) return undefined
   const x = v.trim().toLowerCase()
   // chấp nhận "quan_ly", "quản lý", "manager"
-  if (x === "quan_ly" || x === "quản lý" || x === "manager") return "quan_ly"
+  if (x === "quan_ly" || x === "chu_shop" || x === "quản lý" || x === "manager") return "quan_ly"
   return x
 }
 

@@ -29,7 +29,7 @@ import {
   CheckCircle2,
 } from "lucide-react"
 
-type Role = "quan_ly" | "nhan_vien" | undefined
+type Role = "chu_shop" | "quan_ly" | "nhan_vien" | undefined
 
 function getAuthHeaders(): Record<string, string> {
   try {
@@ -60,7 +60,7 @@ export default function HuongDanPage() {
   }, [])
 
   const VisibleIf = ({ allow, children }: { allow?: Role[]; children: React.ReactNode }) => {
-    if (!allow || allow.includes(role as Role)) return <>{children}</>
+    if (!allow || allow.includes(role as Role) || (role === "chu_shop" && allow.includes("quan_ly"))) return <>{children}</>
     return null
   }
 
@@ -70,7 +70,7 @@ export default function HuongDanPage() {
         <h1 className="text-2xl md:text-3xl font-bold">Hướng dẫn sử dụng</h1>
         <p className="text-muted-foreground">
           Cách dùng hệ thống cho{" "}
-          {role === "quan_ly" ? "Quản lý" : role === "nhan_vien" ? "Nhân viên" : "bạn"} — đọc một
+          {role === "chu_shop" ? "Chủ shop" : role === "quan_ly" ? "Quản lý" : role === "nhan_vien" ? "Nhân viên" : "bạn"} — đọc một
           lượt là làm được việc.
         </p>
       </div>

@@ -38,7 +38,7 @@ import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
 import { NavPendingReporter } from "./nav-loading"
 
-type Role = "quan_ly" | "nhan_vien"
+type Role = "chu_shop" | "quan_ly" | "nhan_vien"
 
 const getNavigation = () => [
   {
@@ -176,9 +176,17 @@ export function AppSidebar() {
       .map((section) => ({
         ...section,
         items: section.items.filter((item) => {
-          if (!item.roles.includes(role)) return false
+          // Chủ shop có mọi quyền của quản lý
+          if (!item.roles.includes(role) && !(role === "chu_shop" && item.roles.includes("quan_ly"))) return false
           return true
         }),
+      }))
+      .map((section) => ({
+        ...section,
+        // Quản lý không xem Tổng quan: vào thẳng tab Sửa dữ liệu
+        items: section.items.map((item) =>
+          item.href === "/dashboard/quan-tri" && role !== "chu_shop" ? { ...item, href: "/dashboard/quan-tri/du-lieu" } : item,
+        ),
       }))
       .filter((s) => s.items.length > 0)
   }, [role, me?.email])
@@ -204,7 +212,7 @@ export function AppSidebar() {
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
             <p className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{storeName}</p>
             <p className="truncate text-xs text-sidebar-foreground/60">
-              {role === "quan_ly" ? "Quản lý cửa hàng" : userName || "Nhân viên"}
+              {role === "chu_shop" ? "Chủ shop" : role === "quan_ly" ? "Quản lý cửa hàng" : userName || "Nhân viên"}
             </p>
           </div>
         </div>

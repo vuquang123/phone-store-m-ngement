@@ -1,3 +1,4 @@
+import { isManagerRole } from "@/lib/roles"
 import { NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex } from "@/lib/google-sheets"
 
@@ -571,7 +572,7 @@ export async function PATCH(req: NextRequest) {
       const idxRole = header.indexOf('Vai Trò')
       const userRow = rows.find(r => String(r[idxEmail]).trim().toLowerCase() === email.trim().toLowerCase())
       const role = userRow ? String(userRow[idxRole] || '') : ''
-      if (role !== 'quan_ly') {
+      if (!isManagerRole(role)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
     } catch {

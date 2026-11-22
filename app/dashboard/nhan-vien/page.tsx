@@ -1,4 +1,5 @@
 "use client"
+import { isManagerRole, roleLabel } from "@/lib/roles"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -18,7 +19,7 @@ interface Employee {
   email: string
   ho_ten: string
   so_dien_thoai: string
-  vai_tro: "quan_ly" | "nhan_vien"
+  vai_tro: "chu_shop" | "quan_ly" | "nhan_vien"
   trang_thai: "hoat_dong" | "ngung_hoat_dong"
   created_at?: string
   updated_at?: string
@@ -87,7 +88,7 @@ export default function NhanVienPage() {
         return
       }
       const me = await res.json()
-      if (me?.role !== "quan_ly") {
+      if (!isManagerRole(me?.role)) {
         router.push("/dashboard")
         return
       }
@@ -188,7 +189,7 @@ export default function NhanVienPage() {
   }
 
   const getRoleBadge = (role: string) =>
-    role === "quan_ly" ? <Badge variant="default">Quản lý</Badge> : <Badge variant="secondary">Nhân viên</Badge>
+    isManagerRole(role) ? <Badge variant="default">{roleLabel(role)}</Badge> : <Badge variant="secondary">Nhân viên</Badge>
 
   const getStatusBadge = (status: string) =>
     status === "hoat_dong" ? (

@@ -1,3 +1,4 @@
+import { isManagerRole } from "@/lib/roles"
 import { type NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, syncToGoogleSheets } from "@/lib/google-sheets"
 import { getUserFromRequest } from "@/lib/sheets-auth" // Auth từ sheet USERS
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
   try {
     // Chỉ QUẢN LÝ mới được chạy
     const authed = await getUserFromRequest(request)
-    if (authed.role !== "quan_ly") {
+    if (!isManagerRole(authed.role)) {
       return NextResponse.json({ error: "Không có quyền truy cập" }, { status: 403 })
     }
 

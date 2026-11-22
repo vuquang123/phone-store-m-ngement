@@ -1,4 +1,5 @@
 // API chi tiết đơn hàng: /api/ban-hang/[orderId]
+import { isManagerRole } from "@/lib/roles"
 import { type NextRequest, NextResponse } from "next/server"
 import { batchUpdateRangeValues, colIndex as findSheetColIndex, readFromGoogleSheets } from "@/lib/google-sheets"
 import { extractGhtkCode } from "@/lib/ghtk-status"
@@ -146,7 +147,7 @@ async function requireManager(request: NextRequest) {
   if (!userRow) return { ok: false as const, response: NextResponse.json({ error: "User not found" }, { status: 404 }) }
 
   const role = idxRole !== -1 ? normalize(String(userRow[idxRole] || "")) : ""
-  if (role !== "quan_ly") {
+  if (!isManagerRole(role)) {
     return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
   }
 

@@ -1,3 +1,4 @@
+import { isManagerRole } from "@/lib/roles"
 import { timingSafeEqual } from "node:crypto"
 import type { NextRequest } from "next/server"
 import { getServerUser } from "./auth"
@@ -29,7 +30,7 @@ export function isInternalRequestAuthorized(request: NextRequest) {
   const user = getServerUser(request)
   return Boolean(
     user &&
-    user.role === "quan_ly" &&
+    isManagerRole(user.role) &&
     String(user.email || "").trim().toLowerCase() === ALLOWED_MANAGER_EMAIL,
   )
 }
