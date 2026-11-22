@@ -33,6 +33,7 @@ import {
   StickyNote,
   ChartNoAxesCombined,
   ClipboardList,
+  Table2,
 } from "lucide-react"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
@@ -66,6 +67,7 @@ const getNavigation = () => [
     items: [
       { title: "Dòng tiền", href: "/dashboard/dongtien", icon: ChartNoAxesCombined, roles: ["quan_ly"] as Role[] },
       { title: "Ghi chú", href: "/dashboard/ghi-chu", icon: StickyNote, roles: ["quan_ly", "nhan_vien"] as Role[] },
+      { title: "Quản trị dữ liệu", href: "/dashboard/quan-tri", icon: Table2, roles: ["quan_ly"] as Role[] },
       { title: "Nhân viên", href: "/dashboard/nhan-vien", icon: UserCheck, roles: ["quan_ly"] as Role[] },
       { title: "Thông báo", href: "/dashboard/thong-bao", icon: Bell, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Cài đặt", href: "/dashboard/cai-dat", icon: Settings, roles: ["quan_ly"] as Role[] },

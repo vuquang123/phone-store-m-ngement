@@ -10,7 +10,7 @@ const SHEETS = {
 } as const
 
 const norm = (s: string) =>
-  (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/\s+/g, "_").toLowerCase()
+  (s || "").trim().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/\s+/g, "_").toLowerCase()
 
 function colIndex(header: string[], ...names: string[]) {
   for (const n of names) {

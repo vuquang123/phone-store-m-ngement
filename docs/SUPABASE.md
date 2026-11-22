@@ -72,6 +72,28 @@ Muốn xem bằng câu lệnh: **SQL Editor**, ví dụ
 select "Tên Sản Phẩm", count(*) from "Kho_Hang" where "Trạng Thái" ilike 'còn hàng' group by 1 order by 2 desc;
 ```
 
+## 4b. Trang "Quản trị dữ liệu" trong web (khuyên dùng thay Table Editor)
+
+Menu **Quản lý > Quản trị dữ liệu** (chỉ tài khoản quản lý). Chọn bảng: Kho hàng, Phụ kiện, Khách hàng,
+Đơn bán, Đặt cọc, Gói/Hợp đồng bảo hành, Máy gửi bảo hành, CNC, Hoàn trả, Hàng đối tác.
+
+- **Sửa ô**: bấm vào ô, gõ, Enter (xuống dòng dưới) hoặc Tab (sang phải). Ô đã sửa tô vàng.
+  Bấm **Lưu** để ghi tất cả một lần, **Huỷ thay đổi** để bỏ.
+- **Chống ghi đè**: nếu trong lúc anh sửa mà nhân viên vừa bán/đổi đúng ô đó, ô đó không bị ghi và web báo "xung đột".
+- **Tìm** theo IMEI, tên máy, khách (gõ không dấu cũng được). **Lọc** theo Trạng Thái. Bấm tiêu đề cột để **sắp xếp**.
+- **Sửa hàng loạt**: tick nhiều dòng, chọn **Sửa hàng loạt**, chọn cột + giá trị (vd đổi Giá Bán, Trạng Thái Kho).
+- **Thêm dòng / Xoá dòng** đã chọn.
+- **Xuất Excel (CSV)**: tải các dòng đang lọc. **Nhập file**: sửa file đó trong Excel rồi nhập lại; dòng trùng
+  mã (ID Máy, ID, SĐT, Mã đơn…) được cập nhật, dòng mới được thêm. Web cho xem trước số dòng sẽ sửa/thêm rồi mới ghi.
+- Đổi Trạng Thái máy ở Kho hàng được ghi vào Lịch sử trạng thái máy như các màn hình khác.
+- Không mở bảng USERS (mật khẩu) và Dòng tiền ở đây; hai phần đó có màn hình riêng.
+
+## Kiểm thử tự động
+
+`scripts/dev-tools/e2e-test.ts` chạy 231 kiểm tra trên server + database thử ở máy (localhost):
+thêm/xem/sửa/xung đột/nhập file/xoá cho 11 bảng, phân quyền, và các luồng nhập kho, sửa máy, CNC, bảo hành,
+phụ kiện, khách hàng, đặt cọc, bán hàng, hoàn trả, tiền mặt, ghi chú, ghi đồng thời.
+
 ## 5. Sao lưu
 
 - **Tự động mỗi đêm (00:00 giờ VN)**: cron `/api/cron/sao-luu-sheet` chép toàn bộ Supabase về Google Sheet cũ.

@@ -12,6 +12,7 @@ const SHEETS = {
 
 const norm = (s: string) =>
   (s || "")
+    .trim() // tiêu đề sheet hay dính dấu cách (vd " ID Máy")
     .normalize("NFD")
     // @ts-ignore
     .replace(/\p{Diacritic}/gu, "")
