@@ -1,91 +1,109 @@
 // app/dashboard/quan-tri/page.tsx
-// Trang "Quản trị dữ liệu": sửa kho hàng, phụ kiện, khách hàng... như một bảng tính.
-// - Bấm vào ô để sửa (Enter: lưu tạm & xuống dòng, Tab: sang phải, Esc: huỷ).
-// - Ô đã sửa tô vàng; bấm "Lưu" để ghi tất cả một lần. Nếu người khác vừa sửa cùng ô thì báo xung đột.
-// - Chọn nhiều dòng để sửa hàng loạt / xoá. Xuất & nhập file CSV (mở bằng Excel).
+// "Tổng quan" của Quản trị dữ liệu: xem mỗi ngày tình hình kho, bán hàng và nợ phải trả.
+// Số liệu tính trực tiếp từ dữ liệu hiện tại (API /api/quan-tri/tong-quan), không cần nhập tay.
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
+import { QuanTriTabs } from "@/components/quan-tri/quan-tri-tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import {
-  Download,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Save,
-  Search,
-  Trash2,
-  Undo2,
-  Upload,
-  Wand2,
-  ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Loader2, Plus, RefreshCw, Search } from "lucide-react"
 
-type Row = { rowNumber: number; cells: string[] }
-type TableData = { table: string; label: string; header: (string | null)[]; rows: Row[]; loadedAt: string }
-type Edits = Record<string, string> // key `${rowNumber}:${col}` -> giá trị mới
-
-const PAGE_SIZE = 100
-/** Cột do hệ thống tự ghi, không hiện trong form thêm dòng (so khớp không dấu, chữ thường). */
-const INTERNAL_COLUMNS = ["dang xu ly", "tg msg xu ly"]
-const ALL = "__all__"
-const ek = (row: number, col: number) => `${row}:${col}`
-
-/* ------------------------------ CSV ------------------------------ */
-function toCsv(header: string[], rows: string[][]): string {
-  const esc = (v: string) => (/[",\n\r;]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
-  return "﻿" + [header, ...rows].map((r) => r.map((v) => esc(String(v ?? ""))).join(",")).join("\r\n")
+/* ============================== kiểu dữ liệu ============================== */
+type Item = {
+  id: string; date: string; age: number; name: string; cat: string; type: string; cap: string; pin: string
+  color: string; imei: string; serial: string; cond: string; cost: number; price: number | null; source: string
+  key: string; flags: string[]
 }
-function parseCsv(text: string): string[][] {
-  const s = text.replace(/^﻿/, "")
-  // Excel tiếng Việt hay lưu CSV bằng dấu ";" — đoán theo dòng đầu
-  const firstLine = s.split(/\r?\n/, 1)[0] || ""
-  const sep = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ";" : ","
-  const out: string[][] = []
-  let row: string[] = []
-  let cur = ""
-  let inQ = false
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i]
-    if (inQ) {
-      if (ch === '"' && s[i + 1] === '"') { cur += '"'; i++ }
-      else if (ch === '"') inQ = false
-      else cur += ch
-    } else if (ch === '"') inQ = true
-    else if (ch === sep) { row.push(cur); cur = "" }
-    else if (ch === "\n" || ch === "\r") {
-      if (ch === "\r" && s[i + 1] === "\n") i++
-      row.push(cur); out.push(row); row = []; cur = ""
-    } else cur += ch
-  }
-  if (cur !== "" || row.length) { row.push(cur); out.push(row) }
-  return out.filter((r) => r.some((v) => v.trim() !== ""))
+type Group = {
+  key: string; cat: string; n: number; cost: number; price: number; profit: number
+  avgAge: number; maxAge: number; sold30: number; cover: number | null
 }
-function download(name: string, content: string) {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8" })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = name
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+type PayState = "paid" | "overdue" | "today" | "soon" | "later" | "nodate"
+type Payable = {
+  id: string; creditor: string; type: string; typeLabel: string; description: string; principal: number; paid: number
+  remaining: number; incurredAt: string; dueDate: string; daysLeft: number | null; state: PayState; hasInterest: boolean; note: string
 }
-const fold = (s: string) =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase()
+type Receivable = { id: string; who: string; phone: string; content: string; remaining: number; dueDate: string; daysLeft: number | null }
+type Account = { id: string; name: string; balance: number }
+type SalesSum = { orders: number; revenue: number; profit: number }
+type Overview = {
+  asOf: string; generatedAt: string
+  sales: { today: SalesSum; d7: SalesSum; d30: SalesSum }
+  items: Item[]; groups: Group[]; payables: Payable[]; receivables: Receivable[]; accounts: Account[]
+}
 
-/* ------------------------------ API ------------------------------ */
-async function api(body?: any, query = "") {
-  const res = await fetch(`/api/quan-tri${query}`, {
-    method: body ? "POST" : "GET",
+/* ============================== định dạng ============================== */
+const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("vi-VN"))
+const tr = (n: number | null | undefined) => {
+  if (n == null) return "—"
+  const m = n / 1e6
+  const a = Math.abs(m)
+  return (a >= 100 ? m.toFixed(0) : a >= 10 ? m.toFixed(1) : m.toFixed(2)).replace(".", ",") + "tr"
+}
+const vnd = (n: number | null | undefined) => (n == null ? "—" : `${fmt(n)} đ`)
+const dmy = (s: string) => {
+  if (!s) return "—"
+  const [y, m, d] = s.split("-")
+  return `${+d}/${+m}/${y}`
+}
+const fold = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/đ/g, "d").toLowerCase()
+const todayIso = () => {
+  const d = new Date(Date.now() + 7 * 3600 * 1000)
+  return d.toISOString().slice(0, 10)
+}
+
+const TAG = {
+  good: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  warn: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  ser: "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
+  crit: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+  neu: "bg-muted text-muted-foreground",
+}
+type Tone = keyof typeof TAG
+const Tag = ({ tone, children }: { tone: Tone; children: React.ReactNode }) => (
+  <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-semibold", TAG[tone])}>
+    {children}
+  </span>
+)
+const ageTone = (a: number): Tone => (a <= 14 ? "good" : a <= 30 ? "warn" : a <= 60 ? "ser" : "crit")
+const AgeTag = ({ a }: { a: number }) => <Tag tone={ageTone(a)}>{a} ngày</Tag>
+const lvl = (g: Group) => (g.n >= 4 ? "Nhiều" : g.n >= 2 ? "Vừa" : "Ít")
+function speed(g: Group): [Tone, string] {
+  if (g.sold30 === 0 && g.maxAge > 14) return ["crit", `Chưa bán được máy nào 30N, tồn ${g.maxAge} ngày`]
+  if (g.sold30 === 0) return ["neu", "Chưa có đơn 30N (mới nhập)"]
+  if ((g.cover ?? 0) > 45) return ["ser", "Bán chậm so với lượng tồn"]
+  if (g.maxAge > 45) return ["ser", "Có máy tồn >45 ngày, nên đẩy giá"]
+  if ((g.cover ?? 99) <= 10) return ["good", "Bán nhanh, sắp hết, cân nhắc nhập thêm"]
+  return ["neu", "Ổn"]
+}
+const PAY_STATE: Record<PayState, [Tone, (p: Payable) => string]> = {
+  overdue: ["crit", (p) => `Quá hạn ${Math.abs(p.daysLeft ?? 0)} ngày`],
+  today: ["ser", () => "Đến hạn hôm nay"],
+  soon: ["warn", (p) => `Còn ${p.daysLeft} ngày`],
+  later: ["neu", (p) => `Còn ${p.daysLeft} ngày`],
+  nodate: ["neu", () => "Chưa có hạn"],
+  paid: ["good", () => "Đã trả xong"],
+}
+const PAY_ORDER: Record<PayState, number> = { overdue: 0, today: 1, soon: 2, later: 3, nodate: 4, paid: 5 }
+const PAYABLE_TYPES = [
+  ["inventory_payable", "Nợ đầu hàng"],
+  ["external_debt", "Nợ ngoài"],
+  ["loan", "Vay"],
+  ["rent", "Tiền nhà"],
+  ["salary", "Lương"],
+  ["operating_cost", "Chi phí"],
+  ["other", "Khác"],
+] as const
+
+async function api(method: "GET" | "POST", body?: unknown) {
+  const res = await fetch("/api/quan-tri/tong-quan", {
+    method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
@@ -95,549 +113,609 @@ async function api(body?: any, query = "") {
   return json
 }
 
-export default function QuanTriPage() {
+/* ============================== khung nhỏ ============================== */
+function Card({ className, children, style }: { className?: string; children: React.ReactNode; style?: React.CSSProperties }) {
+  return <div className={cn("rounded-xl border bg-card p-4", className)} style={style}>{children}</div>
+}
+function Kpi({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: Tone }) {
+  return (
+    <Card>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={cn("mt-1.5 text-2xl font-semibold tabular-nums", tone === "crit" && "text-red-600 dark:text-red-400", tone === "warn" && "text-amber-600 dark:text-amber-400")}>{value}</div>
+      {sub ? <div className="mt-1 text-xs text-muted-foreground">{sub}</div> : null}
+    </Card>
+  )
+}
+function Th<K extends string>({ k, sort, setSort, right, children }: { k: K; sort: { k: K; d: number }; setSort: (s: { k: K; d: number }) => void; right?: boolean; children: React.ReactNode }) {
+  return (
+    <th
+      onClick={() => setSort({ k, d: sort.k === k ? -sort.d : -1 })}
+      className={cn("cursor-pointer select-none whitespace-nowrap border-b px-2 py-2 text-xs font-semibold text-muted-foreground", right ? "text-right" : "text-left")}
+    >
+      {children}
+      {sort.k === k ? (sort.d < 0 ? " ↓" : " ↑") : ""}
+    </th>
+  )
+}
+function sortBy<T>(list: T[], k: keyof T, d: number) {
+  return [...list].sort((a, b) => {
+    let x: any = a[k]
+    let y: any = b[k]
+    if (x == null) x = -1e15
+    if (y == null) y = -1e15
+    return (x > y ? 1 : x < y ? -1 : 0) * d
+  })
+}
+const td = "border-b border-border/60 px-2 py-1.5 align-top tabular-nums"
+
+/* ============================== trang ============================== */
+export default function TongQuanPage() {
   return (
     <ProtectedRoute requiredRole="quan_ly">
-      <DataAdmin />
+      <TongQuan />
     </ProtectedRoute>
   )
 }
 
-function DataAdmin() {
+function TongQuan() {
   const { toast } = useToast()
-  const [tables, setTables] = useState<{ id: string; label: string }[]>([])
-  const [table, setTable] = useState("Kho_Hang")
-  const [data, setData] = useState<TableData | null>(null)
+  const [data, setData] = useState<Overview | null>(null)
   const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [edits, setEdits] = useState<Edits>({})
-  const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState(ALL)
-  const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null)
-  const [page, setPage] = useState(0)
-  const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [editing, setEditing] = useState<{ row: number; col: number } | null>(null)
-  const [draft, setDraft] = useState("")
-  const [bulkOpen, setBulkOpen] = useState(false)
-  const [bulkCol, setBulkCol] = useState<string>("")
-  const [bulkVal, setBulkVal] = useState("")
-  const [addOpen, setAddOpen] = useState(false)
-  const [addVals, setAddVals] = useState<Record<string, string>>({})
-  const [delOpen, setDelOpen] = useState(false)
-  const [importPlan, setImportPlan] = useState<{ rows: Record<string, string>[]; summary: any } | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [error, setError] = useState("")
+  const [cat, setCat] = useState<"all" | "iPhone" | "iPad">("all")
 
-  const dirtyCount = Object.keys(edits).length
-
-  /* ----- tải dữ liệu ----- */
-  const load = useCallback(
-    async (t = table) => {
-      setLoading(true)
-      try {
-        const d = (await api(undefined, `?table=${encodeURIComponent(t)}`)) as TableData
-        setData(d)
-        setEdits({})
-        setSelected(new Set())
-        setEditing(null)
-      } catch (e: any) {
-        toast({ title: "Không tải được dữ liệu", description: e.message, variant: "destructive" as any })
-      } finally {
-        setLoading(false)
-      }
-    },
-    [table, toast],
-  )
-
-  useEffect(() => {
-    api(undefined, "?list=1").then((r) => setTables(r.tables || [])).catch(() => {})
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError("")
+    try {
+      setData(await api("GET"))
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
   }, [])
   useEffect(() => {
-    load(table)
-    setSearch("")
-    setStatusFilter(ALL)
-    setSort(null)
-    setPage(0)
-  }, [table]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Nhắc khi rời trang mà chưa lưu
-  useEffect(() => {
-    const h = (e: BeforeUnloadEvent) => {
-      if (dirtyCount) { e.preventDefault(); e.returnValue = "" }
-    }
-    window.addEventListener("beforeunload", h)
-    return () => window.removeEventListener("beforeunload", h)
-  }, [dirtyCount])
-
-  const header = useMemo(() => data?.header || [], [data])
-  const visibleCols = useMemo(() => header.map((h, i) => (h === null ? -1 : i)).filter((i) => i >= 0), [header])
-  const statusCol = useMemo(() => header.findIndex((h) => fold(String(h || "").trim()) === "trang thai"), [header])
-  const statusValues = useMemo(() => {
-    if (statusCol < 0 || !data) return []
-    const m = new Map<string, number>()
-    for (const r of data.rows) {
-      const v = r.cells[statusCol]?.trim() || "(trống)"
-      m.set(v, (m.get(v) || 0) + 1)
-    }
-    return Array.from(m.entries()).sort((a, b) => b[1] - a[1])
-  }, [data, statusCol])
-
-  const valueOf = useCallback((r: Row, c: number) => edits[ek(r.rowNumber, c)] ?? r.cells[c] ?? "", [edits])
-
-  const filtered = useMemo(() => {
-    if (!data) return []
-    const terms = fold(search.trim()).split(/\s+/).filter(Boolean)
-    let list = data.rows.filter((r) => {
-      if (statusFilter !== ALL) {
-        const v = r.cells[statusCol]?.trim() || "(trống)"
-        if (v !== statusFilter) return false
-      }
-      if (!terms.length) return true
-      const hay = fold(visibleCols.map((c) => valueOf(r, c)).join(" "))
-      return terms.every((t) => hay.includes(t))
-    })
-    if (sort) {
-      const num = (s: string) => {
-        const d = s.replace(/[^\d-]/g, "")
-        return d && /^-?\d+$/.test(d) && /^[\d\s.,đ%-]+$/i.test(s.trim()) ? Number(d) : NaN
-      }
-      list = [...list].sort((a, b) => {
-        const x = valueOf(a, sort.col), y = valueOf(b, sort.col)
-        const nx = num(x), ny = num(y)
-        const cmp = !isNaN(nx) && !isNaN(ny) ? nx - ny : x.localeCompare(y, "vi", { numeric: true })
-        return cmp * sort.dir
-      })
-    } else {
-      list = [...list].reverse() // mới nhất lên đầu
-    }
-    return list
-  }, [data, search, statusFilter, statusCol, sort, visibleCols, valueOf])
-
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const pageRows = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
-  useEffect(() => { if (page >= pages) setPage(0) }, [pages, page])
-
-  /* ----- sửa ô ----- */
-  const startEdit = (row: Row, col: number) => {
-    setEditing({ row: row.rowNumber, col })
-    setDraft(valueOf(row, col))
-  }
-  const commit = (move?: "down" | "right" | "left") => {
-    if (!editing || !data) return
-    const r = data.rows.find((x) => x.rowNumber === editing.row)
-    if (r) {
-      const orig = r.cells[editing.col] ?? ""
-      setEdits((prev) => {
-        const next = { ...prev }
-        if (draft === orig) delete next[ek(editing.row, editing.col)]
-        else next[ek(editing.row, editing.col)] = draft
-        return next
-      })
-    }
-    if (!move || !r) return setEditing(null)
-    const idx = pageRows.findIndex((x) => x.rowNumber === editing.row)
-    const ci = visibleCols.indexOf(editing.col)
-    let target: { row: Row; col: number } | null = null
-    if (move === "down" && pageRows[idx + 1]) target = { row: pageRows[idx + 1], col: editing.col }
-    if (move === "right" && visibleCols[ci + 1] !== undefined) target = { row: r, col: visibleCols[ci + 1] }
-    if (move === "left" && ci > 0) target = { row: r, col: visibleCols[ci - 1] }
-    if (target) startEdit(target.row, target.col)
-    else setEditing(null)
-  }
-
-  /* ----- lưu ----- */
-  const save = async () => {
-    if (!data || !dirtyCount) return
-    setSaving(true)
-    try {
-      const changes = Object.entries(edits).map(([k, value]) => {
-        const [row, col] = k.split(":").map(Number)
-        const r = data.rows.find((x) => x.rowNumber === row)
-        return { row, col, old: r?.cells[col] ?? "", value }
-      })
-      const res = await api({ action: "update", table, changes })
-      if (res.conflicts?.length) {
-        toast({
-          title: `Đã lưu ${res.saved} ô, ${res.conflicts.length} ô bị xung đột`,
-          description: "Có người vừa sửa các ô này. Dữ liệu đã được tải lại, vui lòng kiểm tra và sửa lại nếu cần.",
-          variant: "destructive" as any,
-        })
-      } else {
-        toast({ title: `Đã lưu ${res.saved} ô` })
-      }
-      await load()
-    } catch (e: any) {
-      toast({ title: "Lưu thất bại", description: e.message, variant: "destructive" as any })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  /* ----- sửa hàng loạt ----- */
-  const applyBulk = () => {
-    const col = Number(bulkCol)
-    if (!data || !Number.isInteger(col) || !selected.size) return
-    setEdits((prev) => {
-      const next = { ...prev }
-      for (const r of data.rows) {
-        if (!selected.has(r.rowNumber)) continue
-        if ((r.cells[col] ?? "") === bulkVal) delete next[ek(r.rowNumber, col)]
-        else next[ek(r.rowNumber, col)] = bulkVal
-      }
-      return next
-    })
-    setBulkOpen(false)
-    toast({ title: `Đã điền "${bulkVal}" cho ${selected.size} dòng`, description: "Bấm Lưu để ghi vào hệ thống." })
-  }
-
-  /* ----- xoá dòng ----- */
-  const doDelete = async () => {
-    if (!data) return
-    setSaving(true)
-    try {
-      const rows = data.rows.filter((r) => selected.has(r.rowNumber)).map((r) => ({ row: r.rowNumber, cells: r.cells }))
-      const res = await api({ action: "delete", table, rows })
-      toast({
-        title: `Đã xoá ${res.deleted} dòng`,
-        description: res.conflicts?.length ? `${res.conflicts.length} dòng vừa bị người khác thay đổi nên không xoá.` : undefined,
-      })
-      setDelOpen(false)
-      await load()
-    } catch (e: any) {
-      toast({ title: "Xoá thất bại", description: e.message, variant: "destructive" as any })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  /* ----- thêm dòng ----- */
-  const doAdd = async () => {
-    setSaving(true)
-    try {
-      const res = await api({ action: "append", table, rows: [addVals] })
-      toast({ title: res.added ? "Đã thêm 1 dòng" : "Chưa nhập thông tin nào" })
-      setAddOpen(false)
-      setAddVals({})
-      await load()
-    } catch (e: any) {
-      toast({ title: "Thêm thất bại", description: e.message, variant: "destructive" as any })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  /* ----- xuất / nhập ----- */
-  const exportCsv = () => {
-    if (!data) return
-    const cols = visibleCols
-    const csv = toCsv(cols.map((c) => String(header[c])), filtered.map((r) => cols.map((c) => valueOf(r, c))))
-    const stamp = new Date().toISOString().slice(0, 10)
-    download(`${table}-${stamp}.csv`, csv)
-  }
-  const onFile = async (f?: File | null) => {
-    if (!f || !data) return
-    try {
-      const grid = parseCsv(await f.text())
-      if (grid.length < 2) throw new Error("File không có dữ liệu")
-      const fileHeader = grid[0].map((h) => h.trim())
-      const known = new Set(header.filter(Boolean).map((h) => String(h).trim()))
-      const cols = fileHeader.map((h) => (known.has(h) ? h : null))
-      if (!cols.some(Boolean)) throw new Error("Tiêu đề cột trong file không khớp với bảng. Hãy dùng file Xuất CSV làm mẫu.")
-      // map tên cột đã trim về đúng tên gốc trên bảng
-      const original = new Map(header.filter(Boolean).map((h) => [String(h).trim(), String(h)]))
-      const rows = grid.slice(1).map((r) => {
-        const o: Record<string, string> = {}
-        cols.forEach((h, i) => { if (h) o[original.get(h)!] = r[i] ?? "" })
-        return o
-      })
-      const summary = await api({ action: "import", table, rows, dryRun: true })
-      setImportPlan({ rows, summary: { ...summary, ignored: fileHeader.filter((_, i) => !cols[i]) } })
-    } catch (e: any) {
-      toast({ title: "Không đọc được file", description: e.message, variant: "destructive" as any })
-    } finally {
-      if (fileRef.current) fileRef.current.value = ""
-    }
-  }
-  const doImport = async () => {
-    if (!importPlan) return
-    setSaving(true)
-    try {
-      const res = await api({ action: "import", table, rows: importPlan.rows })
-      toast({ title: "Nhập file xong", description: `Cập nhật ${res.updatedRows} dòng, thêm ${res.added} dòng mới.` })
-      setImportPlan(null)
-      await load()
-    } catch (e: any) {
-      toast({ title: "Nhập file thất bại", description: e.message, variant: "destructive" as any })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(r.rowNumber))
-  const toggleAllOnPage = () =>
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (allOnPageSelected) pageRows.forEach((r) => next.delete(r.rowNumber))
-      else pageRows.forEach((r) => next.add(r.rowNumber))
-      return next
-    })
+    load()
+  }, [load])
 
   return (
-    <div className="space-y-3 p-2 md:p-4">
+    <div className="mx-auto max-w-[1320px] space-y-4 p-2 md:p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-2 text-xl font-semibold">Quản trị dữ liệu</h1>
-        <Select
-          value={table}
-          onValueChange={(v) => {
-            if (dirtyCount && !confirm(`Có ${dirtyCount} ô chưa lưu. Bỏ các thay đổi này?`)) return
-            setTable(v)
-          }}
-        >
-          <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {(tables.length ? tables : [{ id: "Kho_Hang", label: "Kho hàng" }]).map((t) => (
-              <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={() => load()} disabled={loading}>
+        <QuanTriTabs />
+        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           {loading ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-4 w-4" />} Tải lại
         </Button>
-        <div className="ml-auto flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => setAddOpen(true)} disabled={!data}>
-            <Plus className="mr-1 h-4 w-4" /> Thêm dòng
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={!data}>
-            <Download className="mr-1 h-4 w-4" /> Xuất Excel (CSV)
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={!data}>
-            <Upload className="mr-1 h-4 w-4" /> Nhập file
-          </Button>
-          <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
-        </div>
+        {data ? <span className="text-xs text-muted-foreground">Số liệu ngày {dmy(data.asOf)}, cập nhật {new Date(data.generatedAt).toLocaleTimeString("vi-VN")}</span> : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-8" placeholder="Tìm IMEI, tên máy, khách..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0) }} />
-        </div>
-        {statusCol >= 0 && (
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0) }}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Trạng thái" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Mọi trạng thái</SelectItem>
-              {statusValues.map(([v, n]) => (
-                <SelectItem key={v} value={v}>{v} ({n})</SelectItem>
+      {error ? <Card className="border-red-300 text-sm text-red-600">{error}</Card> : null}
+      {!data && loading ? (
+        <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Đang tính số liệu…</div>
+      ) : null}
+
+      {data ? (
+        <>
+          <SalesStrip s={data.sales} />
+          <CashSection data={data} reload={load} toast={toast} />
+          <div className="flex flex-wrap items-end justify-between gap-2 pt-2">
+            <div>
+              <h2 className="text-lg font-semibold">Kho hàng</h2>
+              <div className="text-xs text-muted-foreground">Máy đang có Trạng Thái “Còn hàng” (hoặc để trống) trong Kho_Hang · tốc độ bán lấy từ đơn 30 ngày gần nhất</div>
+            </div>
+            <div className="inline-flex rounded-lg border bg-card p-0.5">
+              {(["all", "iPhone", "iPad"] as const).map((c) => (
+                <button key={c} onClick={() => setCat(c)} className={cn("rounded-md px-3 py-1.5 text-sm", cat === c ? "bg-foreground text-background" : "text-muted-foreground")}>
+                  {c === "all" ? "Tất cả" : c}
+                </button>
               ))}
-            </SelectContent>
-          </Select>
-        )}
-        <span className="text-sm text-muted-foreground">{filtered.length} dòng</span>
-        {selected.size > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary" className="whitespace-nowrap">Đã chọn {selected.size}</Badge>
-            <Button size="sm" variant="outline" onClick={() => { setBulkCol(String(visibleCols[0] ?? "")); setBulkVal(""); setBulkOpen(true) }}>
-              <Wand2 className="mr-1 h-4 w-4" /> Sửa hàng loạt
-            </Button>
-            <Button size="sm" variant="outline" className="text-red-600" onClick={() => setDelOpen(true)}>
-              <Trash2 className="mr-1 h-4 w-4" /> Xoá
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Bỏ chọn</Button>
+            </div>
           </div>
-        )}
+          <InventorySection data={data} cat={cat} />
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+/* ============================== bán hàng ============================== */
+function SalesStrip({ s }: { s: Overview["sales"] }) {
+  const rows: [string, SalesSum][] = [["Hôm nay", s.today], ["7 ngày qua", s.d7], ["30 ngày qua", s.d30]]
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      {rows.map(([l, v]) => (
+        <Card key={l} className="p-3 sm:p-4">
+          <div className="text-xs text-muted-foreground"><span className="hidden sm:inline">Bán hàng · </span>{l}</div>
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <span className="text-2xl font-semibold tabular-nums">{v.orders}</span>
+            <span className="text-sm text-muted-foreground">đơn</span>
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            Doanh thu <b className="text-foreground">{tr(v.revenue)}</b> · Lãi <b className="text-foreground">{tr(v.profit)}</b>
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+/* ============================== dòng tiền & nợ ============================== */
+type FormState = { id?: string; creditor: string; type: string; description: string; amount: string; dueDate: string; note: string }
+const emptyForm = (): FormState => ({ creditor: "", type: "inventory_payable", description: "", amount: "", dueDate: todayIso(), note: "" })
+const digits = (s: string) => Number(String(s).replace(/[^\d]/g, "")) || 0
+const moneyInput = (s: string) => {
+  const n = digits(s)
+  return n ? n.toLocaleString("vi-VN") : ""
+}
+
+function CashSection({ data, reload, toast }: { data: Overview; reload: () => Promise<void>; toast: ReturnType<typeof useToast>["toast"] }) {
+  const [showPaid, setShowPaid] = useState(false)
+  const [onlyStock, setOnlyStock] = useState(false)
+  const [form, setForm] = useState<FormState | null>(null)
+  const [payFor, setPayFor] = useState<Payable | null>(null)
+  const [payAmount, setPayAmount] = useState("")
+  const [payAcc, setPayAcc] = useState("")
+  const [payNote, setPayNote] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [allRecv, setAllRecv] = useState(false)
+
+  const open = data.payables.filter((p) => p.state !== "paid")
+  const sum = (l: Payable[]) => l.reduce((a, p) => a + p.remaining, 0)
+  const overdue = open.filter((p) => p.state === "overdue")
+  const week = open.filter((p) => p.state === "today" || p.state === "soon")
+  const stockDebt = open.filter((p) => p.type === "inventory_payable" || p.type === "supplier")
+  const recvTotal = data.receivables.reduce((a, r) => a + r.remaining, 0)
+  const cash = data.accounts.reduce((a, x) => a + x.balance, 0)
+
+  const byCreditor = useMemo(() => {
+    const m = new Map<string, { name: string; remaining: number; n: number; next: string; overdue: number }>()
+    for (const p of open) {
+      const x = m.get(p.creditor) || { name: p.creditor, remaining: 0, n: 0, next: "", overdue: 0 }
+      x.remaining += p.remaining
+      x.n++
+      if (p.dueDate && (!x.next || p.dueDate < x.next)) x.next = p.dueDate
+      if (p.state === "overdue") x.overdue += p.remaining
+      m.set(p.creditor, x)
+    }
+    return [...m.values()].sort((a, b) => b.remaining - a.remaining)
+  }, [open])
+  const maxCred = byCreditor[0]?.remaining || 1
+
+  const list = data.payables
+    .filter((p) => showPaid || p.state !== "paid")
+    .filter((p) => !onlyStock || p.type === "inventory_payable" || p.type === "supplier")
+    .sort((a, b) => PAY_ORDER[a.state] - PAY_ORDER[b.state] || (a.dueDate || "9999").localeCompare(b.dueDate || "9999") || b.remaining - a.remaining)
+
+  async function saveForm() {
+    if (!form) return
+    setBusy(true)
+    try {
+      const payload = {
+        creditor: form.creditor,
+        description: form.description,
+        principalAmount: digits(form.amount),
+        dueDate: form.dueDate,
+        note: form.note,
+      }
+      if (form.id) await api("POST", { action: "update_payable", id: form.id, ...payload })
+      else await api("POST", { action: "add_payable", type: form.type, ...payload })
+      toast({ title: form.id ? "Đã cập nhật khoản nợ" : "Đã thêm khoản nợ" })
+      setForm(null)
+      await reload()
+    } catch (e: any) {
+      toast({ title: "Chưa lưu được", description: e.message, variant: "destructive" })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function savePay() {
+    if (!payFor) return
+    setBusy(true)
+    try {
+      await api("POST", { action: "pay_payable", id: payFor.id, amount: digits(payAmount), accountId: payAcc, note: payNote })
+      toast({ title: "Đã ghi trả nợ", description: `${payFor.creditor}: ${vnd(digits(payAmount))}` })
+      setPayFor(null)
+      await reload()
+    } catch (e: any) {
+      toast({ title: "Chưa ghi được", description: e.message, variant: "destructive" })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">Dòng tiền và công nợ</h2>
+          <div className="text-xs text-muted-foreground">Các khoản đang nợ đầu hàng, hạn trả dự kiến và số còn phải trả</div>
+        </div>
+        <Button size="sm" onClick={() => setForm(emptyForm())}><Plus className="mr-1 h-4 w-4" /> Thêm khoản nợ</Button>
       </div>
 
-      {dirtyCount > 0 && (
-        <div className="sticky top-0 z-30 flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
-          <span>Có <b>{dirtyCount}</b> ô đã sửa, chưa lưu.</span>
-          <Button size="sm" onClick={save} disabled={saving} className="ml-auto">
-            {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />} Lưu
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setEdits({})} disabled={saving}>
-            <Undo2 className="mr-1 h-4 w-4" /> Huỷ thay đổi
-          </Button>
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <Kpi label="Tổng còn phải trả" value={tr(sum(open))} sub={`${open.length} khoản · ${byCreditor.length} chủ nợ · nợ đầu hàng ${tr(sum(stockDebt))}`} />
+        <Kpi label="Quá hạn" value={tr(sum(overdue))} tone={overdue.length ? "crit" : undefined} sub={overdue.length ? `${overdue.length} khoản đã qua ngày hẹn trả` : "Không có khoản quá hạn"} />
+        <Kpi label="Phải trả trong 7 ngày" value={tr(sum(week))} tone={week.length ? "warn" : undefined} sub={`${week.length} khoản (kể cả hôm nay)`} />
+        <Kpi label="Khách còn nợ mình" value={tr(recvTotal)} sub={`${data.receivables.length} khoản chưa thu`} />
+        <Kpi label="Tiền trong các nguồn" value={tr(cash)} sub={data.accounts.filter((a) => a.balance).map((a) => `${a.name} ${tr(a.balance)}`).join(" · ") || "Chưa có nguồn tiền"} />
+      </div>
 
-      <div className="overflow-auto rounded-md border" style={{ maxHeight: "calc(100vh - 260px)" }}>
-        {!data ? (
-          <div className="flex items-center justify-center p-10 text-muted-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang tải...
+      <div className="grid gap-3 lg:grid-cols-[2fr_3fr]">
+        <Card>
+          <h3 className="text-sm font-semibold">Nợ theo chủ nợ</h3>
+          <div className="text-xs text-muted-foreground">Số còn phải trả · ngày hẹn gần nhất</div>
+          <div className="mt-3 space-y-1">
+            {byCreditor.length === 0 ? <div className="text-sm text-muted-foreground">Không còn khoản nợ nào.</div> : null}
+            {byCreditor.map((c) => (
+              <div key={c.name} className="grid grid-cols-[120px_1fr_auto] items-center gap-2 rounded px-1 py-0.5 hover:bg-muted" title={`${c.name}: ${vnd(c.remaining)} · ${c.n} khoản${c.overdue ? ` · quá hạn ${vnd(c.overdue)}` : ""}`}>
+                <div className="truncate text-[12.5px]">{c.name}</div>
+                <div className="h-3.5">
+                  <div className={cn("h-3.5 rounded-r", c.overdue ? "bg-red-500" : "bg-blue-600")} style={{ width: `${Math.max(1, (100 * c.remaining) / maxCred)}%` }} />
+                </div>
+                <div className="whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
+                  {tr(c.remaining)} · {c.next ? dmy(c.next) : "—"}
+                </div>
+              </div>
+            ))}
           </div>
-        ) : (
-          <table className="w-max min-w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-20 bg-muted">
-              <tr>
-                <th className="sticky left-0 z-30 w-10 border-b bg-muted px-2 py-2">
-                  <Checkbox checked={allOnPageSelected} onCheckedChange={toggleAllOnPage} aria-label="Chọn tất cả" />
-                </th>
-                {visibleCols.map((c) => (
-                  <th
-                    key={c}
-                    className="cursor-pointer select-none whitespace-nowrap border-b px-2 py-2 text-left font-medium"
-                    onClick={() => setSort((s) => (s?.col === c ? (s.dir === 1 ? { col: c, dir: -1 } : null) : { col: c, dir: 1 }))}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {header[c] || <i className="text-muted-foreground">(cột {c + 1})</i>}
-                      <ArrowUpDown className={`h-3 w-3 ${sort?.col === c ? "opacity-100" : "opacity-30"}`} />
-                    </span>
-                  </th>
+          {byCreditor.some((c) => c.overdue) ? <div className="mt-2 text-xs text-muted-foreground"><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-red-500" />có khoản quá hạn</div> : null}
+        </Card>
+
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">Khách còn nợ (lớn nhất)</h3>
+            {data.receivables.length > 8 ? (
+              <button className="text-xs text-blue-600 hover:underline" onClick={() => setAllRecv((v) => !v)}>{allRecv ? "Thu gọn" : `Xem cả ${data.receivables.length} khoản`}</button>
+            ) : null}
+          </div>
+          <div className={cn("mt-2 overflow-auto", allRecv && "max-h-[360px]")}>
+            <table className="w-full text-[13px]">
+              <thead><tr>
+                <th className="border-b px-2 py-1.5 text-left text-xs font-semibold text-muted-foreground">Khách</th>
+                <th className="border-b px-2 py-1.5 text-left text-xs font-semibold text-muted-foreground">Nội dung</th>
+                <th className="border-b px-2 py-1.5 text-left text-xs font-semibold text-muted-foreground">Hẹn trả</th>
+                <th className="border-b px-2 py-1.5 text-right text-xs font-semibold text-muted-foreground">Còn nợ</th>
+              </tr></thead>
+              <tbody>
+                {[...data.receivables].sort((a, b) => b.remaining - a.remaining).slice(0, allRecv ? undefined : 8).map((r) => (
+                  <tr key={r.id} className="hover:bg-muted/60">
+                    <td className={td}>{r.who}{r.phone ? <div className="text-xs text-muted-foreground">{r.phone}</div> : null}</td>
+                    <td className={cn(td, "max-w-[260px] truncate")} title={r.content}>{r.content || "—"}</td>
+                    <td className={td}>{r.dueDate ? <>{dmy(r.dueDate)}{r.daysLeft != null && r.daysLeft < 0 ? <span className="ml-1 text-xs text-red-600">quá {-r.daysLeft} ngày</span> : null}</> : "—"}</td>
+                    <td className={cn(td, "text-right font-medium")}>{fmt(r.remaining)}</td>
+                  </tr>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((r) => (
-                <tr key={r.rowNumber} className={selected.has(r.rowNumber) ? "bg-blue-50 dark:bg-blue-950/40" : "hover:bg-muted/40"}>
-                  <td className="sticky left-0 z-10 border-b bg-background px-2 py-1">
-                    <Checkbox
-                      checked={selected.has(r.rowNumber)}
-                      onCheckedChange={() =>
-                        setSelected((prev) => {
-                          const next = new Set(prev)
-                          next.has(r.rowNumber) ? next.delete(r.rowNumber) : next.add(r.rowNumber)
-                          return next
-                        })
-                      }
-                    />
-                  </td>
-                  {visibleCols.map((c) => {
-                    const isEditing = editing?.row === r.rowNumber && editing.col === c
-                    const dirty = ek(r.rowNumber, c) in edits
-                    const v = valueOf(r, c)
-                    return (
-                      <td
-                        key={c}
-                        className={`max-w-[260px] border-b border-l px-0 py-0 align-top ${dirty ? "bg-amber-100 dark:bg-amber-900/50" : ""}`}
-                        onClick={() => !isEditing && startEdit(r, c)}
-                        title={v}
-                      >
-                        {isEditing ? (
-                          <input
-                            autoFocus
-                            className="w-full min-w-[120px] bg-white px-2 py-1 outline outline-2 outline-blue-500 dark:bg-zinc-900"
-                            value={draft}
-                            onChange={(e) => setDraft(e.target.value)}
-                            onBlur={() => commit()}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") { e.preventDefault(); commit("down") }
-                              else if (e.key === "Tab") { e.preventDefault(); commit(e.shiftKey ? "left" : "right") }
-                              else if (e.key === "Escape") { e.preventDefault(); setEditing(null) }
-                            }}
-                          />
-                        ) : (
-                          <div className="min-h-[28px] cursor-text truncate px-2 py-1">{v}</div>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
+                {data.receivables.length === 0 ? <tr><td className={td} colSpan={4}>Không có khoản nào.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold">Danh sách khoản nợ phải trả</h3>
+            <div className="text-xs text-muted-foreground">Sắp theo hạn trả: quá hạn lên đầu · bấm “Trả” để ghi một lần trả (trừ tiền ở nguồn đã chọn)</div>
+          </div>
+          <div className="flex flex-wrap gap-3 text-xs">
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={onlyStock} onChange={(e) => setOnlyStock(e.target.checked)} /> Chỉ nợ đầu hàng</label>
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={showPaid} onChange={(e) => setShowPaid(e.target.checked)} /> Hiện cả khoản đã trả</label>
+          </div>
+        </div>
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead><tr>
+              {["Chủ nợ", "Nội dung", "Ngày nợ", "Hạn trả", "Tình trạng", "Đã trả / Gốc", "Còn lại", ""].map((h, i) => (
+                <th key={i} className={cn("whitespace-nowrap border-b px-2 py-2 text-xs font-semibold text-muted-foreground", i >= 5 && i <= 6 ? "text-right" : "text-left")}>{h}</th>
               ))}
-              {!pageRows.length && (
-                <tr><td colSpan={visibleCols.length + 1} className="p-8 text-center text-muted-foreground">Không có dòng nào</td></tr>
-              )}
+            </tr></thead>
+            <tbody>
+              {list.map((p) => {
+                const [tone, label] = PAY_STATE[p.state]
+                const pct = p.principal ? Math.min(100, (100 * p.paid) / p.principal) : 0
+                return (
+                  <tr key={p.id} className="hover:bg-muted/60">
+                    <td className={cn(td, "font-medium")}>{p.creditor}<div className="text-xs font-normal text-muted-foreground">{p.typeLabel}{p.hasInterest ? " · có tính lãi" : ""}</div></td>
+                    <td className={cn(td, "max-w-[260px]")}>{p.description || "—"}{p.note ? <div className="truncate text-xs text-muted-foreground" title={p.note}>{p.note}</div> : null}</td>
+                    <td className={td}>{dmy(p.incurredAt)}</td>
+                    <td className={cn(td, "whitespace-nowrap")}>{dmy(p.dueDate)}</td>
+                    <td className={td}><Tag tone={tone}>{label(p)}</Tag></td>
+                    <td className={cn(td, "text-right whitespace-nowrap")}>
+                      <div className="whitespace-nowrap text-xs text-muted-foreground">{tr(p.paid)} / {tr(p.principal)}</div>
+                      <div className="ml-auto mt-1 h-1.5 w-24 rounded bg-muted"><div className="h-1.5 rounded bg-emerald-500" style={{ width: `${pct}%` }} /></div>
+                    </td>
+                    <td className={cn(td, "whitespace-nowrap text-right font-semibold", p.state === "overdue" && "text-red-600 dark:text-red-400")}>{fmt(p.remaining)}</td>
+                    <td className={cn(td, "whitespace-nowrap text-right")}>
+                      {p.state !== "paid" ? (
+                        <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => { setPayFor(p); setPayAmount(moneyInput(String(p.remaining))); setPayAcc(data.accounts.find((a) => a.balance >= p.remaining)?.id || data.accounts[0]?.id || ""); setPayNote("") }}>Trả</Button>
+                      ) : null}
+                      <Button size="sm" variant="ghost" className="ml-1 h-7 px-2" onClick={() => setForm({ id: p.id, creditor: p.creditor, type: p.type, description: p.description, amount: moneyInput(String(p.principal)), dueDate: p.dueDate || todayIso(), note: p.note })}>Sửa</Button>
+                    </td>
+                  </tr>
+                )
+              })}
+              {list.length === 0 ? <tr><td className={td} colSpan={8}>Không có khoản nợ nào{showPaid ? "" : " đang mở"}.</td></tr> : null}
             </tbody>
           </table>
-        )}
+        </div>
+      </Card>
+
+      {/* Thêm / sửa khoản nợ */}
+      <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{form?.id ? "Sửa khoản nợ" : "Thêm khoản nợ"}</DialogTitle>
+            <DialogDescription>Ghi số tiền mình đang nợ và ngày dự kiến trả.</DialogDescription>
+          </DialogHeader>
+          {form ? (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="col-span-2 text-xs font-medium sm:col-span-1">Đầu hàng / chủ nợ
+                <Input className="mt-1" value={form.creditor} onChange={(e) => setForm({ ...form, creditor: e.target.value })} placeholder="VD: A Đào Thành" autoFocus />
+              </label>
+              <label className="col-span-2 text-xs font-medium sm:col-span-1">Loại
+                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })} disabled={!!form.id}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>{PAYABLE_TYPES.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                </Select>
+              </label>
+              <label className="col-span-2 text-xs font-medium">Nội dung (lô máy, ghi chú ngắn)
+                <Input className="mt-1" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="VD: x8 16 Plus Lock" />
+              </label>
+              <label className="text-xs font-medium">Số tiền nợ (gốc)
+                <Input className="mt-1 text-right tabular-nums" inputMode="numeric" value={form.amount} onChange={(e) => setForm({ ...form, amount: moneyInput(e.target.value) })} placeholder="0" />
+              </label>
+              <label className="text-xs font-medium">Ngày trả dự kiến
+                <Input className="mt-1" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+              </label>
+              <label className="col-span-2 text-xs font-medium">Ghi chú
+                <Input className="mt-1" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+              </label>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForm(null)}>Huỷ</Button>
+            <Button onClick={saveForm} disabled={busy}>{busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}Lưu</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ghi trả nợ */}
+      <Dialog open={!!payFor} onOpenChange={(o) => !o && setPayFor(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Trả nợ: {payFor?.creditor}</DialogTitle>
+            <DialogDescription>Còn phải trả {vnd(payFor?.remaining)}. Số tiền trả sẽ được trừ khỏi nguồn tiền bạn chọn.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <label className="text-xs font-medium">Số tiền trả lần này
+              <Input className="mt-1 text-right tabular-nums" inputMode="numeric" value={payAmount} onChange={(e) => setPayAmount(moneyInput(e.target.value))} />
+            </label>
+            <label className="text-xs font-medium">Trả từ nguồn tiền
+              <Select value={payAcc} onValueChange={setPayAcc}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Chọn nguồn tiền" /></SelectTrigger>
+                <SelectContent>{data.accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} · còn {tr(a.balance)}</SelectItem>)}</SelectContent>
+              </Select>
+            </label>
+            <label className="text-xs font-medium">Ghi chú
+              <Input className="mt-1" value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="VD: chuyển khoản VCB" />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayFor(null)}>Huỷ</Button>
+            <Button onClick={savePay} disabled={busy || !digits(payAmount) || !payAcc}>{busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}Ghi trả</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+/* ============================== kho ============================== */
+type GKey = "key" | "n" | "lvl" | "cost" | "price" | "profit" | "avgAge" | "maxAge" | "sold30" | "cover"
+type IKey = "id" | "date" | "age" | "name" | "cap" | "type" | "color" | "pin" | "cond" | "cost" | "price" | "m"
+const AGE_BUCKETS: [string, number, number, string][] = [
+  ["0–7 ngày", 0, 7, "bg-blue-200 dark:bg-blue-900"],
+  ["8–14", 8, 14, "bg-blue-300 dark:bg-blue-800"],
+  ["15–30", 15, 30, "bg-blue-500 dark:bg-blue-600"],
+  ["31–60", 31, 60, "bg-blue-700 dark:bg-blue-400"],
+  [">60 ngày", 61, 1e9, "bg-blue-900 dark:bg-blue-200"],
+]
+
+function InventorySection({ data, cat }: { data: Overview; cat: "all" | "iPhone" | "iPad" }) {
+  const [gs, setGs] = useState<{ k: GKey; d: number }>({ k: "cost", d: -1 })
+  const [is, setIs] = useState<{ k: IKey; d: number }>({ k: "age", d: -1 })
+  const [q, setQ] = useState("")
+  const G = data.groups.filter((g) => cat === "all" || g.cat === cat)
+  const I = data.items.filter((i) => cat === "all" || i.cat === cat)
+
+  const n = I.length
+  const cost = I.reduce((a, i) => a + i.cost, 0)
+  const priced = I.filter((i) => i.price)
+  const pp = priced.reduce((a, i) => a + (i.price || 0), 0)
+  const pc = priced.reduce((a, i) => a + i.cost, 0)
+  const avg = n ? Math.round(I.reduce((a, i) => a + i.age, 0) / n) : 0
+  const old = I.filter((i) => i.age > 30)
+  const ip = I.filter((i) => i.cat === "iPhone").length
+
+  const bars = [...G].sort((a, b) => b.cost - a.cost)
+  const mx = bars[0]?.cost || 1
+  const buckets = AGE_BUCKETS.map(([l, lo, hi, c]) => {
+    const list = I.filter((i) => i.age >= lo && i.age <= hi)
+    const top: Record<string, number> = {}
+    list.forEach((i) => (top[i.key] = (top[i.key] || 0) + 1))
+    return { l, c, n: list.length, cost: list.reduce((a, i) => a + i.cost, 0), top: Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 4) }
+  })
+  const am = Math.max(1, ...buckets.map((b) => b.n))
+
+  const alerts = useMemo(() => {
+    const by: Record<string, string[]> = {}
+    for (const i of I)
+      for (const f of i.flags) {
+        const k = f.startsWith("Đã có đơn") ? "Đã có đơn bán nhưng vẫn nằm trong kho" : f
+        const extra = f.startsWith("Đã có đơn") ? ` (${f.replace("Đã có đơn bán ", "").replace(" nhưng vẫn nằm trong kho", "")})` : ""
+        ;(by[k] = by[k] || []).push((i.id || i.imei || i.serial || "?") + extra)
+      }
+    return Object.entries(by)
+  }, [I])
+
+  const GG = sortBy(G.map((g) => ({ ...g, lvl: lvl(g), coverS: g.cover ?? 1e9 })), (gs.k === "cover" ? "coverS" : gs.k) as any, gs.d)
+  const ql = fold(q.trim())
+  const II = sortBy(
+    I.map((i) => ({ ...i, m: i.price ? i.price - i.cost : null })).filter((i) => !ql || fold([i.id, i.name, i.color, i.imei, i.serial, i.cond, i.cap, i.type].join(" ")).includes(ql)),
+    is.k as any,
+    is.d,
+  )
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <Kpi label="Tổng máy tồn" value={n} sub={`${ip} iPhone · ${n - ip} iPad/khác · ${G.length} mã`} />
+        <Kpi label="Vốn tồn kho (giá nhập)" value={tr(cost)} sub={vnd(cost)} />
+        <Kpi label="Giá trị bán dự kiến" value={tr(pp)} sub={priced.length < n ? `${n - priced.length} máy chưa có giá bán` : "theo cột Giá Bán"} />
+        <Kpi label="Lãi dự kiến" value={tr(pp - pc)} sub={pp ? `biên ${((100 * (pp - pc)) / pp).toFixed(1).replace(".", ",")}% trên giá bán` : "—"} />
+        <Kpi label="Tuổi kho trung bình" value={`${avg} ngày`} sub={n ? `máy lâu nhất ${Math.max(...I.map((i) => i.age))} ngày` : "—"} />
+        <Kpi label="Tồn trên 30 ngày" value={`${old.length} máy`} tone={old.length ? "warn" : undefined} sub={`đọng ${tr(old.reduce((a, i) => a + i.cost, 0))} vốn`} />
       </div>
 
-      {pages > 1 && (
-        <div className="flex items-center justify-end gap-2 text-sm">
-          <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((p) => p - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-          <span>Trang {page + 1}/{pages}</span>
-          <Button size="sm" variant="outline" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)}><ChevronRight className="h-4 w-4" /></Button>
+      <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
+        <Card>
+          <h3 className="text-sm font-semibold">Vốn tồn theo mã</h3>
+          <div className="text-xs text-muted-foreground">Tổng giá nhập của máy còn trong kho · số máy và số tiền ở cột phải</div>
+          <div className="mt-3 space-y-0.5">
+            {bars.map((g) => (
+              <div key={g.key} className="grid grid-cols-[minmax(0,190px)_1fr_auto] items-center gap-2 rounded px-1 py-0.5 hover:bg-muted" title={`${g.key}\n${g.n} máy · vốn ${vnd(g.cost)}\nGiá bán DK ${vnd(g.price)} · lãi ${tr(g.profit)}\nTuổi TB ${g.avgAge} ngày · lâu nhất ${g.maxAge} ngày\nBán 30 ngày qua: ${g.sold30} máy`}>
+                <div className="truncate text-[12.5px]">{g.key}</div>
+                <div className="h-3.5"><div className="h-3.5 rounded-r bg-blue-600" style={{ width: `${Math.max(0.6, (100 * g.cost) / mx)}%` }} /></div>
+                <div className="whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">{g.n} máy · {tr(g.cost)}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <h3 className="text-sm font-semibold">Tuổi tồn kho</h3>
+          <div className="text-xs text-muted-foreground">Số máy theo số ngày nằm kho (tính từ Ngày Nhập)</div>
+          <div className="mt-4 flex h-[200px] items-end gap-3 border-b px-1">
+            {buckets.map((b) => (
+              <div key={b.l} className="flex h-full flex-1 flex-col items-center justify-end" title={`${b.l} · ${b.n} máy · vốn ${tr(b.cost)}\n${b.top.map(([k, v]) => `${k}: ${v}`).join("\n")}`}>
+                <div className="mb-1 text-sm font-semibold">{b.n}</div>
+                <div className={cn("w-full max-w-16 rounded-t", b.c)} style={{ height: Math.max(2, (150 * b.n) / am) }} />
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3 px-1 pt-1.5">
+            {buckets.map((b) => <div key={b.l} className="flex-1 text-center text-xs text-muted-foreground">{b.l}</div>)}
+          </div>
+          <div className="mt-3 text-xs text-muted-foreground">
+            {buckets.map((b, i) => <span key={b.l}>{i ? " · " : ""}{b.l}: <b className="text-foreground">{tr(b.cost)}</b></span>)}
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <h3 className="text-sm font-semibold">Cần kiểm tra lại</h3>
+        {alerts.length ? (
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed">
+            {alerts.map(([k, v]) => <li key={k}><b>{k}</b>: {v.length} máy: {v.join(", ")}</li>)}
+          </ul>
+        ) : <div className="mt-2 text-sm text-muted-foreground">Không có gì cần kiểm tra.</div>}
+        <div className="mt-2 text-xs text-muted-foreground">Sửa các dòng này ở tab “Sửa dữ liệu” (tìm theo ID máy).</div>
+      </Card>
+
+      <Card>
+        <h3 className="text-sm font-semibold">Tồn kho theo mã</h3>
+        <div className="text-xs text-muted-foreground">Bấm tiêu đề cột để sắp xếp · “Đủ bán” = số máy tồn ÷ tốc độ bán 30 ngày qua</div>
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead><tr>
+              <Th k="key" sort={gs} setSort={setGs}>Mã (dòng · dung lượng · loại)</Th>
+              <Th k="n" sort={gs} setSort={setGs} right>SL</Th>
+              <Th k="lvl" sort={gs} setSort={setGs}>Mức tồn</Th>
+              <Th k="cost" sort={gs} setSort={setGs} right>Vốn tồn</Th>
+              <Th k="price" sort={gs} setSort={setGs} right>Giá bán DK</Th>
+              <Th k="profit" sort={gs} setSort={setGs} right>Lãi DK</Th>
+              <Th k="avgAge" sort={gs} setSort={setGs} right>Tuổi TB</Th>
+              <Th k="maxAge" sort={gs} setSort={setGs} right>Lâu nhất</Th>
+              <Th k="sold30" sort={gs} setSort={setGs} right>Bán 30N</Th>
+              <Th k="cover" sort={gs} setSort={setGs} right>Đủ bán</Th>
+              <th className="border-b px-2 py-2 text-left text-xs font-semibold text-muted-foreground">Nhận xét</th>
+            </tr></thead>
+            <tbody>
+              {GG.map((g) => {
+                const [tone, txt] = speed(g)
+                const l = lvl(g)
+                return (
+                  <tr key={g.key} className="hover:bg-muted/60">
+                    <td className={td}>{g.key}</td>
+                    <td className={cn(td, "text-right font-semibold")}>{g.n}</td>
+                    <td className={td}><Tag tone={l === "Nhiều" ? "ser" : l === "Vừa" ? "neu" : "good"}>{l}</Tag></td>
+                    <td className={cn(td, "text-right whitespace-nowrap")}>{fmt(g.cost)}</td>
+                    <td className={cn(td, "text-right whitespace-nowrap")}>{fmt(g.price)}</td>
+                    <td className={cn(td, "text-right whitespace-nowrap")}>{fmt(g.profit)}</td>
+                    <td className={cn(td, "text-right whitespace-nowrap")}>{g.avgAge} ng</td>
+                    <td className={cn(td, "text-right whitespace-nowrap")}><AgeTag a={g.maxAge} /></td>
+                    <td className={cn(td, "text-right whitespace-nowrap")}>{g.sold30}</td>
+                    <td className={cn(td, "text-right whitespace-nowrap")}>{g.cover == null ? "—" : `~${g.cover} ng`}</td>
+                    <td className={td}><Tag tone={tone}>{txt}</Tag></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
-      )}
+      </Card>
 
-      {/* Sửa hàng loạt */}
-      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sửa hàng loạt {selected.size} dòng</DialogTitle>
-            <DialogDescription>Điền cùng một giá trị vào một cột cho các dòng đã chọn. Bấm Lưu sau đó để ghi.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Select value={bulkCol} onValueChange={setBulkCol}>
-              <SelectTrigger><SelectValue placeholder="Chọn cột" /></SelectTrigger>
-              <SelectContent>
-                {visibleCols.map((c) => <SelectItem key={c} value={String(c)}>{header[c] || `(cột ${c + 1})`}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Input placeholder="Giá trị mới (để trống = xoá nội dung ô)" value={bulkVal} onChange={(e) => setBulkVal(e.target.value)} />
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold">Chi tiết từng máy</h3>
+            <div className="text-xs text-muted-foreground">{II.length} máy · bấm tiêu đề cột để sắp xếp</div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkOpen(false)}>Đóng</Button>
-            <Button onClick={applyBulk} disabled={bulkCol === ""}>Điền vào bảng</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Xoá */}
-      <Dialog open={delOpen} onOpenChange={setDelOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Xoá {selected.size} dòng?</DialogTitle>
-            <DialogDescription>Không hoàn tác được trên web (bản sao lưu hằng đêm vẫn còn). Nên Xuất CSV trước khi xoá nhiều.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDelOpen(false)}>Huỷ</Button>
-            <Button variant="destructive" onClick={doDelete} disabled={saving}>
-              {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Xoá
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Thêm dòng */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
-          <DialogHeader className="space-y-1">
-            <DialogTitle>Thêm dòng vào {data?.label}</DialogTitle>
-            <DialogDescription>Nhập máy mới số lượng lớn thì dùng màn hình Nhập hàng hoặc Nhập file.</DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2 md:grid-cols-4">
-            {visibleCols.map((c) => {
-              const h = String(header[c] || "")
-              // bỏ các cột hệ thống tự điền (Telegram, đang xử lý)
-              if (!h.trim() || INTERNAL_COLUMNS.includes(fold(h.trim()))) return null
-              return (
-                <label key={c} className="text-[11px] font-medium text-muted-foreground">
-                  {h.trim()}
-                  <Input className="mt-0.5 h-8 text-sm" value={addVals[h] || ""} onChange={(e) => setAddVals((p) => ({ ...p, [h]: e.target.value }))} />
-                </label>
-              )
-            })}
+          <div className="relative w-full max-w-xs">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input className="pl-8" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm ID, tên máy, màu, IMEI…" />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Huỷ</Button>
-            <Button onClick={doAdd} disabled={saving}>{saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Thêm</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Xác nhận nhập file */}
-      <Dialog open={!!importPlan} onOpenChange={(o) => !o && setImportPlan(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nhập file vào {data?.label}</DialogTitle>
-            <DialogDescription>Đối chiếu theo cột “{importPlan?.summary?.key}”. Dòng trùng khoá sẽ được cập nhật, dòng chưa có sẽ được thêm mới.</DialogDescription>
-          </DialogHeader>
-          {importPlan && (
-            <ul className="list-disc space-y-1 pl-5 text-sm">
-              <li>Cập nhật <b>{importPlan.summary.updatedRows}</b> dòng ({importPlan.summary.updatedCells} ô thay đổi)</li>
-              <li>Thêm mới <b>{importPlan.summary.added}</b> dòng</li>
-              {importPlan.summary.ignored?.length > 0 && (
-                <li className="text-muted-foreground">Bỏ qua cột không có trên bảng: {importPlan.summary.ignored.join(", ")}</li>
-              )}
-            </ul>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setImportPlan(null)}>Huỷ</Button>
-            <Button onClick={doImport} disabled={saving || (!importPlan?.summary?.updatedCells && !importPlan?.summary?.added)}>
-              {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Nhập
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+        <div className="mt-2 max-h-[640px] overflow-auto">
+          <table className="w-full text-[13px]">
+            <thead className="sticky top-0 bg-card"><tr>
+              <Th k="id" sort={is} setSort={setIs}>ID</Th>
+              <Th k="date" sort={is} setSort={setIs}>Ngày nhập</Th>
+              <Th k="age" sort={is} setSort={setIs} right>Ngày tồn</Th>
+              <Th k="name" sort={is} setSort={setIs}>Sản phẩm</Th>
+              <Th k="cap" sort={is} setSort={setIs}>DL</Th>
+              <Th k="type" sort={is} setSort={setIs}>Loại</Th>
+              <Th k="color" sort={is} setSort={setIs}>Màu</Th>
+              <Th k="pin" sort={is} setSort={setIs}>Pin</Th>
+              <Th k="cond" sort={is} setSort={setIs}>Tình trạng</Th>
+              <Th k="cost" sort={is} setSort={setIs} right>Giá nhập</Th>
+              <Th k="price" sort={is} setSort={setIs} right>Giá bán</Th>
+              <Th k="m" sort={is} setSort={setIs} right>Lãi</Th>
+            </tr></thead>
+            <tbody>
+              {II.map((i, ix) => (
+                <tr key={`${i.id}-${ix}`} className="hover:bg-muted/60">
+                  <td className={cn(td, "font-semibold")}>{i.id || "—"}</td>
+                  <td className={cn(td, "whitespace-nowrap")}>{dmy(i.date)}</td>
+                  <td className={cn(td, "text-right whitespace-nowrap")}><AgeTag a={i.age} /></td>
+                  <td className={td}>{i.name}{i.flags.length ? <div className="text-xs text-red-600 dark:text-red-400">⚠ {i.flags.join("; ")}</div> : null}</td>
+                  <td className={td}>{i.cap}</td>
+                  <td className={td}>{i.type}</td>
+                  <td className={td}>{i.color}</td>
+                  <td className={td}>{i.pin}</td>
+                  <td className={cn(td, "max-w-[220px]")}>{i.cond}</td>
+                  <td className={cn(td, "text-right whitespace-nowrap")}>{fmt(i.cost)}</td>
+                  <td className={cn(td, "text-right whitespace-nowrap")}>{fmt(i.price)}</td>
+                  <td className={cn(td, "text-right", i.m != null && i.m < 0 && "font-semibold text-red-600")}>{fmt(i.m)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <div className="text-xs text-muted-foreground">Giá bán DK = cột Giá Bán, chưa trừ giảm giá/phụ kiện. Tổng hợp tính cả các dòng ở mục “Cần kiểm tra”.</div>
     </div>
   )
 }

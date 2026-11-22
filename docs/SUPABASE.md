@@ -74,7 +74,17 @@ select "Tên Sản Phẩm", count(*) from "Kho_Hang" where "Trạng Thái" ilike
 
 ## 4b. Trang "Quản trị dữ liệu" trong web (khuyên dùng thay Table Editor)
 
-Menu **Quản lý > Quản trị dữ liệu** (chỉ tài khoản quản lý). Chọn bảng: Kho hàng, Phụ kiện, Khách hàng,
+Menu **Quản lý > Quản trị dữ liệu** (chỉ tài khoản quản lý) có 2 tab.
+
+**Tab Tổng quan** (xem mỗi ngày, số liệu tính trực tiếp từ dữ liệu, không cần nhập):
+- Bán hàng hôm nay / 7 ngày / 30 ngày: số đơn, doanh thu, lãi.
+- Dòng tiền và công nợ: tổng còn phải trả, quá hạn, phải trả trong 7 ngày, khách còn nợ, tiền trong các nguồn;
+  nợ theo chủ nợ; danh sách khoản nợ (hạn trả, đã trả/gốc, còn lại). Nút **Thêm khoản nợ**, **Trả** (ghi một lần trả,
+  trừ tiền ở nguồn đã chọn) và **Sửa** (đổi hạn trả, số tiền). Dữ liệu nằm ở bảng `DongTien_PhaiTra`, dùng chung với module Dòng tiền.
+- Kho hàng: tổng máy tồn, vốn tồn, lãi dự kiến, tuổi kho, vốn tồn theo mã, tồn kho theo mã với tốc độ bán 30 ngày,
+  danh sách "Cần kiểm tra lại" (trống trạng thái, trùng ID/IMEI, đã bán mà vẫn trong kho, giá bán thấp hơn giá nhập), chi tiết từng máy.
+
+**Tab Sửa dữ liệu**: chọn bảng: Kho hàng, Phụ kiện, Khách hàng,
 Đơn bán, Đặt cọc, Gói/Hợp đồng bảo hành, Máy gửi bảo hành, CNC, Hoàn trả, Hàng đối tác.
 
 - **Sửa ô**: bấm vào ô, gõ, Enter (xuống dòng dưới) hoặc Tab (sang phải). Ô đã sửa tô vàng.
