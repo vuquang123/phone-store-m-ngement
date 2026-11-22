@@ -1,3 +1,4 @@
+import { normalizeBranch } from "@/lib/branches"
 import { type NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
 
@@ -51,6 +52,7 @@ function getCols(header: string[]) {
     password: header.indexOf("Mật Khẩu"),
     createdAt: colIndex(header, "Ngày tạo", "Ngày Tạo", "Ngay Tao", "Created At", "Created_At"),
     phone: colIndex(header, "Số Điện Thoại", "So Dien Thoai", "Phone"),
+    branch: colIndex(header, "Chi nhánh", "Chi Nhanh", "Branch"),
   }
 }
 
@@ -97,6 +99,7 @@ export async function GET(request: NextRequest) {
         trang_thai: r[C.status],
         ngay_tao: C.createdAt !== -1 ? r[C.createdAt] : null,
         lan_dang_nhap_cuoi: C.lastLogin !== -1 ? r[C.lastLogin] : null,
+        chi_nhanh: normalizeBranch(C.branch !== -1 ? r[C.branch] : "") || "1",
       }))
       .sort((a, b) => parseToEpoch(b.ngay_tao) - parseToEpoch(a.ngay_tao))
       .slice(0, limit)

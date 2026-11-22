@@ -4,6 +4,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { sendTelegramMessage, formatOrderMessage, deleteTelegramMessage } from "@/lib/telegram"
 import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheets, updateRangeValues, batchUpdateRangeValues, readRangeValuesFresh, syncToGoogleSheets, colIndex, norm, ensureColumn } from "@/lib/google-sheets"
 import { GIO_BAN_COL } from "@/lib/shift"
+import { branchContextFromHeaders, branchColumnIndex, rowVisible } from "@/lib/branch-context"
+import { branchName, rowBranchId } from "@/lib/branches"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
@@ -341,11 +343,15 @@ export async function GET(request: NextRequest) {
     const idxLoaiDon = header.indexOf("Loại Đơn")
     const idxTrangThai = colIndex(header, "Trạng Thái", "trang_thai")
     const idxHinhThuc = colIndex(header, "Hình Thức Vận Chuyển", "Hình thức vận chuyển", "Hinh Thuc Van Chuyen", "hinh_thuc_van_chuyen")
+    const branchCtx = branchContextFromHeaders(request.headers)
+    const idxBranch = branchColumnIndex(header)
     
     // Group rows by order ID
     const groupedOrdersMap = new Map<string, any[]>()
     
     rows.forEach((row, rowIndex) => {
+      // Chỉ đơn của chi nhánh đang xem (giữ rowIndex gốc để row_number đúng dòng trên bảng)
+      if (!rowVisible(header, row, branchCtx)) return
       const orderId = String((idx.idDon !== -1 ? row[idx.idDon] : "") || "").trim() || `row-${rowIndex}`
       if (!groupedOrdersMap.has(orderId)) {
         groupedOrdersMap.set(orderId, [])
@@ -380,6 +386,7 @@ export async function GET(request: NextRequest) {
         loai_don: idxLoaiDon !== -1 ? row[idxLoaiDon] : "",
         trang_thai: idxTrangThai !== -1 ? row[idxTrangThai] : "hoan_thanh",
         hinh_thuc_van_chuyen: idxHinhThuc !== -1 ? String(row[idxHinhThuc] || "") : "",
+        chi_nhanh: branchName(rowBranchId(idxBranch !== -1 ? row[idxBranch] : "")),
       })
     })
 

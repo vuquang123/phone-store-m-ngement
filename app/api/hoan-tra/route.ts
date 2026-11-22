@@ -1,3 +1,4 @@
+import { branchContextFromHeaders, filterRowsByBranch } from "@/lib/branch-context"
 import { isManagerRole } from "@/lib/roles"
 import { NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex } from "@/lib/google-sheets"
@@ -91,7 +92,8 @@ export async function GET(req: NextRequest) {
 
     // NGUỒN CHÍNH: Ban_Hang lọc Trạng Thái = "Hoàn trả" (mỗi máy đã hoàn = 1 dòng).
     // Mã đơn là DUY NHẤT; IMEI có thể trùng giữa nhiều đơn nên không dùng đứng một mình.
-    const { header: BH, rows: BR } = await readFromGoogleSheets("Ban_Hang", undefined, { force })
+    const { header: BH, rows: BRall } = await readFromGoogleSheets("Ban_Hang", undefined, { force })
+    const BR = filterRowsByBranch(BH, BRall, branchContextFromHeaders(req.headers))
     const b = {
       idDon: colIndex(BH, "ID Đơn Hàng"),
       tenSP: colIndex(BH, "Tên Sản Phẩm"),

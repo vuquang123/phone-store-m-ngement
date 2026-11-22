@@ -19,6 +19,7 @@ import {
   HDR_EMPLOYEE,
   verifySession,
 } from "@/lib/auth"
+import { BRANCH_COOKIE, HDR_ACTIVE_BRANCH, HDR_BRANCH, normalizeBranch, resolveActiveBranch } from "@/lib/branches"
 
 // API công khai (không cần đăng nhập):
 const PUBLIC_API_EXACT = ["/api/login", "/api/logout", "/api/health"]
@@ -69,6 +70,10 @@ export async function middleware(req: NextRequest) {
   headers.set(HDR_ROLE, headerSafe(user.role || ""))
   headers.set(HDR_NAME, headerSafe(user.name || ""))
   headers.set(HDR_EMPLOYEE, headerSafe(user.employeeId || ""))
+  // Chi nhánh: nhân viên bị khoá vào chi nhánh gốc; chủ shop/quản lý chọn qua cookie.
+  const home = normalizeBranch(user.branch) || "1"
+  headers.set(HDR_BRANCH, home)
+  headers.set(HDR_ACTIVE_BRANCH, resolveActiveBranch(user.role, home, req.cookies.get(BRANCH_COOKIE)?.value))
 
   return NextResponse.next({ request: { headers } })
 }

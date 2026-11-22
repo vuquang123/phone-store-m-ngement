@@ -17,6 +17,7 @@ import {
 import { Settings, User, LogOut, ClipboardCheck, ClipboardX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthMe } from "@/hooks/use-auth-me"
+import { BranchSwitcher } from "@/components/layout/branch-switcher"
 import { useToast } from "@/hooks/use-toast"
 import { ModeToggle } from "./mode-toggle"
 import { NotificationsBell } from "./notifications-bell"
@@ -134,6 +135,7 @@ export function Header({ title, onMenuClick }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <BranchSwitcher />
           <ModeToggle />
 
           <NotificationsBell disabled={isLoading} />

@@ -3,6 +3,7 @@
 // Số dư "thật" luôn được TÍNH LẠI từ toàn bộ sổ (tổng thu - tổng chi),
 // cột "Số Dư Sau" chỉ là ảnh chụp tại thời điểm ghi.
 
+import { currentBranchContext, filterRowsByBranch } from "./branch-context"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
 import { addNotification } from "@/lib/notifications"
 import { parseVietnameseNumber } from "@/lib/number"
@@ -86,9 +87,16 @@ async function ensureHeader() {
 }
 
 /** Đọc toàn bộ sổ, map theo tên cột (so khớp lowercase), sort created_at giảm dần. */
-export async function getCashEntries(): Promise<CashEntry[]> {
+export async function getCashEntries(scope: "view" | "write" = "view"): Promise<CashEntry[]> {
   await ensureHeader()
-  const { header, rows } = await readFromGoogleSheets(SHEET_NAME)
+  const { header, rows: allRows } = await readFromGoogleSheets(SHEET_NAME)
+  // Mỗi chi nhánh một quỹ tiền mặt riêng. "write" = quỹ của chi nhánh đang ghi
+  // (dùng tính "Số Dư Sau"), "view" = chi nhánh đang xem (có thể là tất cả).
+  const ctx = await currentBranchContext()
+  const rows =
+    scope === "write" && ctx
+      ? filterRowsByBranch(header, allRows, { ...ctx, active: ctx.writeBranch })
+      : filterRowsByBranch(header, allRows, ctx)
   const lower = header.map((h) => (h || "").trim().toLowerCase())
   const idx = (name: string) => lower.indexOf(name.trim().toLowerCase())
 
@@ -128,7 +136,7 @@ export async function getCashEntries(): Promise<CashEntry[]> {
 
 /** Số dư "thật" = tổng(thu) - tổng(chi) trên toàn bộ sổ. */
 export async function getCashBalance(): Promise<number> {
-  const entries = await getCashEntries()
+  const entries = await getCashEntries("write")
   return entries.reduce((sum, e) => sum + (e.loai === "thu" ? e.so_tien : -e.so_tien), 0)
 }
 

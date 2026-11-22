@@ -12,6 +12,13 @@ export type AuthMe = {
   role?: Role
   status?: string
   employeeId?: string
+  /** Chi nhánh gốc ('1' DEV PỒ, '2' T1s) */
+  branch?: "1" | "2"
+  branchName?: string
+  /** Chi nhánh đang xem: '1' | '2' | 'all' */
+  activeBranch?: "1" | "2" | "all"
+  canSwitchBranch?: boolean
+  branches?: { id: "1" | "2"; name: string }[]
   /** Lúc phiên đăng nhập hết hạn (ms) */
   sessionExpiresAt?: number | null
 }

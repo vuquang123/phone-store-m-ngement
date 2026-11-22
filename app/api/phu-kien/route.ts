@@ -1,3 +1,4 @@
+import { branchContextFromHeaders, filterRowsByBranch } from "@/lib/branch-context"
 
 import { NextResponse, type NextRequest } from "next/server"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
@@ -8,7 +9,8 @@ const SHEET = "Phu_Kien"
 // ================== GET: list/search/pagination ==================
 export async function GET(request: NextRequest) {
   try {
-    const { header, rows } = await readFromGoogleSheets(SHEET)
+    const { header, rows: allRows } = await readFromGoogleSheets(SHEET)
+    const rows = filterRowsByBranch(header, allRows, branchContextFromHeaders(request.headers))
     const keyMap: { [key: string]: string } = {
       "ID": "id",
       "Tên Sản Phẩm": "ten_phu_kien",
@@ -17,7 +19,8 @@ export async function GET(request: NextRequest) {
       "Giá Nhập": "gia_nhap",
       "Giá Bán": "gia_ban",
       "Ghi Chú": "ghi_chu",
-      "Cập nhật lần cuối": "updated_at"
+      "Cập nhật lần cuối": "updated_at",
+      "Chi Nhánh": "chi_nhanh",
     }
     const mapped = rows.map((row) => {
       const obj: Record<string, any> = {}

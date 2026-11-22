@@ -33,8 +33,13 @@ type Payable = {
 type Receivable = { id: string; who: string; phone: string; content: string; remaining: number; dueDate: string; daysLeft: number | null }
 type Account = { id: string; name: string; balance: number }
 type SalesSum = { orders: number; revenue: number; profit: number }
+type BranchSum = {
+  id: string; name: string; today: SalesSum; d7: SalesSum; d30: SalesSum
+  stock: number; stockCost: number; payableRemaining: number
+}
 type Overview = {
   asOf: string; generatedAt: string
+  activeBranch?: string; byBranch?: BranchSum[]
   sales: { today: SalesSum; d7: SalesSum; d30: SalesSum }
   items: Item[]; groups: Group[]; payables: Payable[]; receivables: Receivable[]; accounts: Account[]
 }
@@ -197,6 +202,7 @@ function TongQuan() {
 
       {data ? (
         <>
+          {data.byBranch?.length ? <BranchCompare rows={data.byBranch} active={data.activeBranch || "all"} /> : null}
           <SalesStrip s={data.sales} />
           <CashSection data={data} reload={load} toast={toast} />
           <div className="flex flex-wrap items-end justify-between gap-2 pt-2">
@@ -216,6 +222,70 @@ function TongQuan() {
         </>
       ) : null}
     </div>
+  )
+}
+
+/* ============================== chi nhánh ============================== */
+function BranchCompare({ rows, active }: { rows: BranchSum[]; active: string }) {
+  const total = rows.reduce(
+    (a, r) => ({
+      today: a.today + r.today.revenue,
+      d30: a.d30 + r.d30.revenue,
+      p30: a.p30 + r.d30.profit,
+      o30: a.o30 + r.d30.orders,
+      stock: a.stock + r.stock,
+      cost: a.cost + r.stockCost,
+      debt: a.debt + r.payableRemaining,
+    }),
+    { today: 0, d30: 0, p30: 0, o30: 0, stock: 0, cost: 0, debt: 0 },
+  )
+  return (
+    <Card className="overflow-x-auto p-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-3">
+        <h2 className="text-sm font-semibold">So sánh chi nhánh</h2>
+        <span className="text-xs text-muted-foreground">
+          {active === "all" ? "Các số liệu bên dưới là tổng của cả 2 chi nhánh" : `Các số liệu bên dưới chỉ của ${rows.find((r) => r.id === active)?.name || "chi nhánh đang chọn"}`}
+        </span>
+      </div>
+      <table className="mt-2 w-full min-w-[640px] text-sm">
+        <thead className="text-xs text-muted-foreground">
+          <tr className="border-b">
+            <th className="px-4 py-2 text-left font-medium">Chi nhánh</th>
+            <th className="px-3 py-2 text-right font-medium">Doanh thu hôm nay</th>
+            <th className="px-3 py-2 text-right font-medium">Đơn 30 ngày</th>
+            <th className="px-3 py-2 text-right font-medium">Doanh thu 30 ngày</th>
+            <th className="px-3 py-2 text-right font-medium">Lãi 30 ngày</th>
+            <th className="px-3 py-2 text-right font-medium">Máy tồn</th>
+            <th className="px-3 py-2 text-right font-medium">Vốn tồn kho</th>
+            <th className="px-4 py-2 text-right font-medium">Còn nợ đầu hàng</th>
+          </tr>
+        </thead>
+        <tbody className="tabular-nums">
+          {rows.map((r) => (
+            <tr key={r.id} className={cn("border-b", active === r.id && "bg-muted/50 font-medium")}>
+              <td className="px-4 py-2">{r.name}</td>
+              <td className="px-3 py-2 text-right">{tr(r.today.revenue)}</td>
+              <td className="px-3 py-2 text-right">{r.d30.orders}</td>
+              <td className="px-3 py-2 text-right">{tr(r.d30.revenue)}</td>
+              <td className="px-3 py-2 text-right">{tr(r.d30.profit)}</td>
+              <td className="px-3 py-2 text-right">{r.stock}</td>
+              <td className="px-3 py-2 text-right">{tr(r.stockCost)}</td>
+              <td className="px-4 py-2 text-right">{tr(r.payableRemaining)}</td>
+            </tr>
+          ))}
+          <tr className={cn("font-semibold", active === "all" && "bg-muted/50")}>
+            <td className="px-4 py-2">Tổng</td>
+            <td className="px-3 py-2 text-right">{tr(total.today)}</td>
+            <td className="px-3 py-2 text-right">{total.o30}</td>
+            <td className="px-3 py-2 text-right">{tr(total.d30)}</td>
+            <td className="px-3 py-2 text-right">{tr(total.p30)}</td>
+            <td className="px-3 py-2 text-right">{total.stock}</td>
+            <td className="px-3 py-2 text-right">{tr(total.cost)}</td>
+            <td className="px-4 py-2 text-right">{tr(total.debt)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </Card>
   )
 }
 

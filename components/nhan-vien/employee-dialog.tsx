@@ -1,4 +1,5 @@
 "use client"
+import { BRANCHES } from "@/lib/branches"
 
 import type React from "react"
 import { useState, useEffect } from "react"
@@ -25,6 +26,7 @@ export interface Employee {
   so_dien_thoai: string
   vai_tro: Role
   trang_thai: Status
+  chi_nhanh?: "1" | "2"
 }
 
 type FormState = {
@@ -34,6 +36,7 @@ type FormState = {
   so_dien_thoai: string
   vai_tro: Role
   trang_thai: Status
+  chi_nhanh: "1" | "2"
 }
 
 interface EmployeeDialogProps {
@@ -51,6 +54,7 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
     so_dien_thoai: "",
     vai_tro: "nhan_vien",
     trang_thai: "hoat_dong",
+    chi_nhanh: "1",
   })
   const [loading, setLoading] = useState(false)
 
@@ -63,6 +67,7 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
         so_dien_thoai: employee.so_dien_thoai,
         vai_tro: employee.vai_tro,
         trang_thai: employee.trang_thai,
+        chi_nhanh: employee.chi_nhanh || "1",
       })
     } else {
       setFormData({
@@ -72,6 +77,7 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
         so_dien_thoai: "",
         vai_tro: "nhan_vien",
         trang_thai: "hoat_dong",
+        chi_nhanh: "1",
       })
     }
   }, [employee, open])
@@ -181,6 +187,26 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
                   <SelectItem value="nhan_vien">Nhân viên</SelectItem>
                   <SelectItem value="quan_ly">Quản lý</SelectItem>
                   <SelectItem value="chu_shop">Chủ shop</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Chi nhánh</Label>
+              <Select
+                value={formData.chi_nhanh}
+                onValueChange={(value) => handleChange("chi_nhanh", value as "1" | "2")}
+                disabled={loading}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Chọn chi nhánh" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BRANCHES.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

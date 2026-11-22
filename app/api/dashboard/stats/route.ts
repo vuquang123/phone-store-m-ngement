@@ -1,3 +1,4 @@
+import { branchContextFromHeaders, filterRowsByBranch } from "@/lib/branch-context"
 import { NextResponse, type NextRequest } from "next/server"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
 import { parseVietnameseNumber } from "@/lib/number"
@@ -104,10 +105,12 @@ export async function GET(req: NextRequest) {
     const monthForView = reqMonth > 0 ? reqMonth : nowVN.getMonth() + 1
     const todayKey = `${nowVN.getDate()}/${nowVN.getMonth() + 1}/${nowVN.getFullYear()}`
 
+    const branchCtx = branchContextFromHeaders(req.headers)
     let inventoryInStock = 0
     let inventoryCost = 0
     try {
-      const { header: khoHeader, rows: khoRows } = await readFromGoogleSheets(SHEETS.KHO_HANG)
+      const { header: khoHeader, rows: khoAll } = await readFromGoogleSheets(SHEETS.KHO_HANG)
+      const khoRows = filterRowsByBranch(khoHeader, khoAll, branchCtx)
       const idxGiaNhap = colIndex(khoHeader, "Giá Nhập", "Gia Nhap", "GiaNhap")
       const idxTrangThai = colIndex(khoHeader, "Trạng Thái", "Trang Thai")
       for (const row of khoRows) {
@@ -124,7 +127,8 @@ export async function GET(req: NextRequest) {
     const monthAgg = new Map<string, MonthAgg>()
 
     try {
-      const { header: bhHeader, rows: bhRows } = await readFromGoogleSheets(SHEETS.BAN_HANG)
+      const { header: bhHeader, rows: bhAll } = await readFromGoogleSheets(SHEETS.BAN_HANG)
+      const bhRows = filterRowsByBranch(bhHeader, bhAll, branchCtx)
       const idxIdDon = colIndex(bhHeader, "ID Đơn Hàng", "Mã Đơn Hàng", "ID", "Id", "id")
       const idxNgay = colIndex(bhHeader, "Ngày Bán", "Ngày bán", "Ngày Xuất", "ngay_ban")
       const idxTongThu = colIndex(bhHeader, "Tổng Thu", "Tong Thu")
@@ -183,7 +187,8 @@ export async function GET(req: NextRequest) {
     let totalCustomersAllTime = 0
 
     try {
-      const { header: khHeader, rows: khRows } = await readFromGoogleSheets(SHEETS.KHACH_HANG)
+      const { header: khHeader, rows: khAll } = await readFromGoogleSheets(SHEETS.KHACH_HANG)
+      const khRows = filterRowsByBranch(khHeader, khAll, branchCtx)
       const idxNgayTao = colIndex(
         khHeader,
         "Ngày tạo",

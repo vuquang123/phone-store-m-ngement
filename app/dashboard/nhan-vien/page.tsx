@@ -1,4 +1,5 @@
 "use client"
+import { branchName } from "@/lib/branches"
 import { isManagerRole, roleLabel } from "@/lib/roles"
 
 import { useState, useEffect } from "react"
@@ -21,6 +22,7 @@ interface Employee {
   so_dien_thoai: string
   vai_tro: "chu_shop" | "quan_ly" | "nhan_vien"
   trang_thai: "hoat_dong" | "ngung_hoat_dong"
+  chi_nhanh?: "1" | "2"
   created_at?: string
   updated_at?: string
 }
@@ -262,6 +264,9 @@ export default function NhanVienPage() {
                       <h3 className="font-medium truncate max-w-[200px] sm:max-w-none">{employee.ho_ten}</h3>
                       {getRoleBadge(employee.vai_tro)}
                       {getStatusBadge(employee.trang_thai)}
+                      <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                        {branchName(employee.chi_nhanh || "1")}
+                      </span>
                     </div>
                     <p className="text-sm text-muted-foreground break-words">{employee.email}</p>
                     <p className="text-sm text-muted-foreground">{employee.so_dien_thoai}</p>

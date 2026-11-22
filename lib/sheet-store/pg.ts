@@ -12,6 +12,7 @@
 // Chỉ import file này ở server.
 import { Pool, type PoolClient } from "pg"
 import { indexToCol, parseA1, parseRef, type A1Range } from "./a1"
+import { isBranchColumn, isBranchTab } from "../branches"
 
 const META = "_sheet_meta"
 const MAX_IDENT_BYTES = 63
@@ -318,22 +319,70 @@ export async function readValuesUnformatted(range: string): Promise<any[][]> {
 }
 
 /* ------------------------------------------------------------------ write */
-async function writeRowCells(c: PoolClient, meta: Meta, rowNo: number, c1: number, cells: (string | null | undefined)[]) {
+/**
+ * Cột "Chi Nhánh" của các bảng chia theo chi nhánh:
+ *  - dòng MỚI chưa ghi chi nhánh -> tự điền chi nhánh của người đang thao tác;
+ *  - dòng CŨ: chỉ đổi khi code ghi một giá trị cụ thể. Code cũ hay ghi lại cả dòng
+ *    theo tiêu đề (ô chi nhánh để trống), nên ô trống KHÔNG được xoá chi nhánh.
+ */
+type BranchFill = { col: string; pos: number; value: string | null }
+
+async function branchFillFor(meta: Meta): Promise<BranchFill | null> {
+  if (!isBranchTab(meta.sheet)) return null
+  const pos = meta.headers.findIndex((h) => isBranchColumn(h))
+  if (pos === -1) return null
+  let value: string | null = null
+  try {
+    const mod = await import("../branch-context")
+    value = await mod.currentWriteBranchName()
+  } catch {
+    value = null
+  }
+  return { col: meta.columns[pos], pos, value }
+}
+
+async function writeRowCells(
+  c: PoolClient,
+  meta: Meta,
+  rowNo: number,
+  c1: number,
+  cells: (string | null | undefined)[],
+  fill: BranchFill | null = null,
+) {
   const sets: string[] = []
   const vals: any[] = [rowNo]
   const insCols: string[] = ["_row"]
+  const insVals: string[] = ["$1"]
+  let wrote = false
   for (let j = 0; j < cells.length; j++) {
     const v = cells[j]
     if (v === undefined) continue
+    if (fill && c1 + j === fill.pos) continue
     const cn = meta.columns[c1 + j]
     vals.push(v)
     insCols.push(qi(cn))
+    insVals.push(`$${vals.length}`)
     sets.push(`${qi(cn)} = excluded.${qi(cn)}`)
+    wrote = true
   }
-  if (!sets.length) return
-  const ph = vals.map((_, i) => `$${i + 1}`).join(", ")
+  if (fill) {
+    const j = fill.pos - c1
+    const given = j >= 0 && j < cells.length ? cells[j] : undefined
+    const explicit = given === undefined || given === null || given === "" ? null : given
+    if (wrote || explicit !== null) {
+      vals.push(explicit)
+      const pGiven = `$${vals.length}::text`
+      vals.push(fill.value)
+      const pFill = `$${vals.length}::text`
+      insCols.push(qi(fill.col))
+      insVals.push(`coalesce(${pGiven}, ${pFill})`)
+      sets.push(`${qi(fill.col)} = coalesce(${pGiven}, ${qi(meta.tbl)}.${qi(fill.col)}, ${pFill})`)
+      wrote = true
+    }
+  }
+  if (!wrote || !sets.length) return
   await c.query(
-    `insert into ${qi(meta.tbl)} (${insCols.join(", ")}) values (${ph})
+    `insert into ${qi(meta.tbl)} (${insCols.join(", ")}) values (${insVals.join(", ")})
      on conflict (_row) do update set ${sets.join(", ")}`,
     vals,
   )
@@ -342,11 +391,17 @@ async function writeRowCells(c: PoolClient, meta: Meta, rowNo: number, c1: numbe
 async function writeGrid(c: PoolClient, meta: Meta, a: A1Range, values: any[][]): Promise<Meta> {
   const width = values.reduce((w, r) => Math.max(w, Array.isArray(r) ? r.length : 0), 0)
   meta = await ensureColumnCount(c, meta, a.c1 + width)
+  let fill: BranchFill | null | undefined
   for (let i = 0; i < values.length; i++) {
     const rowNo = a.r1 + i
     const cells = (Array.isArray(values[i]) ? values[i] : [values[i]]).map(toCell)
-    if (rowNo === 1) meta = await writeHeader(c, meta, a.c1, cells)
-    else await writeRowCells(c, meta, rowNo, a.c1, cells)
+    if (rowNo === 1) {
+      meta = await writeHeader(c, meta, a.c1, cells)
+      fill = undefined
+    } else {
+      if (fill === undefined) fill = await branchFillFor(meta)
+      await writeRowCells(c, meta, rowNo, a.c1, cells, fill)
+    }
   }
   return meta
 }
@@ -358,6 +413,7 @@ export async function updateValues(range: string, values: any[][]) {
     const meta = await metaForWrite(c, a.sheet, true)
     await writeGrid(c, meta, a, values)
   })
+  afterWrite([a.sheet])
 }
 
 export async function batchUpdateValues(items: Array<{ range: string; values: any[][] }>) {
@@ -376,6 +432,7 @@ export async function batchUpdateValues(items: Array<{ range: string; values: an
       metas.set(key(a.sheet), await writeGrid(c, metas.get(key(a.sheet))!, a, it.values))
     }
   })
+  afterWrite(items.map((it) => parseA1(it.range).sheet))
 }
 
 async function lastDataRow(c: PoolClient, meta: Meta): Promise<number> {
@@ -391,6 +448,7 @@ export async function appendValues(sheet: string, rows: any[][]) {
     const start = (await lastDataRow(c, meta)) + 1
     meta = await writeGrid(c, meta, { sheet, c1: 0, c2: Infinity, r1: start, r2: Infinity }, rows)
   })
+  afterWrite([sheet])
 }
 
 /** spreadsheets.values.clear */
@@ -421,6 +479,7 @@ export async function clearValues(range: string) {
     const meta = await metaForWrite(c, a.sheet, false)
     await clearIn(c, meta, a)
   })
+  afterWrite([a.sheet])
 }
 
 /** Xoá toàn bộ dữ liệu (giữ tiêu đề) rồi ghi lại — tất cả trong 1 transaction. */
@@ -432,6 +491,7 @@ export async function replaceValues(sheet: string, startRange: string, rows: any
       meta = await writeGrid(c, meta, parseRef(sheet, startRange || "A2"), rows)
     }
   })
+  afterWrite([sheet])
 }
 
 /** deleteDimension ROWS: xoá dòng và đẩy các dòng phía dưới lên (như Sheets). */
@@ -445,6 +505,7 @@ export async function deleteRows(sheet: string, startRow: number, count = 1) {
     await c.query(`update ${qi(meta.tbl)} set _row = -(_row - $2) where _row > $1`, [end, count])
     await c.query(`update ${qi(meta.tbl)} set _row = -_row where _row < 0`)
   })
+  afterWrite([sheet])
 }
 
 export async function sheetExists(sheet: string): Promise<boolean> {
@@ -455,6 +516,20 @@ export async function createSheet(sheet: string) {
   await withTx(async (c) => {
     await metaForWrite(c, sheet, true)
   })
+  afterWrite([sheet])
+}
+
+/**
+ * Sau mỗi lần ghi Supabase: chép lại tab đó sang Google Sheet (chạy nền, không làm
+ * chậm thao tác). Chỉ chạy trong server Next.js; script (db:import...) bỏ qua.
+ * Tắt bằng SHEET_MIRROR=off.
+ */
+function afterWrite(sheets: string[]) {
+  if (!process.env.NEXT_RUNTIME) return
+  if (String(process.env.SHEET_MIRROR || "").toLowerCase() === "off") return
+  import("./mirror")
+    .then((m) => m.scheduleMirror(sheets))
+    .catch((e) => console.error("[mirror] không lên lịch được:", e?.message || e))
 }
 
 export async function listSheets(): Promise<string[]> {
@@ -504,5 +579,20 @@ export async function closePool() {
   if (g.__sheetStorePool) {
     await (g.__sheetStorePool as Pool).end()
     g.__sheetStorePool = undefined
+  }
+}
+
+/** Chạy fn khi giữ khoá advisory (khoá phiên) trên một kết nối riêng: chống 2 instance làm cùng việc chồng nhau. */
+export async function withAdvisoryLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const c = await pool().connect()
+  try {
+    await c.query(`select pg_advisory_lock(hashtext($1))`, [key])
+    try {
+      return await fn()
+    } finally {
+      await c.query(`select pg_advisory_unlock(hashtext($1))`, [key]).catch(() => {})
+    }
+  } finally {
+    c.release()
   }
 }

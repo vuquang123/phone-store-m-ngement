@@ -15,6 +15,7 @@ export const runtime = "nodejs" // googleapis + bcrypt cần Node (OpenSSL đầ
 import { readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
 import { SESSION_COOKIE, TOKEN_TTL_SECONDS, signSession, type SessionUser } from "@/lib/auth"
 import { verifyPassword, hashPassword } from "@/lib/password"
+import { BRANCH_COOKIE, DEFAULT_BRANCH, normalizeBranch } from "@/lib/branches"
 
 function toColumnLetter(colNum: number) {
   let letter = ""
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
     const statusIdx = find(["Trạng Thái", "Trang Thai", "Status"])
     const lastLoginIdx = find(["Lần Đăng Nhập Cuối", "Lan Dang Nhap Cuoi", "Last Login"])
     const employeeIdx = find(["ID Nhân Viên", "ID Nhan Vien", "Employee Id"])
+    const branchIdx = find(["Chi nhánh", "Chi Nhanh", "Branch"])
 
     if ([emailIdx, passwordIdx].includes(-1)) {
       return NextResponse.json(
@@ -127,6 +129,7 @@ export async function POST(request: NextRequest) {
       name: nameIdx !== -1 ? String(userRow[nameIdx] ?? "") : "",
       role: roleIdx !== -1 ? String(userRow[roleIdx] ?? "").trim().toLowerCase() : "",
       employeeId: employeeIdx !== -1 ? String(userRow[employeeIdx] ?? "") : "",
+      branch: (branchIdx !== -1 ? normalizeBranch(userRow[branchIdx]) : "") || DEFAULT_BRANCH,
     }
 
     let token: string
@@ -149,6 +152,8 @@ export async function POST(request: NextRequest) {
       path: "/",
       maxAge: TOKEN_TTL_SECONDS,
     })
+    // Đăng nhập lại: luôn bắt đầu ở chi nhánh gốc của tài khoản.
+    res.cookies.set(BRANCH_COOKIE, "", { path: "/", maxAge: 0 })
     return res
   } catch (err: any) {
     console.error("[LOGIN] Unhandled error:", err)

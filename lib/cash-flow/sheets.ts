@@ -54,6 +54,7 @@ const ACCOUNT_HEADER = [
   "Tự Động",
   "Created At",
   "Updated At",
+  "Chi Nhánh",
 ]
 
 const RECEIVABLE_HEADER = [
@@ -73,6 +74,7 @@ const RECEIVABLE_HEADER = [
   "Ghi Chú",
   "Created At",
   "Updated At",
+  "Chi Nhánh",
 ]
 
 const PAYABLE_HEADER = [
@@ -95,6 +97,7 @@ const PAYABLE_HEADER = [
   "Auto Ref ID",
   "Created At",
   "Updated At",
+  "Chi Nhánh",
 ]
 
 const TRANSACTION_HEADER = [
@@ -112,6 +115,7 @@ const TRANSACTION_HEADER = [
   "Tự Động",
   "Created By",
   "Created At",
+  "Chi Nhánh",
 ]
 
 const PROFIT_FUND_HEADER = [

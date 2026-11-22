@@ -8,6 +8,8 @@ import { getServerUser } from "@/lib/auth"
 import { isOwnerRole } from "@/lib/roles"
 import { logAdminChanges } from "@/lib/audit-log"
 import { readFromGoogleSheets, colIndex } from "@/lib/google-sheets"
+import { branchContextFromHeaders, branchColumnIndex } from "@/lib/branch-context"
+import { BRANCHES, rowBranchId, type BranchId } from "@/lib/branches"
 import { parseVietnameseNumber } from "@/lib/number"
 import { createCashFlowPayable, payCashFlowPayable, updateCashFlowPayable } from "@/lib/cash-flow/sheets"
 
@@ -123,6 +125,13 @@ export async function GET(req: NextRequest) {
       safeRead("DongTien_NguonTien"),
     ])
     const now = today()
+    const branchCtx = branchContextFromHeaders(req.headers)
+    const active = branchCtx?.active ?? "all"
+    const inActive = (b: BranchId) => active === "all" || b === active
+    const branchOf = (header: string[]) => {
+      const i = branchColumnIndex(header)
+      return (r: string[]) => rowBranchId(i === -1 ? "" : r[i])
+    }
 
     /* ---------- bán hàng ---------- */
     const B = ban.header
@@ -140,12 +149,14 @@ export async function GET(req: NextRequest) {
       status: colIndex(B, "Trạng Thái"),
     }
     const at = (r: string[], i: number) => (i === -1 ? "" : str(r[i]))
-    const sales = ban.rows
+    const banBranch = branchOf(B)
+    const allSales = ban.rows
       .filter((r) => at(r, bi.name) && !fold(at(r, bi.status)).includes("hoan tra"))
       .map((r) => {
         const d = parseDay(at(r, bi.date))
         const name = normName(at(r, bi.name))
         return {
+          branch: banBranch(r),
           code: at(r, bi.code),
           day: d,
           age: d ? Math.round(now.diff(d, "days").days) : null,
@@ -155,14 +166,15 @@ export async function GET(req: NextRequest) {
           profit: num(at(r, bi.profit)),
         }
       })
-    const salesSummary = (days: number) => {
-      const l = sales.filter((s) => s.age !== null && s.age >= 0 && s.age < days)
+    const sales = allSales.filter((x) => inActive(x.branch))
+    const salesSummary = (days: number, list = sales) => {
+      const l = list.filter((s) => s.age !== null && s.age >= 0 && s.age < days)
       return { orders: l.length, revenue: l.reduce((a, s) => a + s.revenue, 0), profit: l.reduce((a, s) => a + s.profit, 0) }
     }
     const sold30 = new Map<string, number>()
     for (const s of sales) if (s.age !== null && s.age >= 0 && s.age < 30) sold30.set(s.key, (sold30.get(s.key) || 0) + 1)
     const soldById = new Map<string, { code: string; day: DateTime | null }>()
-    for (const s of sales) for (const id of s.ids) soldById.set(id, { code: s.code, day: s.day })
+    for (const s of allSales) for (const id of s.ids) soldById.set(id, { code: s.code, day: s.day })
 
     /* ---------- kho ---------- */
     const K = kho.header
@@ -182,6 +194,7 @@ export async function GET(req: NextRequest) {
       status: colIndex(K, "Trạng Thái"),
       source: colIndex(K, "Nguồn nhập"),
     }
+    const khoBranch = branchOf(K)
     const stockRows = kho.rows.filter((r) => {
       if (!at(r, ki.name)) return false
       const st = fold(at(r, ki.status))
@@ -195,7 +208,7 @@ export async function GET(req: NextRequest) {
       if (id) idCount.set(id, (idCount.get(id) || new Set()).add(ser || Math.random().toString()))
       if (ser) serialCount.set(ser, (serialCount.get(ser) || 0) + 1)
     }
-    const items = stockRows.map((r) => {
+    const allItems = stockRows.map((r) => {
       const d = parseDay(at(r, ki.date))
       const name = normName(at(r, ki.name))
       const cat = categoryOf(name)
@@ -228,6 +241,7 @@ export async function GET(req: NextRequest) {
         }
       }
       return {
+        branch: khoBranch(r),
         id,
         date: d ? d.toISODate() : "",
         age: d ? Math.max(0, Math.round(now.diff(d, "days").days)) : 0,
@@ -248,6 +262,7 @@ export async function GET(req: NextRequest) {
       }
     })
 
+    const items = allItems.filter((x) => inActive(x.branch))
     const groupsMap = new Map<string, any>()
     for (const it of items) {
       const g0 = groupsMap.get(it.key) || { key: it.key, cat: it.cat, n: 0, cost: 0, price: 0, priced: 0, pricedCost: 0, ageSum: 0, maxAge: 0 }
@@ -281,7 +296,8 @@ export async function GET(req: NextRequest) {
     /* ---------- nợ phải trả ---------- */
     const P = pay.header
     const pi = (n: string) => colIndex(P, n)
-    const payables = pay.rows
+    const payBranch = branchOf(P)
+    const allPayables = pay.rows
       .filter((r) => str(r[pi("ID")]))
       .map((r) => {
         const principal = num(r[pi("Số Tiền Gốc")])
@@ -300,6 +316,7 @@ export async function GET(req: NextRequest) {
         else if (daysLeft <= 7) state = "soon"
         else state = "later"
         return {
+          branch: payBranch(r),
           id: str(r[pi("ID")]),
           creditor: str(r[pi("Chủ Nợ")]) || "(chưa ghi tên)",
           type,
@@ -320,8 +337,9 @@ export async function GET(req: NextRequest) {
     /* ---------- khách còn nợ ---------- */
     const R = recv.header
     const ri = (n: string) => colIndex(R, n)
+    const recvBranch = branchOf(R)
     const receivables = recv.rows
-      .filter((r) => str(r[ri("ID")]))
+      .filter((r) => str(r[ri("ID")]) && inActive(recvBranch(r)))
       .map((r) => {
         const total = num(r[ri("Tổng Phải Thu")])
         const got = num(r[ri("Đã Thu")])
@@ -343,11 +361,32 @@ export async function GET(req: NextRequest) {
     /* ---------- nguồn tiền ---------- */
     const A = acc.header
     const ai = (n: string) => colIndex(A, n)
+    const accBranch = branchOf(A)
     const accounts = acc.rows
-      .filter((r) => str(r[ai("ID")]))
+      .filter((r) => str(r[ai("ID")]) && inActive(accBranch(r)))
       .map((r) => ({ id: str(r[ai("ID")]), name: str(r[ai("Tên Nguồn")]), balance: num(r[ai("Số Dư")]) }))
 
+    const payables = allPayables.filter((x) => inActive(x.branch))
+
+    // So sánh nhanh giữa các chi nhánh (chủ shop luôn thấy, kể cả khi đang xem 1 chi nhánh)
+    const byBranch = BRANCHES.map((b) => {
+      const bs = allSales.filter((x) => x.branch === b.id)
+      const bi2 = allItems.filter((x) => x.branch === b.id)
+      return {
+        id: b.id,
+        name: b.name,
+        today: salesSummary(1, bs),
+        d7: salesSummary(7, bs),
+        d30: salesSummary(30, bs),
+        stock: bi2.length,
+        stockCost: bi2.reduce((a, x) => a + x.cost, 0),
+        payableRemaining: allPayables.filter((x) => x.branch === b.id).reduce((a, x) => a + x.remaining, 0),
+      }
+    })
+
     return NextResponse.json({
+      activeBranch: active,
+      byBranch,
       asOf: now.toISODate(),
       generatedAt: new Date().toISOString(),
       sales: { today: salesSummary(1), d7: salesSummary(7), d30: salesSummary(30) },

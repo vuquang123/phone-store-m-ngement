@@ -1,4 +1,5 @@
 // app/api/khach-hang/route.ts
+import { branchContextFromHeaders, filterRowsByBranch } from "@/lib/branch-context"
 import { type NextRequest, NextResponse } from "next/server"
 import { readFromGoogleSheets, appendToGoogleSheets } from "@/lib/google-sheets"
 
@@ -55,14 +56,16 @@ function parseToEpoch(v: any): number {
 export async function GET(request: NextRequest) {
   try {
     const force = new URL(request.url).searchParams.get("refresh") === "1"
-    const { header, rows } = await readFromGoogleSheets(SHEET, undefined, { force })
+    const { header, rows: allRows } = await readFromGoogleSheets(SHEET, undefined, { force })
+    const rows = filterRowsByBranch(header, allRows, branchContextFromHeaders(request.headers))
     const keyMap: { [key: string]: string } = {
       "Ngày tạo": "created_at",
       "Tên Khách Hàng": "ten_khach",
       "Số Điện Thoại": "sdt",
       "Tổng Mua": "tong_mua",
       "Lần Mua Cuối": "lan_mua_cuoi",
-      "Ghi Chú": "ghi_chu"
+      "Ghi Chú": "ghi_chu",
+      "Chi Nhánh": "chi_nhanh",
     }
     let mapped = rows.map((row) => {
       const obj: Record<string, any> = {}

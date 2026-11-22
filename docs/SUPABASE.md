@@ -121,6 +121,9 @@ phụ kiện, khách hàng, đặt cọc, bán hàng, hoàn trả, tiền mặt,
 
 ## 5. Sao lưu
 
+- **Ngay sau mỗi thay đổi**: mỗi lần web ghi vào Supabase, tab vừa đổi được chép đè sang Google Sheet ở chế độ nền
+  (thường vài giây sau). Vì vậy **không sửa trực tiếp trên Google Sheet nữa**: lần ghi kế tiếp sẽ chép đè lên.
+  Muốn sửa tay thì dùng trang Quản trị dữ liệu. Tắt tính năng này bằng biến `SHEET_MIRROR=off` trên Vercel.
 - **Tự động mỗi 6 tiếng** (0h, 6h, 12h, 18h giờ VN): GitHub Actions (`.github/workflows/sao-luu-sheet.yml`) gọi
   `/api/cron/sao-luu-sheet`, chép **toàn bộ** Supabase về Google Sheet cũ. Chỉ chạy khi `DATA_BACKEND=postgres`.
   Cần thêm 2 secret ở GitHub repo: **Settings > Secrets and variables > Actions > New repository secret**:
@@ -129,6 +132,20 @@ phụ kiện, khách hàng, đặt cọc, bán hàng, hoàn trả, tiền mặt,
   (Vercel gói Hobby chỉ cho cron 1 lần/ngày nên không đặt lịch này trong `vercel.json`.)
 - **Sao lưu tay** bất kỳ lúc nào: `pnpm db:export --yes` (ghi đè Google Sheet bằng dữ liệu Supabase).
 - Gói **Supabase Pro** có thêm backup tự động hằng ngày, giữ 7 ngày, khôi phục bằng 1 nút.
+
+## 5b. Chi nhánh (DEV PỒ = 1, T1s = 2)
+
+- **USERS.Chi nhánh**: `1` = DEV PỒ, `2` = T1s, để trống = DEV PỒ. Đổi chi nhánh của nhân viên ở trang Nhân viên
+  (hoặc Quản trị dữ liệu > USERS). Đổi xong, nhân viên đó phải đăng nhập lại.
+- **Nhân viên** chỉ thấy dữ liệu chi nhánh của mình, không đổi được. **Chủ shop và quản lý** có nút chọn chi nhánh
+  ở thanh trên cùng: DEV PỒ, T1s hoặc *Tất cả chi nhánh* (xem tổng).
+- Các bảng có cột **Chi Nhánh** (ghi tên chi nhánh): Kho_Hang, Ban_Hang, Khach_Hang, Dat_Coc, Hoan_Tra, Tien_mat,
+  Phu_Kien, DongTien_PhaiTra, DongTien_CongNoThu, DongTien_GiaoDich, DongTien_NguonTien. Ô trống được tính là DEV PỒ.
+- Dòng mới tự ghi chi nhánh của người thao tác. Chủ shop/quản lý đang xem *Tất cả* thì ghi cho chi nhánh gốc của mình.
+- **Chuyển máy sang chi nhánh khác**: Quản trị dữ liệu > Kho_Hang, sửa ô Chi Nhánh (có thể sửa nhiều dòng một lúc).
+- Quỹ tiền mặt tính riêng từng chi nhánh. Telegram giữ nguyên như cũ.
+- Lần đầu bật: `pnpm db:branches` (xem trước), `pnpm db:branches --yes --sheet` (thêm cột, gán dữ liệu cũ cho DEV PỒ,
+  lấy cột Chi nhánh của USERS từ Google Sheet).
 
 ## 6. Quay lại Google Sheets (nếu có sự cố)
 

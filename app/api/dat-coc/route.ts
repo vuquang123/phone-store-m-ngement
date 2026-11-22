@@ -158,6 +158,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+import { branchContextFromHeaders, filterRowsByBranch } from "@/lib/branch-context"
 import { NextResponse } from "next/server"
 import { appendToGoogleSheets, readFromGoogleSheets, updateRangeValues, syncToGoogleSheets, colIndex, norm } from "@/lib/google-sheets"
 import { sendTelegramMessage, formatOrderMessage } from "@/lib/telegram"
@@ -203,9 +204,10 @@ async function compactDatCocSheet() {
 
 
 // API route: GET /api/dat-coc
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const { header, rows } = await compactDatCocSheet()
+    const { header, rows: allRows } = await compactDatCocSheet()
+    const rows = filterRowsByBranch(header, allRows, branchContextFromHeaders(req.headers))
     return NextResponse.json({ data: [header, ...rows] }, { status: 200 })
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

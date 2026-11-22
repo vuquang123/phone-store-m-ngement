@@ -1,5 +1,7 @@
 import { isManagerRole } from "@/lib/roles"
 import { type NextRequest, NextResponse } from "next/server"
+import { branchContextFromHeaders, filterRowsByBranch, branchColumnIndex } from "@/lib/branch-context"
+import { branchName, rowBranchId } from "@/lib/branches"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, norm, khoColIndex, nguonNhapColIndex, updateProductsNguon, updateProductsDangXuLy } from "@/lib/google-sheets"
 
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
@@ -196,9 +198,13 @@ export async function GET(request: NextRequest) {
   try {
     const manager = await isManager(request)
     const force = new URL(request.url).searchParams.get("refresh") === "1"
-    const { header, rows } = await readFromGoogleSheets(SHEET, undefined, { force })
+    const { header, rows: allRows } = await readFromGoogleSheets(SHEET, undefined, { force })
+    const branchCtx = branchContextFromHeaders(request.headers)
+    const rows = filterRowsByBranch(header, allRows, branchCtx)
+    const bIdx = branchColumnIndex(header)
     const idx = idxKho(header)
     const products = rows.map((row) => ({
+      chi_nhanh: branchName(rowBranchId(bIdx !== -1 ? row[bIdx] : "")),
       id: row[idx.id],
       ten_san_pham: row[idx.tenSP],
       loai_may: row[idx.loaiMay],

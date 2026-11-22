@@ -26,7 +26,8 @@ export async function exportPostgresToSheets(only?: string[]): Promise<ExportRes
   if (!spreadsheetId) throw new Error("Thiếu GOOGLE_SHEETS_SPREADSHEET_ID")
   const api = sheetsClient()
 
-  const tabs = (await listSheets()).filter((t) => !only?.length || only.includes(t))
+  const wanted = new Set((only || []).map((t) => t.toLowerCase()))
+  const tabs = (await listSheets()).filter((t) => !wanted.size || wanted.has(t.toLowerCase()))
   const data = new Map<string, string[][]>()
   for (const t of tabs) data.set(t, await readValues({ sheet: t, c1: 0, c2: Infinity, r1: 1, r2: Infinity }))
 

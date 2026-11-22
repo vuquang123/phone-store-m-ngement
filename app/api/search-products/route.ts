@@ -1,4 +1,5 @@
 // app/api/search/route.ts
+import { branchContextFromHeaders, filterRowsByBranch, type BranchContext } from "@/lib/branch-context"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
 import { type NextRequest, NextResponse } from "next/server"
 import { parseVietnameseNumber } from "@/lib/number"
@@ -40,8 +41,9 @@ const ACCESSORY_HEADERS = [
 ] as const
 
 // ========= ĐỌC DỮ LIỆU (Google Sheets hoặc Supabase tuỳ DATA_BACKEND) =========
-async function readSheetAll(sheetName: string) {
-  const { header, rows } = await readFromGoogleSheets(sheetName)
+async function readSheetAll(sheetName: string, branchCtx: BranchContext | null) {
+  const { header, rows: allRows } = await readFromGoogleSheets(sheetName)
+  const rows = filterRowsByBranch(header, allRows, branchCtx)
   return (header.length || rows.length ? [header, ...rows] : []) as string[][]
 }
 
@@ -77,8 +79,8 @@ export async function GET(request: NextRequest) {
 
     // Đọc 2 sheet
     const [pAll, aAll] = await Promise.all([
-      readSheetAll(SHEET_PRODUCTS),
-      readSheetAll(SHEET_ACCESSORIES),
+      readSheetAll(SHEET_PRODUCTS, branchContextFromHeaders(request.headers)),
+      readSheetAll(SHEET_ACCESSORIES, branchContextFromHeaders(request.headers)),
     ])
 
     // ===== Products từ Kho_Hang =====

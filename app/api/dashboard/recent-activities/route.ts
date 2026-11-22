@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+import { branchContextFromHeaders, filterRowsByBranch } from "@/lib/branch-context"
+import { NextResponse, type NextRequest } from "next/server"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
 
 export const dynamic = "force-dynamic"
@@ -38,13 +39,18 @@ function parseToEpoch(s: any): number {
   return 0
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    // Đọc dữ liệu từ Google Sheets
+    // Đọc dữ liệu, chỉ giữ dòng của chi nhánh đang xem
+    const branchCtx = branchContextFromHeaders(req.headers)
+    const scoped = async (name: string) => {
+      const d = await readFromGoogleSheets(name)
+      return { ...d, rows: filterRowsByBranch(d.header, d.rows, branchCtx) }
+    }
     const [bh, kh, pk] = await Promise.all([
-      readFromGoogleSheets(SHEETS.BAN_HANG),
-      readFromGoogleSheets(SHEETS.KHO_HANG),
-      readFromGoogleSheets(SHEETS.PHU_KIEN),
+      scoped(SHEETS.BAN_HANG),
+      scoped(SHEETS.KHO_HANG),
+      scoped(SHEETS.PHU_KIEN),
     ])
 
     // Đơn hàng mới

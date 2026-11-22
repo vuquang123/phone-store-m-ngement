@@ -1,5 +1,7 @@
+import { normalizeBranch } from "@/lib/branches"
+import { isManagerRole, isOwnerRole } from "@/lib/roles"
 import { type NextRequest, NextResponse } from "next/server"
-import { readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
+import { readFromGoogleSheets, updateRangeValues, ensureColumn } from "@/lib/google-sheets"
 
 export const dynamic = "force-dynamic"
 
@@ -49,6 +51,7 @@ function getCols(header: string[]) {
     password: header.indexOf("Mật Khẩu"),
     // tùy sheet có hay không:
     phone: colIndex(header, "Số Điện Thoại", "So Dien Thoai", "Phone"),
+    branch: colIndex(header, "Chi nhánh", "Chi Nhanh", "Branch"),
     updatedAt: colIndex(header, "Ngày Cập Nhật", "Ngay Cap Nhat", "Updated At", "Updated_At"),
   }
 }
@@ -65,7 +68,22 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
     const ho_ten: string | undefined = body?.ho_ten
     const so_dien_thoai: string | undefined = body?.so_dien_thoai
     const anh_dai_dien: string | undefined = body?.anh_dai_dien
-    let status: string | undefined = body?.status
+    let status: string | undefined = body?.status ?? body?.trang_thai
+    const callerRole = decodeURIComponent(request.headers.get("x-user-role") || "")
+    const callerIsManager = isManagerRole(callerRole)
+    const wantsAdminFields = ["vai_tro", "chi_nhanh", "status", "trang_thai"].some((k) => body?.[k] !== undefined)
+    if (wantsAdminFields && !callerIsManager) {
+      return NextResponse.json({ error: "Chỉ chủ shop hoặc quản lý được đổi vai trò, chi nhánh, trạng thái" }, { status: 403 })
+    }
+    const vai_tro: string | undefined =
+      typeof body?.vai_tro === "string" && ["chu_shop", "quan_ly", "nhan_vien"].includes(body.vai_tro) ? body.vai_tro : undefined
+    if (vai_tro === "chu_shop" && !isOwnerRole(callerRole)) {
+      return NextResponse.json({ error: "Chỉ chủ shop được cấp vai trò Chủ shop" }, { status: 403 })
+    }
+    const chi_nhanh = body?.chi_nhanh !== undefined ? normalizeBranch(body.chi_nhanh) : undefined
+    if (body?.chi_nhanh !== undefined && !chi_nhanh) {
+      return NextResponse.json({ error: "Chi nhánh không hợp lệ" }, { status: 400 })
+    }
     // Chuẩn hóa giá trị status về đúng format sheet
     if (typeof status === "string") {
       const s = norm(status)
@@ -104,6 +122,15 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
         const col = toColumnLetter(avatarCol + 1)
         updates.push({ range: `${SHEET}!${col}${rowNumber}`, values: [[anh_dai_dien]] })
       }
+    }
+    if (typeof vai_tro !== "undefined" && C.role !== -1) {
+      const col = toColumnLetter(C.role + 1)
+      updates.push({ range: `${SHEET}!${col}${rowNumber}`, values: [[vai_tro]] })
+    }
+    if (typeof chi_nhanh !== "undefined" && chi_nhanh) {
+      // Chưa có cột thì thêm vào cuối USERS
+      const branchCol = C.branch !== -1 ? C.branch : await ensureColumn(SHEET, "Chi nhánh")
+      updates.push({ range: `${SHEET}!${toColumnLetter(branchCol + 1)}${rowNumber}`, values: [[chi_nhanh]] })
     }
     if (typeof status !== "undefined" && C.status !== -1) {
       const col = toColumnLetter(C.status + 1)

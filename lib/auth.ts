@@ -31,6 +31,8 @@ export type SessionUser = {
   role: string
   name?: string
   employeeId?: string
+  /** Chi nhánh gốc ('1' DEV PỒ, '2' T1s), lấy từ USERS."Chi nhánh" lúc đăng nhập */
+  branch?: string
   /** Thời điểm phiên hết hạn (ms), chỉ có khi đọc từ token. */
   expiresAt?: number
 }
@@ -50,6 +52,7 @@ export async function signSession(user: SessionUser): Promise<string> {
     role: user.role,
     name: user.name ?? "",
     employeeId: user.employeeId ?? "",
+    branch: user.branch ?? "",
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.email)
@@ -73,6 +76,7 @@ export async function verifySession(token: string): Promise<SessionUser | null> 
       role: String((payload as any).role || ""),
       name: String((payload as any).name || ""),
       employeeId: String((payload as any).employeeId || ""),
+      branch: String((payload as any).branch || ""),
     }
   } catch {
     return null
