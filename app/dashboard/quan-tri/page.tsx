@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { ColorChip, TypeChip } from "@/components/quan-tri/value-chips"
 import { Loader2, Plus, RefreshCw, Search } from "lucide-react"
 
 /* ============================== kiểu dữ liệu ============================== */
@@ -702,8 +703,8 @@ function InventorySection({ data, cat }: { data: Overview; cat: "all" | "iPhone"
                   <td className={cn(td, "text-right whitespace-nowrap")}><AgeTag a={i.age} /></td>
                   <td className={td}>{i.name}{i.flags.length ? <div className="text-xs text-red-600 dark:text-red-400">⚠ {i.flags.join("; ")}</div> : null}</td>
                   <td className={td}>{i.cap}</td>
-                  <td className={td}>{i.type}</td>
-                  <td className={td}>{i.color}</td>
+                  <td className={td}><TypeChip value={i.type} /></td>
+                  <td className={cn(td, "whitespace-nowrap")}><ColorChip value={i.color} /></td>
                   <td className={td}>{i.pin}</td>
                   <td className={cn(td, "max-w-[220px]")}>{i.cond}</td>
                   <td className={cn(td, "text-right whitespace-nowrap")}>{fmt(i.cost)}</td>

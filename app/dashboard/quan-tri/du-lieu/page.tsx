@@ -8,6 +8,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { QuanTriTabs } from "@/components/quan-tri/quan-tri-tabs"
+import { ColorChip, TypeChip, chipKind } from "@/components/quan-tri/value-chips"
+import { ColumnFilter, cellKey, dayKey, type FacetValue } from "@/components/quan-tri/column-filter"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -38,7 +40,11 @@ type Edits = Record<string, string> // key `${rowNumber}:${col}` -> giá trị m
 const PAGE_SIZE = 100
 /** Cột do hệ thống tự ghi, không hiện trong form thêm dòng (so khớp không dấu, chữ thường). */
 const INTERNAL_COLUMNS = ["dang xu ly", "tg msg xu ly"]
-const ALL = "__all__"
+/** Cột hiện sẵn nút lọc nếu bảng có (so khớp không dấu, chữ thường). */
+const PRESET_FILTERS = [
+  "trang thai", "trang thai kho", "ten san pham", "loai may", "dung luong", "mau sac", "dang sim",
+  "nguon nhap", "nguon hang", "nguon", "loai", "loai don", "nguoi ban", "hinh thuc thanh toan", "hinh thuc van chuyen",
+]
 const ek = (row: number, col: number) => `${row}:${col}`
 
 /* ------------------------------ CSV ------------------------------ */
@@ -113,7 +119,10 @@ function DataAdmin() {
   const [saving, setSaving] = useState(false)
   const [edits, setEdits] = useState<Edits>({})
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState(ALL)
+  const [colFilters, setColFilters] = useState<Record<number, string[]>>({})
+  const [extraCols, setExtraCols] = useState<number[]>([])
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null)
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -155,7 +164,10 @@ function DataAdmin() {
   useEffect(() => {
     load(table)
     setSearch("")
-    setStatusFilter(ALL)
+    setColFilters({})
+    setExtraCols([])
+    setDateFrom("")
+    setDateTo("")
     setSort(null)
     setPage(0)
   }, [table]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -171,31 +183,67 @@ function DataAdmin() {
 
   const header = useMemo(() => data?.header || [], [data])
   const visibleCols = useMemo(() => header.map((h, i) => (h === null ? -1 : i)).filter((i) => i >= 0), [header])
-  const statusCol = useMemo(() => header.findIndex((h) => fold(String(h || "").trim()) === "trang thai"), [header])
-  const statusValues = useMemo(() => {
-    if (statusCol < 0 || !data) return []
-    const m = new Map<string, number>()
-    for (const r of data.rows) {
-      const v = r.cells[statusCol]?.trim() || "(trống)"
-      m.set(v, (m.get(v) || 0) + 1)
-    }
-    return Array.from(m.entries()).sort((a, b) => b[1] - a[1])
-  }, [data, statusCol])
-
   const valueOf = useCallback((r: Row, c: number) => edits[ek(r.rowNumber, c)] ?? r.cells[c] ?? "", [edits])
+
+  const hfold = useCallback((c: number) => cellKey(String(header[c] ?? "")), [header])
+  const presetCols = useMemo(() => {
+    const out: number[] = []
+    for (const name of PRESET_FILTERS) {
+      const i = visibleCols.find((c) => hfold(c) === name)
+      if (i !== undefined && !out.includes(i)) out.push(i)
+    }
+    return out
+  }, [visibleCols, hfold])
+  const filterCols = useMemo(() => {
+    const active = Object.keys(colFilters).map(Number).filter((c) => colFilters[c]?.length)
+    return [...new Set([...presetCols, ...extraCols, ...active])]
+  }, [presetCols, extraCols, colFilters])
+  const dateCol = useMemo(() => visibleCols.find((c) => hfold(c).startsWith("ngay")) ?? -1, [visibleCols, hfold])
+  const terms = useMemo(() => cellKey(search).split(" ").filter(Boolean), [search])
+  const sets = useMemo(() => {
+    const m = new Map<number, Set<string>>()
+    for (const [c, v] of Object.entries(colFilters)) if (v.length) m.set(Number(c), new Set(v))
+    return m
+  }, [colFilters])
+  const passes = useCallback(
+    (r: Row, except: number) => {
+      for (const [c, set] of sets) if (c !== except && !set.has(cellKey(valueOf(r, c)))) return false
+      if (dateCol >= 0 && (dateFrom || dateTo)) {
+        const d = dayKey(valueOf(r, dateCol))
+        if (!d || (dateFrom && d < dateFrom) || (dateTo && d > dateTo)) return false
+      }
+      if (terms.length) {
+        const hay = cellKey(visibleCols.map((c) => valueOf(r, c)).join(" "))
+        if (!terms.every((t) => hay.includes(t))) return false
+      }
+      return true
+    },
+    [sets, dateCol, dateFrom, dateTo, terms, visibleCols, valueOf],
+  )
+  /** Giá trị + số dòng của một cột, tính trên các dòng đã qua các bộ lọc khác. */
+  const facets = useCallback(
+    (col: number): FacetValue[] => {
+      if (!data) return []
+      const m = new Map<string, FacetValue>()
+      for (const r of data.rows) {
+        if (!passes(r, col)) continue
+        const raw = valueOf(r, col).trim()
+        const k = cellKey(raw)
+        const f = m.get(k)
+        if (f) f.count++
+        else m.set(k, { key: k, label: raw, count: 1 })
+      }
+      for (const k of colFilters[col] || []) if (!m.has(k)) m.set(k, { key: k, label: k, count: 0 })
+      return [...m.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "vi", { numeric: true }))
+    },
+    [data, passes, valueOf, colFilters],
+  )
+  const activeFilterCount = Object.values(colFilters).filter((v) => v.length).length + (dateFrom || dateTo ? 1 : 0)
+  const clearFilters = () => { setColFilters({}); setExtraCols([]); setDateFrom(""); setDateTo(""); setPage(0) }
 
   const filtered = useMemo(() => {
     if (!data) return []
-    const terms = fold(search.trim()).split(/\s+/).filter(Boolean)
-    let list = data.rows.filter((r) => {
-      if (statusFilter !== ALL) {
-        const v = r.cells[statusCol]?.trim() || "(trống)"
-        if (v !== statusFilter) return false
-      }
-      if (!terms.length) return true
-      const hay = fold(visibleCols.map((c) => valueOf(r, c)).join(" "))
-      return terms.every((t) => hay.includes(t))
-    })
+    let list = data.rows.filter((r) => passes(r, -1))
     if (sort) {
       const num = (s: string) => {
         const d = s.replace(/[^\d-]/g, "")
@@ -211,7 +259,7 @@ function DataAdmin() {
       list = [...list].reverse() // mới nhất lên đầu
     }
     return list
-  }, [data, search, statusFilter, statusCol, sort, visibleCols, valueOf])
+  }, [data, passes, sort, valueOf])
 
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageRows = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
@@ -418,22 +466,47 @@ function DataAdmin() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        {filterCols.map((c) => {
+          const kind = chipKind(header[c])
+          return (
+            <ColumnFilter
+              key={c}
+              label={String(header[c] ?? "").trim()}
+              values={facets(c)}
+              selected={colFilters[c] || []}
+              onChange={(next) => { setColFilters((f) => ({ ...f, [c]: next })); setPage(0) }}
+              onRemove={presetCols.includes(c) ? undefined : () => { setExtraCols((x) => x.filter((y) => y !== c)); setColFilters((f) => { const n = { ...f }; delete n[c]; return n }); setPage(0) }}
+              render={kind === "color" ? (v) => <ColorChip value={v} /> : kind === "type" ? (v) => <TypeChip value={v} /> : undefined}
+            />
+          )
+        })}
+        {dateCol >= 0 && (
+          <div className={`flex h-9 items-center gap-1 rounded-md border px-2 text-sm ${dateFrom || dateTo ? "border-blue-500 bg-blue-50 dark:bg-blue-950" : ""}`}>
+            <span className="whitespace-nowrap text-muted-foreground">{String(header[dateCol] ?? "").trim()}</span>
+            <input type="date" className="bg-transparent text-sm outline-none" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(0) }} />
+            <span className="text-muted-foreground">→</span>
+            <input type="date" className="bg-transparent text-sm outline-none" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(0) }} />
+          </div>
+        )}
+        <Select value="" onValueChange={(v) => setExtraCols((x) => [...x, Number(v)])}>
+          <SelectTrigger className="h-9 w-[170px] border-dashed"><SelectValue placeholder="+ Lọc theo cột khác" /></SelectTrigger>
+          <SelectContent>
+            {visibleCols.filter((c) => !filterCols.includes(c)).map((c) => (
+              <SelectItem key={c} value={String(c)}>{String(header[c] ?? "").trim() || `Cột ${c + 1}`}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input className="pl-8" placeholder="Tìm IMEI, tên máy, khách..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0) }} />
         </div>
-        {statusCol >= 0 && (
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0) }}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Trạng thái" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Mọi trạng thái</SelectItem>
-              {statusValues.map(([v, n]) => (
-                <SelectItem key={v} value={v}>{v} ({n})</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
         <span className="text-sm text-muted-foreground">{filtered.length} dòng</span>
+        {activeFilterCount > 0 && (
+          <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={clearFilters}>Xoá lọc ({activeFilterCount})</Button>
+        )}
         {selected.size > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary" className="whitespace-nowrap">Đã chọn {selected.size}</Badge>
@@ -526,7 +599,9 @@ function DataAdmin() {
                             }}
                           />
                         ) : (
-                          <div className="min-h-[28px] cursor-text truncate px-2 py-1">{v}</div>
+                          <div className="min-h-[28px] cursor-text truncate px-2 py-1">
+                            {chipKind(data?.header[c]) === "color" ? <ColorChip value={v} /> : chipKind(data?.header[c]) === "type" ? <TypeChip value={v} /> : v}
+                          </div>
                         )}
                       </td>
                     )
