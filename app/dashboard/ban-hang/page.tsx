@@ -107,6 +107,8 @@ export default function BanHangPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
   const [isSendCNCDialogOpen, setIsSendCNCDialogOpen] = useState(false)
   const [isSendPartnerDialogOpen, setIsSendPartnerDialogOpen] = useState(false)
+  /** Lần gửi đối tác này lấy từ các máy trong giỏ -> gửi xong thì bỏ các máy đó khỏi giỏ */
+  const [sendPartnerFromCart, setSendPartnerFromCart] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   // Fetch đơn đặt cọc từ API khi vào tab hoặc khi tạo mới
   useEffect(() => {
@@ -389,7 +391,8 @@ export default function BanHangPage() {
 
   /* =================== Quản lý kho: actions + thống kê =================== */
   const queryClient = useQueryClient()
-  const { toggleDangXuLy, isTogglingDangXuLy, bulkUpdateNguon } = useInventoryActions()
+  // Chức năng "Đang xử lý" đã bỏ (theo yêu cầu chủ shop); dữ liệu cột cũ giữ nguyên nhưng không hiển thị.
+  const { bulkUpdateNguon } = useInventoryActions()
   const { data: invResRaw } = useInventoryData()
   const { data: cncResRaw } = useCNCData()
   const { data: bhResRaw } = useBaoHanhHistory()
@@ -412,6 +415,7 @@ export default function BanHangPage() {
       }).length,
     }
   }, [invResRaw, cncResRaw, bhResRaw, accResRaw])
+  const soMayGuiDoiTac = inventoryStats.soSanPhamDoiTac
 
   // Máy trong kho hệ thống (có trong sheet Kho_Hang) mới chỉnh/CNC/giao đối tác được.
   const allInventoryProducts: any[] = invResRaw?.data || []
@@ -456,6 +460,42 @@ export default function BanHangPage() {
   }, [reloadFlag, queryClient])
 
   // === CART === addToCart/addPartnerItemToCart/updateQuantity/removeFromCart chuyển sang useCart
+
+  /** Xuất bán máy (đối tác / kho ngoài): đẩy vào giỏ; máy đang gửi đối tác thì điền sẵn đối tác làm khách hàng. */
+  const handleAddPartnerToCart = (products: any[], partner?: { name: string; phone: string }) => {
+    products.forEach((p: any) => {
+      // Máy của shop đang gửi đối tác (nằm trong Kho_Hang): vào giỏ như máy bán bình thường,
+      // để lúc chốt đơn hệ thống trừ đúng máy trong kho, giữ giá nhập / nguồn của máy.
+      if (p.trang_thai === "Giao đối tác") {
+        addToCart({ ...p, type: "product", trang_thai: "Còn hàng" })
+        return
+      }
+      // Máy ở kho của đối tác (Hàng đối tác / kho ngoài): giữ luồng cũ
+      addPartnerItemToCart({
+      ...p,
+      model: p.ten_san_pham || p.model,
+      gia_goi_y_ban: typeof p.gia_ban === 'number' ? p.gia_ban : p.gia_goi_y_ban,
+      gia_chuyen: typeof p.gia_nhap === 'number' ? p.gia_nhap : p.gia_chuyen,
+      bo_nho: p.dung_luong || p.bo_nho,
+      mau: p.mau_sac || p.mau,
+      pin_pct: p.pin || p.pin_pct,
+      sheet: p.partner_sheet || p.sheet,
+      row_index: p.partner_row_index || p.row_index,
+      })
+    })
+    let note = ""
+    if (partner?.name) {
+      if (!selectedCustomer) {
+        setSelectedCustomer({ id: partner.phone || partner.name, ho_ten: partner.name, so_dien_thoai: partner.phone || "" })
+        note = ` · Khách hàng: ${partner.name}`
+      } else {
+        note = ` · Giỏ đang có khách ${selectedCustomer.ho_ten}, đổi nếu cần`
+      }
+    }
+    setActiveTab("ban-hang")
+    if (isMobile) setMobileView("gio-hang")
+    sonnerToast.success(`Đã thêm ${products.length} máy vào giỏ hàng${note}`)
+  }
 
   // === CHECKOUT ===
   // isWarrantyEligible/computeCartSubtotal/computeWarrantyTotal tách sang lib/ban-hang/totals.ts
@@ -1266,6 +1306,7 @@ export default function BanHangPage() {
           {...inventoryStats}
           onNavigate={(target) => {
             if (target === "san-pham") { setActiveTab("ban-hang"); return }
+            if (target === "giao-doi-tac") { setActiveTab("gui-doi-tac"); return }
             setActiveTab("xu-ly")
             setManageTab(target)
           }}
@@ -1287,6 +1328,17 @@ export default function BanHangPage() {
               {depositOrderCount > 0 && (
                 <span className="ml-2 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-semibold bg-blue-600 text-white">
                   {depositOrderCount}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="gui-doi-tac"
+              className="relative data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 data-[state=active]:border-purple-500"
+            >
+              <span>Máy gửi đối tác</span>
+              {soMayGuiDoiTac > 0 && (
+                <span className="ml-2 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-semibold bg-purple-600 text-white">
+                  {soMayGuiDoiTac}
                 </span>
               )}
             </TabsTrigger>
@@ -1358,23 +1410,9 @@ export default function BanHangPage() {
                       size="sm"
                       variant="outline"
                       className="h-9 border-purple-300 text-purple-700 hover:bg-purple-50 hover:text-purple-700 dark:border-purple-500/40 dark:text-purple-400 dark:hover:bg-purple-500/10"
-                      onClick={() => setIsSendPartnerDialogOpen(true)}
+                      onClick={() => { setSendPartnerFromCart(false); setIsSendPartnerDialogOpen(true) }}
                     >
-                      Giao đối tác
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-9 border-yellow-300 text-yellow-700 hover:bg-yellow-50 hover:text-yellow-700 dark:border-yellow-500/40 dark:text-yellow-400 dark:hover:bg-yellow-500/10"
-                      disabled={isTogglingDangXuLy}
-                      onClick={() => {
-                        toggleDangXuLy({
-                          productIds: selectedIds,
-                          employeeName: me?.name || me?.employeeId || "NV-UNKNOWN",
-                        }).then(clearMachineSelection).catch(() => {})
-                      }}
-                    >
-                      Đang xử lý
+                      Gửi đối tác
                     </Button>
                     <Select onValueChange={(val) => {
                       bulkUpdateNguon({
@@ -1449,17 +1487,22 @@ export default function BanHangPage() {
                     setSelectedProduct(inStock)
                     setIsProductDialogOpen(true)
                   }}
-                  onSendCNC={(p) => { setSelectedIds([p.id]); setIsSendCNCDialogOpen(true) }}
-                  onSendPartner={(p) => { setSelectedIds([p.id]); setIsSendPartnerDialogOpen(true) }}
-                  onToggleProcessing={(p) => {
-                    if (String(p.id).startsWith("DT-")) {
-                      sonnerToast.error("Chỉ đánh dấu được máy trong kho (Kho_Hang)")
-                      return
-                    }
-                    toggleDangXuLy({
-                      productIds: [p.id],
-                      employeeName: me?.name || me?.employeeId || "NV-UNKNOWN",
-                    }).catch(() => {})
+                  // Đang chọn nhiều máy mà bấm nút ở 1 máy -> gửi cả các máy đã chọn (thêm máy vừa bấm)
+                  onSendCNC={(p) => { setSelectedIds((prev) => (prev.length && isEditMode ? Array.from(new Set([...prev, p.id])) : [p.id])); setIsSendCNCDialogOpen(true) }}
+                  onSendPartner={(p) => {
+                    // 1) Đang bật chọn nhiều máy -> gửi các máy đã chọn + máy vừa bấm
+                    // 2) Máy vừa bấm đang nằm trong giỏ -> gửi tất cả máy (của kho) đang trong giỏ
+                    // 3) Còn lại -> chỉ máy vừa bấm
+                    const cartMachineIds = cart
+                      .filter((it: any) => it.type === "product" && allInventoryProducts.some((x: any) => x.id === it.id))
+                      .map((it: any) => String(it.id))
+                    let ids: string[] = [p.id]
+                    let fromCart = false
+                    if (isEditMode && selectedIds.length) ids = Array.from(new Set([...selectedIds, p.id]))
+                    else if (cartMachineIds.includes(String(p.id)) && cartMachineIds.length > 1) { ids = cartMachineIds; fromCart = true }
+                    setSendPartnerFromCart(fromCart)
+                    setSelectedIds(ids)
+                    setIsSendPartnerDialogOpen(true)
                   }}
                   advancedFilter={filterType === "phu_kien" || filterType === "sim_ghep"
                     ? null
@@ -1581,7 +1624,14 @@ export default function BanHangPage() {
             />
           </TabsContent>
 
-          {/* Xử lý: CNC / Bảo hành / Giao đối tác / Hàng đối tác / Tồn phụ kiện */}
+          {/* Máy đang gửi đối tác (thợ / khách sỉ giữ máy): xuất bán hoặc hoàn kho */}
+          <TabsContent value="gui-doi-tac">
+            <div className="mt-4">
+              <ManageTabs tab="giao-doi-tac" isManager={isManager} onAddPartnerToCart={handleAddPartnerToCart} />
+            </div>
+          </TabsContent>
+
+          {/* Xử lý: CNC / Bảo hành / Hàng đối tác / Tồn phụ kiện */}
           <TabsContent value="xu-ly">
             <div className="mt-4 space-y-4">
               <div className="flex flex-wrap gap-2">
@@ -1600,24 +1650,7 @@ export default function BanHangPage() {
               <ManageTabs
                 tab={manageTab}
                 isManager={isManager}
-                onAddPartnerToCart={(products) => {
-                  // Chốt bán máy đối tác: đẩy thẳng vào giỏ của trang này.
-                  // Trước khi gộp phải ghi localStorage rồi reload sang trang Bán hàng.
-                  products.forEach((p: any) => addPartnerItemToCart({
-                    ...p,
-                    model: p.ten_san_pham || p.model,
-                    gia_goi_y_ban: typeof p.gia_ban === 'number' ? p.gia_ban : p.gia_goi_y_ban,
-                    gia_chuyen: typeof p.gia_nhap === 'number' ? p.gia_nhap : p.gia_chuyen,
-                    bo_nho: p.dung_luong || p.bo_nho,
-                    mau: p.mau_sac || p.mau,
-                    pin_pct: p.pin || p.pin_pct,
-                    sheet: p.partner_sheet || p.sheet,
-                    row_index: p.partner_row_index || p.row_index,
-                  }))
-                  setActiveTab("ban-hang")
-                  if (isMobile) setMobileView("gio-hang")
-                  sonnerToast.success(`Đã thêm ${products.length} máy vào giỏ hàng`)
-                }}
+                onAddPartnerToCart={handleAddPartnerToCart}
               />
             </div>
           </TabsContent>
@@ -1673,7 +1706,14 @@ export default function BanHangPage() {
         onOpenChange={setIsSendPartnerDialogOpen}
         selectedProducts={allInventoryProducts.filter((p: any) => selectedIds.includes(p.id))}
         employeeId={me?.employeeId}
-        onSuccess={clearMachineSelection}
+        onSuccess={() => {
+          if (sendPartnerFromCart) {
+            const sent = new Set(selectedIds.map(String))
+            setCart((prev) => prev.filter((it: any) => !(it.type === "product" && sent.has(String(it.id)))))
+            setSendPartnerFromCart(false)
+          }
+          clearMachineSelection()
+        }}
       />
     </ProtectedRoute>
   )

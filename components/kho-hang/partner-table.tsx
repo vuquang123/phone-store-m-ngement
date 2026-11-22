@@ -4,8 +4,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { RotateCcw, ShoppingCart, User } from "lucide-react"
-import { getTrangThaiColor, extractPartnerInfo } from "@/lib/utils/inventory-helpers"
+import { Phone, RotateCcw, ShoppingCart, User } from "lucide-react"
+import { parsePartnerInfo } from "@/lib/utils/inventory-helpers"
 
 interface PartnerProduct {
   id: string
@@ -47,7 +47,7 @@ export function PartnerTable({
   
 
   return (
-    <div className="rounded-md border border-border overflow-hidden bg-card shadow-sm">
+    <div className="rounded-md border border-border overflow-x-auto bg-card shadow-sm">
       <Table>
         <TableHeader className="bg-muted/80">
           <TableRow>
@@ -68,9 +68,9 @@ export function PartnerTable({
               </div>
             </TableHead>
             <TableHead className="font-semibold text-foreground hidden sm:table-cell">IMEI</TableHead>
-            <TableHead className="font-semibold text-foreground">Đối tác & Ngày giao</TableHead>
-            <TableHead className="font-semibold text-foreground hidden lg:table-cell">Tình trạng</TableHead>
-            {(onReturnStock || onCompleteSale) && <TableHead className="w-32 text-right">Thao tác</TableHead>}
+            <TableHead className="font-semibold text-foreground">Đối tác & Ngày gửi</TableHead>
+            <TableHead className="font-semibold text-foreground hidden xl:table-cell">Tình trạng</TableHead>
+            {(onReturnStock || onCompleteSale) && <TableHead className="whitespace-nowrap text-right">Thao tác</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -104,7 +104,7 @@ export function PartnerTable({
                   </div>
                   
                   {/* Condition for tablets (where lg is still hidden) */}
-                  <div className="hidden sm:block lg:hidden mt-1">
+                  <div className="hidden sm:block xl:hidden mt-1">
                     {p.tinh_trang && (
                       <p className="text-[10px] text-muted-foreground italic truncate max-w-[200px]">
                         {p.tinh_trang}
@@ -115,45 +115,56 @@ export function PartnerTable({
               </TableCell>
               <TableCell className="text-sm font-mono text-muted-foreground hidden sm:table-cell">{p.imei || "—"}</TableCell>
               <TableCell>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5 text-sm font-medium text-purple-700">
-                    <User className="w-3.5 h-3.5" />
-                    {extractPartnerInfo(p.ghi_chu)}
-                  </div>
-                  {p.ghi_chu?.includes(" - ") && (
-                    <span className="text-[10px] text-muted-foreground ml-5">
-                      {p.ghi_chu.split(" - ")[1].replace("]", "")}
-                    </span>
-                  )}
-                </div>
+                {(() => {
+                  const info = parsePartnerInfo(p.ghi_chu)
+                  return (
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-purple-700 dark:text-purple-400">
+                        <User className="h-3.5 w-3.5 shrink-0" />
+                        {info?.name || "Chưa rõ đối tác"}
+                      </div>
+                      {info?.phone ? (
+                        <a
+                          href={`tel:${info.phone}`}
+                          className="ml-5 inline-flex items-center gap-1 text-xs tabular-nums text-muted-foreground hover:text-foreground"
+                        >
+                          <Phone className="h-3 w-3" />
+                          {info.phone}
+                        </a>
+                      ) : null}
+                      {info?.date ? <span className="ml-5 text-[11px] text-muted-foreground">Gửi ngày {info.date}</span> : null}
+                    </div>
+                  )
+                })()}
               </TableCell>
-              <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                <Badge variant="outline" className="text-[10px]">{p.tinh_trang || "—"}</Badge>
+              <TableCell className="hidden xl:table-cell max-w-[220px] text-xs text-muted-foreground">
+                <span className="line-clamp-2" title={p.tinh_trang}>{p.tinh_trang || "—"}</span>
               </TableCell>
               {(onReturnStock || onCompleteSale) && (
                 <TableCell>
                   <div className="flex gap-2 justify-end">
                     {onReturnStock && (
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="outline"
-                        title="Hoàn kho"
-                        className="h-8 w-8 p-0 text-muted-foreground hover:text-orange-600 hover:bg-orange-50 border-border" 
+                        title="Đối tác không lấy: hoàn máy về kho"
+                        className="h-8 gap-1.5 px-2.5 text-muted-foreground hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-500/10"
                         onClick={() => onReturnStock(p)}
                         disabled={isReturning}
                       >
-                        <RotateCcw className="w-4 h-4" />
+                        <RotateCcw className="h-4 w-4" />
+                        <span className="hidden md:inline">Hoàn kho</span>
                       </Button>
                     )}
                     {onCompleteSale && (
                       <Button 
                         size="sm" 
-                        title="Chốt bán (Thêm vào giỏ)"
+                        title="Xuất bán: thêm vào giỏ, điền sẵn đối tác làm khách hàng"
                         className="h-8 bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
                         onClick={() => onCompleteSale(p)}
                       >
                         <ShoppingCart className="w-4 h-4 mr-1.5" />
-                        Chốt
+                        Xuất bán
                       </Button>
                     )}
                   </div>
@@ -164,7 +175,7 @@ export function PartnerTable({
           {products.length === 0 && (
             <TableRow>
               <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
-                Không có sản phẩm nào đang giao đối tác.
+                Chưa có máy nào đang gửi đối tác.
               </TableCell>
             </TableRow>
           )}

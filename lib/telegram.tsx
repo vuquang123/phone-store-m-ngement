@@ -7,7 +7,7 @@ try { dns.setDefaultResultOrder("ipv4first") } catch {}
 
 type OrderType = "online" | "offline" | "return" | "deposit" | string
 /** Topic logic (tên chung cho cả 2 chi nhánh). */
-export type TelegramTopic = "offline" | "online" | "return" | "deposit" | "note" | "kho" | "dangXuLy" | "cash" | "baoCao"
+export type TelegramTopic = "offline" | "online" | "return" | "deposit" | "note" | "kho" | "dangXuLy" | "cash" | "baoCao" | "guiDoiTac"
 interface TelegramOptions {
   message_thread_id?: number
   chat_id?: number
@@ -15,6 +15,8 @@ interface TelegramOptions {
   branch?: "1" | "2"
   /** Ép topic logic (ưu tiên hơn message_thread_id khi gửi sang nhóm chi nhánh khác). */
   topic?: TelegramTopic
+  /** Trả lời (reply) 1 tin đã gửi trước đó trong cùng nhóm */
+  reply_to_message_id?: number
 }
 
 type DeviceSummary = {
@@ -90,7 +92,7 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
       case "complete_cnc": return "✅ Hoàn thành CNC"
       case "send_warranty": return "🛠️ Gửi bảo hành"
       case "complete_warranty": return "✅ Hoàn thành bảo hành"
-      case "send_partner": return "🤝 Giao đối tác"
+      case "send_partner": return "🤝 Gửi máy cho đối tác"
       case "transfer": return "🔄 Chuyển kho"
       default: return "Thông báo kho"
     }
@@ -128,9 +130,10 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
 // Gửi sự kiện kho (nhập/gửi/hoàn thành) vào group kho.
 // Có fallback: nếu gửi kèm topic (thread) thất bại, thử lại không kèm topic để tránh mất thông báo.
 export async function sendStockEventNotification(event: StockEvent) {
-  const { text, threadId } = buildStockEventMessage(event)
-  // Ưu tiên dùng topic 22 (đã thống nhất cho kho)
-  const first = await sendTelegramMessage(text, "offline", { message_thread_id: threadId })
+  const { text } = buildStockEventMessage(event)
+  // Gửi máy cho đối tác -> topic "Gửi đối tác" (chưa cấu hình thì vào topic Kho); còn lại -> topic Kho
+  const topic: TelegramTopic = event.type === "send_partner" ? "guiDoiTac" : "kho"
+  const first = await sendTelegramMessage(text, "offline", { topic })
   if (first?.success) return first
   console.warn("[TG] stock event send failed with topic, retry without topic", { event, first })
   // Fallback: bỏ topic để vẫn nhận được ở group
@@ -301,7 +304,11 @@ const DEV_TOPIC_THREADS: Record<TelegramTopic, number> = {
   dangXuLy: PROCESSING_THREAD,
   cash: Number(process.env.TELEGRAM_THREAD_CASH) || 37306,
   baoCao: Number(process.env.TELEGRAM_THREAD_BAO_CAO) || Number(process.env.TELEGRAM_THREAD_CHECKOUT) || 4901,
+  // Topic "Gửi đối tác". Chưa đặt -> rơi về topic Kho (xem TOPIC_FALLBACK)
+  guiDoiTac: Number(process.env.TELEGRAM_THREAD_GUI_DOI_TAC) || 0,
 }
+/** Topic chưa cấu hình (=0) thì gửi vào topic dự phòng. */
+const TOPIC_FALLBACK: Partial<Record<TelegramTopic, TelegramTopic>> = { guiDoiTac: "kho" }
 const T1S_THREAD_ENV: Record<TelegramTopic, string> = {
   offline: "OFFLINE",
   online: "ONLINE",
@@ -312,10 +319,11 @@ const T1S_THREAD_ENV: Record<TelegramTopic, string> = {
   dangXuLy: "DANG_XU_LY",
   cash: "CASH",
   baoCao: "BAO_CAO",
+  guiDoiTac: "GUI_DOI_TAC",
 }
 
 function topicOfDevThread(thread: number): TelegramTopic | null {
-  for (const [k, v] of Object.entries(DEV_TOPIC_THREADS)) if (v === thread) return k as TelegramTopic
+  for (const [k, v] of Object.entries(DEV_TOPIC_THREADS)) if (v && v === thread) return k as TelegramTopic
   return null
 }
 function topicOfOrderType(orderType?: OrderType): TelegramTopic {
@@ -334,7 +342,15 @@ function t1sConfig() {
 function t1sThread(topic: TelegramTopic | null): number {
   if (!topic) return 0
   const n = Number(process.env[`T1S_TELEGRAM_THREAD_${T1S_THREAD_ENV[topic]}`])
-  return Number.isFinite(n) && n > 0 ? n : 0
+  if (Number.isFinite(n) && n > 0) return n
+  const fb = TOPIC_FALLBACK[topic]
+  return fb ? t1sThread(fb) : 0
+}
+function devThread(topic: TelegramTopic): number {
+  const n = DEV_TOPIC_THREADS[topic]
+  if (n) return n
+  const fb = TOPIC_FALLBACK[topic]
+  return fb ? devThread(fb) : 0
 }
 
 /** Chi nhánh của request hiện tại ('1' nếu không có phiên, vd cron/webhook). */
@@ -373,7 +389,7 @@ async function routeTelegram(orderType?: OrderType, options?: TelegramOptions, d
     const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ORDER_TYPE_CHAT_MAP["offline"]
     return { botToken, chatId, messageThreadId: effectiveThreadId(chatId, devThreadDefault), branch }
   }
-  const o = options?.topic && !options?.message_thread_id ? { ...options, message_thread_id: DEV_TOPIC_THREADS[options.topic] } : options
+  const o = options?.topic && !options?.message_thread_id ? { ...options, message_thread_id: devThread(options.topic) } : options
   const { chatId, messageThreadId } = resolveChatAndThread(orderType, o)
   return { botToken, chatId, messageThreadId, branch }
 }
@@ -427,6 +443,10 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
         parse_mode: "HTML",
       }
       if (withThread && messageThreadId) payload.message_thread_id = messageThreadId
+      if (options?.reply_to_message_id) {
+        // Tin gốc đã bị xoá thì vẫn gửi (không trả lời) thay vì báo lỗi
+        payload.reply_parameters = { message_id: options.reply_to_message_id, allow_sending_without_reply: true }
+      }
       const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
         headers: {
@@ -444,14 +464,14 @@ export async function sendTelegramMessage(message: string, orderType?: OrderType
 
     const first = await sendOnce(true)
     if (first?.json?.ok) {
-      return { success: true }
+      return { success: true, message_id: first.json.result?.message_id as number | undefined, chat_id: chatId }
     }
 
     if (messageThreadId) {
       console.warn("[TG] sendMessage fail with topic, retrying without thread", first)
       const second = await sendOnce(false)
       if (second?.json?.ok) {
-        return { success: true }
+        return { success: true, message_id: second.json.result?.message_id as number | undefined, chat_id: chatId }
       }
       console.error("Lỗi gửi Telegram (retry)", second)
       return { success: false, error: second?.json?.description || "Unknown Telegram error" }

@@ -176,3 +176,32 @@ export function extractPartnerInfo(note: string = "") {
   const match = note.match(/\[GiaoĐốiTác: (.*?)\]/)
   return match ? match[1] : "Chưa xác định"
 }
+
+/**
+ * Thông tin máy đang gửi đối tác, lưu trong Ghi Chú dạng
+ *   mới: [GiaoĐốiTác: Tên | SĐT | dd/MM/yyyy]
+ *   cũ : [GiaoĐốiTác: Tên - dd/MM/yyyy]   (chưa có SĐT)
+ */
+export function parsePartnerInfo(
+  note: string = "",
+): { name: string; phone: string; date: string; tgMessageId?: number } | null {
+  const m = String(note || "").match(/\[GiaoĐốiTác: (.*?)\]/)
+  if (!m) return null
+  const raw = m[1].trim()
+  if (raw.includes("|")) {
+    const [name = "", phone = "", date = "", tg = ""] = raw.split("|").map((x) => x.trim())
+    // Phần thứ 4 "tg 12345" = mã tin Telegram đã báo gửi đối tác (để trả lời lại khi hoàn / bán)
+    const id = Number((tg.match(/^tg\s*(\d+)$/i) || [])[1])
+    return { name, phone, date, ...(Number.isFinite(id) && id > 0 ? { tgMessageId: id } : {}) }
+  }
+  const old = raw.match(/^(.*?)\s*-\s*(\d{1,2}\/\d{1,2}\/\d{4})$/)
+  return old ? { name: old[1].trim(), phone: "", date: old[2] } : { name: raw, phone: "", date: "" }
+}
+
+/** Chuẩn hoá SĐT: bỏ khoảng trắng/dấu chấm/gạch, +84 -> 0. Trả "" nếu không hợp lệ (9–11 số). */
+export function normalizePhoneVN(v: string = ""): string {
+  let s = String(v || "").replace(/[\s.\-()]/g, "")
+  if (s.startsWith("+84")) s = "0" + s.slice(3)
+  else if (s.startsWith("84") && s.length >= 11) s = "0" + s.slice(2)
+  return /^\d{9,11}$/.test(s) ? s : ""
+}

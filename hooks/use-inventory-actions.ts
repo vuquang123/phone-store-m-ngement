@@ -51,21 +51,21 @@ export function useInventoryActions() {
   // Add more mutations as needed (Warranty, etc.)
 
   const sendPartnerMutation = useMutation({
-    mutationFn: async ({ productIds, partnerName, employeeId }: any) => {
+    mutationFn: async ({ productIds, partnerName, partnerPhone, employeeId }: any) => {
       const res = await fetch("/api/kho-hang/send-partner", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productIds, partnerName, employeeId })
+        body: JSON.stringify({ productIds, partnerName, partnerPhone, employeeId })
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Giao đối tác thất bại")
+        throw new Error(data.error || "Gửi đối tác thất bại")
       }
       return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
-      toast.success("Đã giao đối tác thành công")
+      toast.success("Đã gửi máy cho đối tác. Máy nằm ở tab Máy gửi đối tác.")
     },
     onError: (error: any) => {
       toast.error(`Lỗi: ${error.message}`)

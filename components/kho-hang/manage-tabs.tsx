@@ -31,7 +31,7 @@ import {
 } from "@/hooks/use-inventory-data"
 import { useInventoryActions } from "@/hooks/use-inventory-actions"
 import { useAuthMe } from "@/hooks/use-auth-me"
-import { extractPartnerInfo } from "@/lib/utils/inventory-helpers"
+import { parsePartnerInfo } from "@/lib/utils/inventory-helpers"
 
 const PAGE_SIZE = 10
 
@@ -40,7 +40,6 @@ export type ManageTab = "dang-cnc" | "giao-doi-tac" | "hang-doi-tac" | "bao-hanh
 export const MANAGE_TABS: { key: ManageTab; label: string }[] = [
   { key: "dang-cnc", label: "CNC" },
   { key: "bao-hanh", label: "Bảo hành" },
-  { key: "giao-doi-tac", label: "Giao đối tác" },
   { key: "hang-doi-tac", label: "Hàng đối tác" },
   { key: "phu-kien", label: "Tồn phụ kiện" },
 ]
@@ -48,8 +47,8 @@ export const MANAGE_TABS: { key: ManageTab; label: string }[] = [
 interface ManageTabsProps {
   tab: ManageTab
   isManager: boolean
-  /** Đẩy máy kho ngoài vào giỏ hàng của trang (thay cho hack localStorage + reload). */
-  onAddPartnerToCart: (products: any[]) => void
+  /** Đẩy máy vào giỏ hàng của trang. `partner`: đối tác đang giữ máy -> điền sẵn làm khách hàng. */
+  onAddPartnerToCart: (products: any[], partner?: { name: string; phone: string }) => void
 }
 
 export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsProps) {
@@ -135,7 +134,10 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
     if (partnerSearch) {
       const q = partnerSearch.toLowerCase()
       result = result.filter(
-        (p: any) => p.ten_san_pham?.toLowerCase().includes(q) || p.imei?.toLowerCase().includes(q),
+        (p: any) =>
+          p.ten_san_pham?.toLowerCase().includes(q) ||
+          p.imei?.toLowerCase().includes(q) ||
+          String(p.ghi_chu || "").toLowerCase().includes(q), // tên / SĐT đối tác nằm trong ghi chú
       )
     }
     return result
@@ -168,8 +170,12 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
   }, [accessories, accessoryStatusFilter])
 
   /** Chốt bán 1 máy đối tác -> vào giỏ ngay, không rời trang. */
+  const partnerOf = (p: any) => {
+    const info = parsePartnerInfo(p.ghi_chu)
+    return info ? { name: info.name, phone: info.phone } : undefined
+  }
   const completeSalePartner = (p: any) => {
-    onAddPartnerToCart([p])
+    onAddPartnerToCart([p], partnerOf(p))
     clearSelection()
   }
 
@@ -177,12 +183,16 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
     const selected = partnerProducts.filter((p: any) => selectedIds.includes(p.id))
     if (selected.length === 0) return
     // Giữ nguyên luật cũ: chốt hàng loạt chỉ cho phép trong cùng 1 đối tác.
-    const partners = new Set(selected.map((p: any) => extractPartnerInfo(p.ghi_chu)))
+    const keyOf = (p: any) => {
+      const i = parsePartnerInfo(p.ghi_chu)
+      return i ? `${i.name.toLowerCase()}|${i.phone}` : "?"
+    }
+    const partners = new Set(selected.map(keyOf))
     if (partners.size > 1) {
-      toast.error("Vui lòng chỉ chọn các máy của cùng một đối tác để chốt hàng loạt")
+      toast.error("Vui lòng chỉ chọn các máy của cùng một đối tác để xuất bán hàng loạt")
       return
     }
-    onAddPartnerToCart(selected)
+    onAddPartnerToCart(selected, partnerOf(selected[0]))
     clearSelection()
   }
 
@@ -310,12 +320,12 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-2">
             <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
-              Đang giao đối tác
+              Máy đang gửi đối tác
               <Badge variant="secondary" className="ml-2 bg-purple-50 text-purple-600 border-purple-100">{partnerProducts.length}</Badge>
             </h3>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Input
-                placeholder="Tìm máy đang giao..."
+                placeholder="Tìm máy, tên hoặc SĐT đối tác..."
                 className="h-9 bg-card w-full sm:w-[240px]"
                 value={partnerSearch}
                 onChange={(e) => setPartnerSearch(e.target.value)}
@@ -352,7 +362,7 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
                 className="h-8 bg-purple-600 hover:bg-purple-700 shadow-sm"
                 onClick={bulkCompleteSalePartner}
               >
-                Chốt hàng loạt ({selectedIds.length})
+                Xuất bán ({selectedIds.length})
               </Button>
             </div>
           )}

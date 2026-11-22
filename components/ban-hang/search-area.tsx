@@ -368,7 +368,7 @@ export function SearchArea({
                           )}
                           {onSendPartner && (
                             <Button variant="outline" size="icon" className="h-8 w-8 text-muted-foreground hover:text-purple-600"
-                              title="Giao đối tác" onClick={() => onSendPartner(product)}>
+                              title="Gửi đối tác (thợ / khách sỉ giữ máy)" onClick={() => onSendPartner(product)}>
                               <UserPlus className="h-4 w-4" />
                             </Button>
                           )}
@@ -449,7 +449,6 @@ export function SearchArea({
                               isDisabled ? 'opacity-60' : 'cursor-pointer hover:bg-accent',
                               inCart && 'border-l-2 border-emerald-500',
                               rowBg,
-                              isProcessing(product) && 'bg-amber-50/80 hover:bg-amber-100/60 dark:bg-amber-500/10 dark:hover:bg-amber-500/15',
                             )}
                             onClick={() => {
                               if (isDisabled) return
@@ -477,11 +476,6 @@ export function SearchArea({
                               </div>
                               {trangThai && !/^c[oò]n h[aà]ng$/i.test(String(trangThai).trim()) && (
                                 <Badge className={`${getTrangThaiColor(trangThai)} mt-1 mr-1 border-none whitespace-nowrap text-[10px]`}>{trangThai}</Badge>
-                              )}
-                              {isProcessing(product) && (
-                                <Badge className="mt-1 animate-pulse border-none bg-amber-500 text-[10px] text-white hover:bg-amber-500">
-                                  Đang xử lý{processingName(product) ? ` · ${processingName(product)}` : ''}
-                                </Badge>
                               )}
                               {isAccessory ? (
                                 <div className="mt-1">
@@ -587,7 +581,7 @@ export function SearchArea({
                                     )}
                                     {onSendPartner && (
                                       <Button variant="outline" size="icon" className="h-7 w-7 text-muted-foreground hover:text-purple-600"
-                                        title="Giao đối tác" onClick={() => onSendPartner(product)}>
+                                        title="Gửi đối tác (thợ / khách sỉ giữ máy)" onClick={() => onSendPartner(product)}>
                                         <UserPlus className="h-3.5 w-3.5" />
                                       </Button>
                                     )}

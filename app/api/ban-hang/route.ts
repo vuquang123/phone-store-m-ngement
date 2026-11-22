@@ -7,6 +7,7 @@ import { GIO_BAN_COL } from "@/lib/shift"
 import { branchContextFromHeaders, branchColumnIndex, rowVisible } from "@/lib/branch-context"
 import { branchName, rowBranchId } from "@/lib/branches"
 import { requireSingleBranch } from "@/lib/require-branch"
+import { notifyPartnerSold, type PartnerDevice } from "@/lib/partner-telegram"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
@@ -992,6 +993,10 @@ export async function POST(request: NextRequest) {
         // Máy đang xử lý mà được xuất bán -> xóa tin nhắn "đang xử lý" trong group Telegram
         const idxTgMsgXuLy = colIndex(header, "TG Msg Xử Lý", "TG Msg Xu Ly")
         const tgMsgsToDelete: number[] = []
+        // Máy đang gửi đối tác mà được xuất bán -> trả lời tin gốc ở topic "Gửi đối tác"
+        const idxGhiChuKho = colIndex(header, "Ghi Chú")
+        const idxTenKho = colIndex(header, "Tên Sản Phẩm")
+        const soldFromPartner: PartnerDevice[] = []
 
         if (idxIdMay !== -1) {
           // Chuẩn hóa danh sách IDs/IMEIs/Serials cần xóa từ mayList
@@ -1020,6 +1025,14 @@ export async function POST(request: NextRequest) {
                 const msgId = Number(String(r[idxTgMsgXuLy] || "").trim())
                 if (Number.isFinite(msgId) && msgId > 0) tgMsgsToDelete.push(msgId)
               }
+              if (isMatch && idxGhiChuKho !== -1 && String(r[idxGhiChuKho] || "").includes("[GiaoĐốiTác:")) {
+                soldFromPartner.push({
+                  name: idxTenKho !== -1 ? r[idxTenKho] : undefined,
+                  imei: idxIMEI !== -1 ? r[idxIMEI] : undefined,
+                  serial: idxSerial !== -1 ? r[idxSerial] : undefined,
+                  note: String(r[idxGhiChuKho] || ""),
+                })
+              }
               return !isMatch
             })
 
@@ -1030,6 +1043,13 @@ export async function POST(request: NextRequest) {
             // Xóa tin nhắn "đang xử lý" của các máy vừa bán (online lẫn offline)
             for (const msgId of tgMsgsToDelete) {
               await deleteTelegramMessage(msgId).catch((e) => console.warn("[TG] delete processing msg fail:", e))
+            }
+            if (soldFromPartner.length) {
+              await notifyPartnerSold(
+                soldFromPartner,
+                idDonHang,
+                String(body.employeeName || body.employeeId || body["Người Bán"] || ""),
+              ).catch((e) => console.warn("[TG] partner sold reply fail:", e))
             }
           }
         }
