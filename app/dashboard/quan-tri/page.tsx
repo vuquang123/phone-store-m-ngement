@@ -35,6 +35,8 @@ type TableData = { table: string; label: string; header: (string | null)[]; rows
 type Edits = Record<string, string> // key `${rowNumber}:${col}` -> giá trị mới
 
 const PAGE_SIZE = 100
+/** Cột do hệ thống tự ghi, không hiện trong form thêm dòng (so khớp không dấu, chữ thường). */
+const INTERNAL_COLUMNS = ["dang xu ly", "tg msg xu ly"]
 const ALL = "__all__"
 const ek = (row: number, col: number) => `${row}:${col}`
 
@@ -587,19 +589,20 @@ function DataAdmin() {
 
       {/* Thêm dòng */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
+          <DialogHeader className="space-y-1">
             <DialogTitle>Thêm dòng vào {data?.label}</DialogTitle>
             <DialogDescription>Nhập máy mới số lượng lớn thì dùng màn hình Nhập hàng hoặc Nhập file.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2 md:grid-cols-4">
             {visibleCols.map((c) => {
               const h = String(header[c] || "")
-              if (!h) return null
+              // bỏ các cột hệ thống tự điền (Telegram, đang xử lý)
+              if (!h.trim() || INTERNAL_COLUMNS.includes(fold(h.trim()))) return null
               return (
-                <label key={c} className="text-xs text-muted-foreground">
-                  {h}
-                  <Input className="mt-1" value={addVals[h] || ""} onChange={(e) => setAddVals((p) => ({ ...p, [h]: e.target.value }))} />
+                <label key={c} className="text-[11px] font-medium text-muted-foreground">
+                  {h.trim()}
+                  <Input className="mt-0.5 h-8 text-sm" value={addVals[h] || ""} onChange={(e) => setAddVals((p) => ({ ...p, [h]: e.target.value }))} />
                 </label>
               )
             })}
