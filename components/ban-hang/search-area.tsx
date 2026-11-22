@@ -1,7 +1,7 @@
 "use client"
 
 import { CartItem } from "@/lib/types/ban-hang"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Search, Globe, Lock, Battery, Copy, Pencil, Check, X, ShoppingCart, Edit2, Hammer, UserPlus, Hourglass } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -134,12 +134,8 @@ export function SearchArea({
 
   return (
     <Card className="min-h-[220px] flex flex-col overflow-hidden">
-      <CardHeader>
-        <CardTitle>Tìm kiếm sản phẩm</CardTitle>
-        <CardDescription>Tìm kiếm iPhone và phụ kiện để thêm vào đơn hàng</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col min-h-0">
-        <div className="relative mb-4">
+      <CardContent className="flex flex-col min-h-0 p-3 sm:p-4">
+        <div className="relative mb-3">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Tìm theo Tên, IMEI/Serial..."
@@ -168,7 +164,7 @@ export function SearchArea({
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 mb-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
           <div className="flex flex-wrap items-center gap-1">
             <span className="text-xs text-muted-foreground mr-1">Nguồn:</span>
             <Button size="sm" variant={filterSource === 'all' ? 'default' : 'outline'}
@@ -207,7 +203,7 @@ export function SearchArea({
           {(isSearching || searchResults.length > 0) && (
             <>
               {/* Mobile: Card grid */}
-              <div className="md:hidden mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto overflow-x-hidden rounded-lg border mb-4 p-3 min-h-0">
+              <div className="md:hidden mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-x-hidden mb-2 min-h-0">
                 {sortedSearchResults.map((product: any, idx: number) => {
                   const isDisabled = ["dadatcoc", "daban"].includes(normalizeStatus(product.trang_thai))
                   const rawPin = product.pin ?? product['Pin (%)']
@@ -394,7 +390,7 @@ export function SearchArea({
                 className="hidden md:block rounded-lg border"
                 ref={tableContainerRef}
               >
-                <Table className="min-w-[640px]" containerClassName="max-h-[calc(100vh-360px)] min-h-[200px] [scrollbar-gutter:stable]">
+                <Table className="min-w-[560px]" containerClassName="max-h-[calc(100vh-360px)] min-h-[200px] [scrollbar-gutter:stable]">
                   <TableHeader>
                     <TableRow className="sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))] hover:bg-card">
                       {showSelectCol && (
@@ -414,27 +410,18 @@ export function SearchArea({
                           {sortKey === 'san_pham' && <span>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
                         </div>
                       </TableHead>
-                      <TableHead className="cursor-pointer" onClick={() => toggleSort('imei_loai')}>
-                        IMEI/Seri {sortKey === 'imei_loai' && <span>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
-                      </TableHead>
-                      <TableHead>Loại</TableHead>
-                      <TableHead>Pin</TableHead>
-                      <TableHead>Tình trạng</TableHead>
-                      {isManager && <TableHead>Nguồn nhập</TableHead>}
-                      <TableHead className="cursor-pointer" onClick={() => toggleSort('trang_thai')}>
-                        Trạng thái {sortKey === 'trang_thai' && <span>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
-                      </TableHead>
+                      <TableHead className="whitespace-nowrap">Thông số</TableHead>
                       <TableHead className="text-right cursor-pointer" onClick={() => toggleSort('gia')}>
                         Giá {sortKey === 'gia' && <span>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
                       </TableHead>
-                      {hasManageActions && !isEditMode && <TableHead className="w-[172px] text-right">Kho</TableHead>}
+                      {hasManageActions && !isEditMode && <TableHead className="w-[150px] text-right">Thao tác</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isSearching && sortedSearchResults.length === 0 ? (
                       Array.from({ length: 8 }).map((_, i) => (
                         <TableRow key={`skeleton-${i}`}>
-                          <TableCell colSpan={(isManager ? 8 : 7) + (showSelectCol ? 1 : 0) + (hasManageActions && !isEditMode ? 1 : 0)}><div className="h-8 w-full bg-muted animate-pulse rounded" /></TableCell>
+                          <TableCell colSpan={3 + (showSelectCol ? 1 : 0) + (hasManageActions && !isEditMode ? 1 : 0)}><div className="h-8 w-full bg-muted animate-pulse rounded" /></TableCell>
                         </TableRow>
                       ))
                     ) : (
@@ -488,6 +475,9 @@ export function SearchArea({
                               <div className="font-medium leading-tight">
                                 {highlight(product.ten_san_pham || '[Chưa có tên sản phẩm]', searchQuery)}
                               </div>
+                              {trangThai && !/^c[oò]n h[aà]ng$/i.test(String(trangThai).trim()) && (
+                                <Badge className={`${getTrangThaiColor(trangThai)} mt-1 mr-1 border-none whitespace-nowrap text-[10px]`}>{trangThai}</Badge>
+                              )}
                               {isProcessing(product) && (
                                 <Badge className="mt-1 animate-pulse border-none bg-amber-500 text-[10px] text-white hover:bg-amber-500">
                                   Đang xử lý{processingName(product) ? ` · ${processingName(product)}` : ''}
@@ -523,9 +513,7 @@ export function SearchArea({
                                   )}
                                 </div>
                               )}
-                            </TableCell>
-                            {/* IMEI/Seri */}
-                            <TableCell className="font-mono text-xs px-3 py-2 whitespace-nowrap align-top">
+                              <div className="mt-1 font-mono text-xs text-muted-foreground">
                               {idVal ? (
                                 <button
                                   type="button"
@@ -538,37 +526,25 @@ export function SearchArea({
                               ) : (
                                 <span>{highlight(String(product.loai_phu_kien || '-'), searchQuery)}</span>
                               )}
+                                                          </div>
                             </TableCell>
-                            {/* Loại */}
+                            {/* Loại · Pin · Tình trạng (gộp 1 cột cho gọn) */}
                             <TableCell className="px-3 py-2 align-top">
-                              {isAccessory ? <span className="text-muted-foreground">-</span> : (
-                                <Badge variant="outline" className={`${getLoaiMayBadgeClass(product.loai_may)} font-medium whitespace-nowrap`}>
-                                  {getLoaiMayLabel(product.loai_may)}
-                                </Badge>
+                              {isAccessory ? (
+                                <span className="text-xs text-muted-foreground">Tồn: {product.so_luong_ton ?? product.so_luong ?? 0}</span>
+                              ) : (
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant="outline" className={`${getLoaiMayBadgeClass(product.loai_may)} font-medium whitespace-nowrap`}>
+                                      {getLoaiMayLabel(product.loai_may)}
+                                    </Badge>
+                                    <span className={`text-sm font-semibold whitespace-nowrap ${pinRaw ? getPinColorClass(pinRaw) : 'text-muted-foreground'}`}>
+                                      {formatPinDisplay(pinRaw)}
+                                    </span>
+                                  </div>
+                                  {tinhTrang ? <span className="line-clamp-2 max-w-[220px] text-xs text-muted-foreground" title={tinhTrang}>{tinhTrang}</span> : null}
+                                </div>
                               )}
-                            </TableCell>
-                            {/* Pin */}
-                            <TableCell className="px-3 py-2 whitespace-nowrap align-top">
-                              {isAccessory ? <span className="text-muted-foreground">-</span> : (
-                                <span className={`text-sm font-semibold ${pinRaw ? getPinColorClass(pinRaw) : 'text-muted-foreground'}`}>
-                                  {formatPinDisplay(pinRaw)}
-                                </span>
-                              )}
-                            </TableCell>
-                            {/* Tình trạng */}
-                            <TableCell className="px-3 py-2 text-xs text-muted-foreground max-w-[160px] align-top">
-                              {isAccessory ? `Tồn: ${product.so_luong_ton ?? product.so_luong ?? 0}` : (
-                                <span className="line-clamp-2" title={tinhTrang}>{tinhTrang || '-'}</span>
-                              )}
-                            </TableCell>
-                            {isManager && (
-                              <TableCell className="px-3 py-2 text-xs text-muted-foreground max-w-[180px] align-top">
-                                {isAccessory ? '-' : (product.nguon_nhap || '-')}
-                              </TableCell>
-                            )}
-                            {/* Trạng thái */}
-                            <TableCell className="px-3 py-2 align-top">
-                              <Badge className={`${getTrangThaiColor(trangThai)} border-none whitespace-nowrap`}>{trangThai}</Badge>
                             </TableCell>
                             {/* Giá */}
                             <TableCell className="px-3 py-2 text-right whitespace-nowrap align-top">
@@ -588,7 +564,7 @@ export function SearchArea({
                                 {isAccessory ? (
                                   <span className="text-xs text-muted-foreground">-</span>
                                 ) : (
-                                  <div className="flex items-center justify-end gap-1">
+                                  <div className="flex items-center justify-end gap-0.5">
                                     <Button variant="outline" size="icon" className="h-7 w-7 text-muted-foreground hover:text-sky-600"
                                       title="Copy tin báo khách" onClick={() => handleCopyQuote(product)}>
                                       <Copy className="h-3.5 w-3.5" />

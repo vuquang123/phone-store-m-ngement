@@ -24,8 +24,8 @@ export function CustomerCard({
 }: CustomerCardProps) {
   return (
     <Card>
-      <CardHeader><CardTitle>Khách hàng</CardTitle></CardHeader>
-      <CardContent className="space-y-4">
+      <CardHeader className="pb-3"><CardTitle className="text-lg">Khách hàng</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
         {customerResults.length > 0 && (
           <div className="border rounded bg-card max-h-56 overflow-y-auto">
             {customerResults.map((kh: Customer & { isDeposit?: boolean }) => (

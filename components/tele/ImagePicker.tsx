@@ -1,7 +1,7 @@
 "use client"
 import React, { useCallback, useState } from 'react'
 
-export default function ImagePicker({ onUploaded, onSelectFile, onSelectBlob, onSelectBlobs, immediateUpload = false, orderType }: { onUploaded?: (res: any) => void, onSelectFile?: (dataUrl: string|null, files?: File[])=>void, onSelectBlob?: (blob: Blob|null, file?: File)=>void, onSelectBlobs?: (blobs: Blob[]|null, files?: File[])=>void, immediateUpload?: boolean, orderType?: string }) {
+export default function ImagePicker({ onUploaded, onSelectFile, onSelectBlob, onSelectBlobs, immediateUpload = false, orderType, showSendButton = true }: { showSendButton?: boolean, onUploaded?: (res: any) => void, onSelectFile?: (dataUrl: string|null, files?: File[])=>void, onSelectBlob?: (blob: Blob|null, file?: File)=>void, onSelectBlobs?: (blobs: Blob[]|null, files?: File[])=>void, immediateUpload?: boolean, orderType?: string }) {
   const [preview, setPreview] = useState<string | null>(null)
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
@@ -151,20 +151,24 @@ export default function ImagePicker({ onUploaded, onSelectFile, onSelectBlob, on
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
-        style={{ border: '1px dashed #ccc', padding: 12, borderRadius: 8 }}
+        className="rounded-lg border border-dashed border-border p-2.5"
       >
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => e.target.files && onSelect(e.target.files)}
-        />
-        <p></p>
+        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+          <span aria-hidden>📎</span>
+          <span>{files.length ? `Đã chọn ${files.length} ảnh · chọn thêm` : "Chọn ảnh hoặc kéo thả vào đây"}</span>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="sr-only"
+            onChange={(e) => e.target.files && onSelect(e.target.files)}
+          />
+        </label>
         {files.length > 0 && (
           <div style={{ marginTop: 8, fontSize: 13 }}>
             {files.map((f, i) => (
               <div key={`${f.name}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <strong>{f.name}</strong>
+                <strong className="min-w-0 truncate">{f.name}</strong>
                 <div style={{ color: '#666', fontSize: 12 }}>{Math.round((f.size || 0) / 1024)} KB</div>
                 <button
                   onClick={() => {
@@ -197,7 +201,7 @@ export default function ImagePicker({ onUploaded, onSelectFile, onSelectBlob, on
           </div>
         )}
       </div>
-      {!immediateUpload && (
+      {!immediateUpload && showSendButton && (
         <div style={{ marginTop: 8 }}>
           <button onClick={() => uploadMultiple(files)} disabled={files.length===0 || loading} className="btn">
             {loading ? 'Đang gửi...' : `Gửi ${files.length} ảnh kèm thông báo`}

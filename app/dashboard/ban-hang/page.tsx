@@ -1254,7 +1254,7 @@ export default function BanHangPage() {
   return (
     <ProtectedRoute>
       <PullToRefresh onRefresh={handleRefreshAll}>
-      <div className="space-y-6 pb-28 md:pb-0">
+      <div className="space-y-4 pb-28 md:pb-0">
         {/* Thẻ số liệu chỉ hiện trên desktop: trên mobile ưu tiên ô tìm kiếm để bán hàng. */}
         {!isMobile && <InventoryStats
           {...inventoryStats}
@@ -1303,7 +1303,7 @@ export default function BanHangPage() {
 
             {/* Toolbar quản lý kho — gộp từ trang Kho hàng cũ */}
             {(!isMobile || mobileView === 'san-pham') && (
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap gap-2">
                   <Button
                     onClick={() => { setSelectedProduct(null); setIsProductDialogOpen(true) }}
@@ -1390,8 +1390,8 @@ export default function BanHangPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.25fr)_minmax(0,0.75fr)] gap-6 items-start mt-4">
-              <div className="flex flex-col gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_380px] gap-4 items-start mt-3">
+              <div className="flex flex-col gap-4 min-w-0">
                 <SearchArea
                   isMobile={isMobile}
                   mobileView={mobileView}
@@ -1468,16 +1468,16 @@ export default function BanHangPage() {
                 />
 
                 {(!isMobile || mobileView === 'gio-hang') && (
-                  <Card className="min-h-[120px] h-full w-full flex flex-col lg:min-h-[360px]">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
+                  <Card className="w-full flex flex-col">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-lg">
                         <ShoppingCart className="h-5 w-5" />
                         Giỏ hàng ({cart.length})
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="flex flex-col h-full">
                       {cart.length === 0 ? (
-                        <div className="flex-1 flex flex-col items-center justify-center gap-1 text-muted-foreground text-sm">
+                        <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground text-sm">
                           <span>Giỏ hàng đang trống</span>
                           <span className="text-xs text-muted-foreground">Chọn sản phẩm và bấm &quot;Thêm&quot; để đưa vào giỏ</span>
                         </div>
@@ -1502,7 +1502,7 @@ export default function BanHangPage() {
               </div>
 
               {(!isMobile || mobileView === 'thanh-toan') && (
-                <div className="space-y-6 lg:max-w-[520px]">
+                <div className="space-y-4 lg:sticky lg:top-0 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pb-2 lg:pr-1">
                   {/* Khách hàng */}
                   <CustomerCard
                     customerResults={customerResults}
