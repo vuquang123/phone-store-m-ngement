@@ -1,9 +1,8 @@
 // app/api/phu-kien/[id]/route.ts
-import { google } from "googleapis"
+import { readFromGoogleSheets, updateRangeValues, deleteSheetRows } from "@/lib/google-sheets"
 import { NextResponse, type NextRequest } from "next/server"
 
 // ================== CONFIG ==================
-const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID as string
 
 // Tên sheet đúng như trên file bạn gửi
 const PK_SHEET = "Phu_Kien"
@@ -44,23 +43,10 @@ type APIItem = {
   updated_at?: string
 }
 
-// ================== GOOGLE SHEETS CLIENT ==================
-function getSheetsClient() {
-  const auth = new google.auth.JWT({
-    email: process.env.GOOGLE_CLIENT_EMAIL,
-    key: (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  })
-  return google.sheets({ version: "v4", auth })
-}
-
+// ================== ĐỌC DỮ LIỆU (Google Sheets hoặc Supabase tuỳ DATA_BACKEND) ==================
 async function getAllValues(sheetName: string) {
-  const sheets = getSheetsClient()
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: sheetName,
-  })
-  return res.data.values || []
+  const { header, rows } = await readFromGoogleSheets(sheetName, undefined, { force: true })
+  return (header.length || rows.length ? [header, ...rows] : []) as string[][]
 }
 
 function toIndexMap(headers: string[]) {
@@ -155,7 +141,6 @@ async function updateRow(
   rowNumber: number,
   patchByHeader: Record<string, any>
 ) {
-  const sheets = getSheetsClient()
   const all = await getAllValues(sheetName)
   const header = all[0] || []
   const idx = toIndexMap(header)
@@ -172,32 +157,11 @@ async function updateRow(
   }
 
   const range = `${sheetName}!A${rowNumber}:${columnLetter(header.length)}${rowNumber}`
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [newRow] },
-  })
+  await updateRangeValues(range, [newRow])
 }
 
 async function deleteRow(sheetName: string, rowNumber: number) {
-  const sheets = getSheetsClient()
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID })
-  const found = meta.data.sheets?.find((s) => s.properties?.title === sheetName)
-  const sheetId = found?.properties?.sheetId
-  if (sheetId == null) throw new Error(`Không tìm thấy sheet ${sheetName}`)
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SPREADSHEET_ID,
-    requestBody: {
-      requests: [
-        {
-          deleteDimension: {
-            range: { sheetId, dimension: "ROWS", startIndex: rowNumber - 1, endIndex: rowNumber },
-          },
-        },
-      ],
-    },
-  })
+  await deleteSheetRows(sheetName, rowNumber, 1)
 }
 
 // ================== HELPERS: USERS/ROLE ==================

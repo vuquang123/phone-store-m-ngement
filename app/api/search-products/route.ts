@@ -1,5 +1,5 @@
 // app/api/search/route.ts
-import { google } from "googleapis"
+import { readFromGoogleSheets } from "@/lib/google-sheets"
 import { type NextRequest, NextResponse } from "next/server"
 import { parseVietnameseNumber } from "@/lib/number"
 import { isConHangStatus } from "@/lib/utils/inventory-helpers"
@@ -7,7 +7,6 @@ import { isConHangStatus } from "@/lib/utils/inventory-helpers"
 export const dynamic = "force-dynamic"
 
 // ========= CONFIG =========
-const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID as string
 const SHEET_PRODUCTS = "Kho_Hang"
 const SHEET_ACCESSORIES = "Phu_Kien"
 
@@ -40,27 +39,10 @@ const ACCESSORY_HEADERS = [
   "Ghi Chú",
 ] as const
 
-// ========= GOOGLE SHEETS CLIENT =========
-function sheetsClient(scope: "ro" | "rw" = "ro") {
-  const auth = new google.auth.JWT({
-    email: process.env.GOOGLE_CLIENT_EMAIL,
-    key: (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
-    scopes: [
-      scope === "ro"
-        ? "https://www.googleapis.com/auth/spreadsheets.readonly"
-        : "https://www.googleapis.com/auth/spreadsheets",
-    ],
-  })
-  return google.sheets({ version: "v4", auth })
-}
-
+// ========= ĐỌC DỮ LIỆU (Google Sheets hoặc Supabase tuỳ DATA_BACKEND) =========
 async function readSheetAll(sheetName: string) {
-  const sheets = sheetsClient("ro")
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: sheetName,
-  })
-  return (res.data.values || []) as string[][]
+  const { header, rows } = await readFromGoogleSheets(sheetName)
+  return (header.length || rows.length ? [header, ...rows] : []) as string[][]
 }
 
 const norm = (s: any) => String(s ?? "").toLowerCase().trim()

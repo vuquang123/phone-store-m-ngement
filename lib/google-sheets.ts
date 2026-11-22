@@ -1,5 +1,14 @@
 import { DateTime } from "luxon"
 import { google } from "googleapis"
+import * as pgStore from "./sheet-store/pg"
+import { parseRef } from "./sheet-store/a1"
+
+/**
+ * DATA_BACKEND=postgres -> mọi hàm đọc/ghi trong file này chạy trên Supabase (Postgres)
+ * thay vì Google Sheets, giữ nguyên "hình dạng" dữ liệu (tiêu đề + dòng) nên code nghiệp vụ
+ * không phải sửa. Bỏ biến này (hoặc đặt "sheets") để quay lại Google Sheets ngay lập tức.
+ */
+export const USE_POSTGRES = String(process.env.DATA_BACKEND || "").trim().toLowerCase() === "postgres"
 
 /* =================== Utils  =================== */
 export const norm = (s: string) =>
@@ -269,6 +278,15 @@ function invalidateSheetCache(sheetName: string) {
 // Đọc dữ liệu, trả về { header, rows }
 // Mặc định đọc rộng tới cột ZZ để tránh thiếu cột (sheet này vượt quá Z)
 export async function readFromGoogleSheets(sheetName: string, range: string = "A1:ZZ10000", options?: { silent?: boolean; force?: boolean }): Promise<SheetData> {
+  if (USE_POSTGRES) {
+    try {
+      const values = await pgStore.readValues(parseRef(sheetName, range))
+      return { header: values[0] || [], rows: values.slice(1) }
+    } catch (error: any) {
+      if (!options?.silent) console.error("[DB] Read error:", { sheet: sheetName, range, message: error?.message })
+      throw error
+    }
+  }
   const cacheKey = `${sheetName}::${range}`
   // force = bỏ qua cache (dùng cho nút "Làm mới" để lấy data mới nhất từ sheet)
   if (options?.force) invalidateSheetCache(sheetName)
@@ -379,6 +397,10 @@ export async function syncToGoogleSheets(sheetName: string, data: any[], range: 
     if (!data || !Array.isArray(data)) {
         return { success: false, error: "Dữ liệu đồng bộ không hợp lệ (không phải mảng)" }
     }
+    if (USE_POSTGRES) {
+      await pgStore.replaceValues(sheetName, range, data)
+      return { success: true }
+    }
 
     // Xóa dữ liệu cũ rộng hẳn ra (đến cột ZZ) để chắc chắn không còn dữ liệu "ma"
     await sheets.spreadsheets.values.clear({
@@ -418,6 +440,10 @@ function numberToColumnName(num: number): string {
 // Thêm dòng mới vào sheet
 export async function appendToGoogleSheets(sheetName: string, data: any[]) {
   try {
+    if (USE_POSTGRES) {
+      await pgStore.appendValues(sheetName, [data])
+      return { success: true }
+    }
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
       range: escapeSheetName(sheetName),
@@ -438,6 +464,10 @@ export async function appendToGoogleSheets(sheetName: string, data: any[]) {
 export async function appendMultipleToGoogleSheets(sheetName: string, data: any[][]) {
   if (!data || data.length === 0) return { success: true }
   try {
+    if (USE_POSTGRES) {
+      await pgStore.appendValues(sheetName, data)
+      return { success: true }
+    }
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
       range: escapeSheetName(sheetName),
@@ -488,6 +518,7 @@ export async function updateRowInGoogleSheets(sheetName: string, key: string, ke
 // có thể BẰNG hoặc LỚN HƠN tồn thật -> tồn kho trông như không bao giờ giảm.
 // Hàm này throw khi đọc lỗi để caller biết mà bỏ qua việc ghi.
 export async function readRangeValuesFresh(range: string): Promise<any[][]> {
+  if (USE_POSTGRES) return pgStore.readValuesUnformatted(range)
   await throttleReads()
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
@@ -544,6 +575,10 @@ const isGridLimitError = (e: any) =>
   /exceeds grid limits|beyond the last row|above the last row/i.test(String(e?.message || e?.errors?.[0]?.message || ""))
 
 export async function updateRangeValues(range: string, values: any[][]) {
+  if (USE_POSTGRES) {
+    await pgStore.updateValues(range, values)
+    return { success: true }
+  }
   // Dùng client singleton (getSheetsClient) thay vì tạo google.sheets() mới mỗi lần.
   const write = () =>
     sheets.spreadsheets.values.update({
@@ -570,6 +605,10 @@ export async function batchUpdateRangeValues(
   items: Array<{ range: string; values: any[][] }>
 ) {
   if (!items.length) return { success: true }
+  if (USE_POSTGRES) {
+    await pgStore.batchUpdateValues(items)
+    return { success: true }
+  }
 
   const write = () =>
     sheets.spreadsheets.values.batchUpdate({
@@ -613,6 +652,11 @@ export async function batchUpdateRangeValues(
 }
 
 export async function ensureSheetExists(sheetName: string) {
+  if (USE_POSTGRES) {
+    if (await pgStore.sheetExists(sheetName)) return { success: true, created: false }
+    await pgStore.createSheet(sheetName)
+    return { success: true, created: true }
+  }
   const meta = await sheets.spreadsheets.get({ spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID })
   const exists = meta.data.sheets?.some((sheet: any) => sheet.properties?.title === sheetName)
   if (exists) return { success: true, created: false }
@@ -624,6 +668,22 @@ export async function ensureSheetExists(sheetName: string) {
   })
   invalidateSheetCache(sheetName)
   return { success: true, created: true }
+}
+
+/** Xoá `count` dòng bắt đầu từ `rowNumber` (đánh số như trên Sheet) và đẩy các dòng dưới lên. */
+export async function deleteSheetRows(sheetName: string, rowNumber: number, count = 1) {
+  if (USE_POSTGRES) return pgStore.deleteRows(sheetName, rowNumber, count)
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID })
+  const found = meta.data.sheets?.find((s: any) => s.properties?.title === sheetName)
+  const sheetId = found?.properties?.sheetId
+  if (sheetId == null) throw new Error(`Không tìm thấy sheet ${sheetName}`)
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: GOOGLE_SHEETS_SPREADSHEET_ID,
+    requestBody: {
+      requests: [{ deleteDimension: { range: { sheetId, dimension: "ROWS", startIndex: rowNumber - 1, endIndex: rowNumber - 1 + count } } }],
+    },
+  })
+  invalidateSheetCache(sheetName)
 }
 
 export async function ensureSheetHeader(sheetName: string, header: string[]) {
