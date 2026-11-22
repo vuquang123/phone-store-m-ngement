@@ -20,10 +20,25 @@ type Meta = { sheet: string; tbl: string; columns: string[]; headers: string[] }
 
 /* ------------------------------------------------------------------ pool */
 const g = globalThis as any
+/**
+ * Làm sạch chuỗi kết nối dán từ dashboard: bỏ khoảng trắng, dấu ngoặc kép/đơn
+ * bao ngoài và tiền tố "DATABASE_URL=" lỡ dán kèm. Nếu không, pg sẽ hiểu chuỗi
+ * là URL tương đối và đi tìm máy chủ tên "base" (lỗi ENOTFOUND base).
+ */
+export function cleanConnectionString(raw: string | undefined): string {
+  let s = String(raw ?? "").trim()
+  s = s.replace(/^(?:export\s+)?[A-Z_]+\s*=\s*/, "").trim()
+  s = s.replace(/^["'`]+|["'`]+$/g, "").trim()
+  return s
+}
+
 function pool(): Pool {
   if (!g.__sheetStorePool) {
-    const connectionString = process.env.DATABASE_URL
+    const connectionString = cleanConnectionString(process.env.DATABASE_URL)
     if (!connectionString) throw new Error("Thiếu DATABASE_URL (chuỗi kết nối Supabase)")
+    if (!/^postgres(?:ql)?:\/\//i.test(connectionString)) {
+      throw new Error("DATABASE_URL không hợp lệ: phải bắt đầu bằng postgresql://")
+    }
     g.__sheetStorePool = new Pool({
       connectionString,
       // Serverless: mỗi instance giữ ít kết nối; Supavisor (cổng 6543) lo phần còn lại.
