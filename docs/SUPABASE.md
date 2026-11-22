@@ -106,8 +106,12 @@ phụ kiện, khách hàng, đặt cọc, bán hàng, hoàn trả, tiền mặt,
 
 ## 5. Sao lưu
 
-- **Tự động mỗi đêm (00:00 giờ VN)**: cron `/api/cron/sao-luu-sheet` chép toàn bộ Supabase về Google Sheet cũ.
-  Sheet luôn có bản sao mới nhất để xem hoặc tải Excel. Chỉ chạy khi `DATA_BACKEND=postgres`.
+- **Tự động mỗi 6 tiếng** (0h, 6h, 12h, 18h giờ VN): GitHub Actions (`.github/workflows/sao-luu-sheet.yml`) gọi
+  `/api/cron/sao-luu-sheet`, chép **toàn bộ** Supabase về Google Sheet cũ. Chỉ chạy khi `DATA_BACKEND=postgres`.
+  Cần thêm 2 secret ở GitHub repo: **Settings > Secrets and variables > Actions > New repository secret**:
+  `APP_URL` (địa chỉ web, vd `https://ten-app.vercel.app`) và `CRON_SECRET` (giống biến trên Vercel).
+  Xem lịch sử chạy ở tab **Actions** của repo; bấm **Run workflow** để chạy ngay.
+  (Vercel gói Hobby chỉ cho cron 1 lần/ngày nên không đặt lịch này trong `vercel.json`.)
 - **Sao lưu tay** bất kỳ lúc nào: `pnpm db:export --yes` (ghi đè Google Sheet bằng dữ liệu Supabase).
 - Gói **Supabase Pro** có thêm backup tự động hằng ngày, giữ 7 ngày, khôi phục bằng 1 nút.
 
@@ -124,11 +128,25 @@ phụ kiện, khách hàng, đặt cọc, bán hàng, hoàn trả, tiền mặt,
 | Supabase | Pro | 25 USD/tháng (~650k) | Backup hằng ngày 7 ngày, không bao giờ tạm dừng, 8 GB |
 | Vercel | giữ gói hiện tại | | Máy chủ đặt ở Singapore (`vercel.json` > `regions: sin1`) để gần Supabase |
 
-Khuyên dùng: bắt đầu **Free** (đã có sao lưu về Sheet mỗi đêm), lên **Pro** khi chạy 2 cửa hàng.
+Khuyên dùng: bắt đầu **Free** (đã có sao lưu về Sheet mỗi 6 tiếng), lên **Pro** khi chạy 2 cửa hàng.
 
-Theo dõi: Supabase, mục **Project Settings, Usage** (dung lượng, băng thông);
-**Organization, Billing** để đặt/giữ **Spend cap** (bật sẵn trên Pro, không bao giờ bị tính vượt 25 USD).
-Vercel: mục **Usage**.
+### Xem thông số ở đâu
+- **Dung lượng, băng thông, số kết nối**: supabase.com/dashboard, chọn Organization, mục **Usage**
+  (có biểu đồ theo ngày và vạch giới hạn của gói Free).
+- **Dữ liệu từng bảng**: chọn project, **Table Editor**; dung lượng từng bảng: **Database > Tables** (cột Size).
+- **Tốc độ, truy vấn chậm**: project, **Reports** (API, Database) và **Advisors > Performance**.
+- **Tiền**: Organization, **Billing** (gói hiện tại, hoá đơn, Spend cap).
+
+### Khi nào cần trả phí (lên Pro 25 USD/tháng)
+Gói Free đủ dùng khi chưa chạm các mốc sau. Nên nâng cấp khi gặp **một trong các trường hợp**:
+1. **Database size** ở trang Usage vượt khoảng **400 MB** (giới hạn 500 MB; hiện chỉ vài MB, 2 cửa hàng vẫn còn rất xa).
+2. **Egress** (dữ liệu tải ra) gần **5 GB/tháng**.
+3. Muốn có **backup tự động hằng ngày** do Supabase giữ (gói Free không có, mình đang bù bằng sao lưu về Sheet mỗi 6 tiếng).
+4. Cần chắc chắn không bị **tạm dừng**: gói Free tạm dừng project nếu 7 ngày không có truy cập. Web dùng hằng ngày và
+   sao lưu 6 tiếng/lần đều chạm database nên thực tế sẽ không bị dừng.
+Supabase gửi email cảnh báo khi gần chạm giới hạn. Trên Pro, giữ **Spend cap** bật thì không bao giờ bị tính quá 25 USD/tháng.
+
+Vercel: mục **Usage** của team.
 
 ## Kỹ thuật (cho người sửa code)
 

@@ -6,7 +6,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
-// Sao lưu hằng đêm: chép toàn bộ dữ liệu Supabase về Google Sheet cũ.
+// Sao lưu mỗi 6 tiếng (GitHub Actions .github/workflows/sao-luu-sheet.yml gọi vào): chép toàn bộ dữ liệu Supabase về Google Sheet cũ.
 // Google Sheet trở thành bản sao lưu (xem được, tải Excel được) và là đường lùi nếu cần.
 export async function GET(request: NextRequest) {
   if (!isInternalRequestAuthorized(request)) {

@@ -10,10 +10,6 @@
     {
       "path": "/api/cron/bao-cao-ngay",
       "schedule": "0 15 * * *"
-    },
-    {
-      "path": "/api/cron/sao-luu-sheet",
-      "schedule": "0 17 * * *"
     }
   ]
 }
