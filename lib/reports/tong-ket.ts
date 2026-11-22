@@ -11,6 +11,8 @@
 
 import { DateTime } from "luxon"
 import { readFromGoogleSheets, colIndex } from "@/lib/google-sheets"
+import { branchColumnIndex } from "@/lib/branch-context"
+import { DEFAULT_BRANCH, activeBranchLabel, rowBranchId, type ActiveBranch } from "@/lib/branches"
 import { sumByMethod, parseMoney as num } from "@/lib/utils/payment"
 import { normalizeStatus, isConHangStatus, isDangCncStatus } from "@/lib/utils/inventory-helpers"
 import {
@@ -47,11 +49,20 @@ function daGui(vanChuyen: string) {
   return /đã gửi/i.test(vanChuyen)
 }
 
-/** Tổng hợp một ngày (hoặc một ca trong ngày). */
-export async function buildSummary(day: DateTime, shift: ShiftDef) {
+/** Giữ các dòng thuộc chi nhánh ("all" = mọi dòng; bảng chưa có cột chi nhánh = DEV PỒ). */
+type Tbl = { header: string[]; rows: Row[] }
+function onlyBranch(t: Tbl, branch: ActiveBranch): Tbl {
+  if (branch === "all") return t
+  const bi = branchColumnIndex(t.header || [])
+  if (bi === -1) return { ...t, rows: branch === DEFAULT_BRANCH ? t.rows : [] }
+  return { ...t, rows: (t.rows || []).filter((r: any[]) => rowBranchId(r?.[bi]) === branch) }
+}
+
+/** Tổng hợp một ngày (hoặc một ca trong ngày) của 1 chi nhánh, hoặc "all" = cả 2. */
+export async function buildSummary(day: DateTime, shift: ShiftDef, branch: ActiveBranch = "all") {
   const sameDay = (dt: DateTime | null) => !!dt && dt.hasSame(day, "day")
 
-  const [banHang, tienMat, datCoc, hoanTra, ghiChu, thongBao, khoHang] = await Promise.all([
+  const [banHangAll, tienMatAll, datCocAll, hoanTraAll, ghiChuAll, thongBao, khoHangAll] = await Promise.all([
     readFromGoogleSheets("Ban_Hang"),
     readFromGoogleSheets("Tien_mat").catch(() => ({ header: [], rows: [] })),
     readFromGoogleSheets("Dat_Coc").catch(() => ({ header: [], rows: [] })),
@@ -60,6 +71,13 @@ export async function buildSummary(day: DateTime, shift: ShiftDef) {
     readFromGoogleSheets("Thong_Bao").catch(() => ({ header: [], rows: [] })),
     readFromGoogleSheets("Kho_Hang").catch(() => ({ header: [], rows: [] })),
   ])
+  // Thong_Bao chỉ dùng tra giờ tạo đơn theo mã đơn -> không cần lọc.
+  const banHang = onlyBranch(banHangAll, branch)
+  const tienMat = onlyBranch(tienMatAll, branch)
+  const datCoc = onlyBranch(datCocAll, branch)
+  const hoanTra = onlyBranch(hoanTraAll, branch)
+  const ghiChu = onlyBranch(ghiChuAll, branch)
+  const khoHang = onlyBranch(khoHangAll, branch)
 
   // Giờ tạo đơn CŨ: sheet Ban_Hang không lưu giờ, nhưng mỗi đơn đều sinh một
   // thông báo "Đơn hàng mới DHxxxxx" có Created At đầy đủ. Dùng làm nguồn dự
@@ -358,6 +376,8 @@ export async function buildSummary(day: DateTime, shift: ShiftDef) {
 
   return {
     ngay: day.toISODate(),
+    chi_nhanh: branch,
+    chi_nhanh_label: activeBranchLabel(branch),
     ca: shift.key,
     ca_label: SHIFTS.find((s) => s.key === shift.key)?.label || "",
     ban_hang: {

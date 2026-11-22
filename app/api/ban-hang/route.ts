@@ -6,6 +6,7 @@ import { readFromGoogleSheets, appendToGoogleSheets, appendMultipleToGoogleSheet
 import { GIO_BAN_COL } from "@/lib/shift"
 import { branchContextFromHeaders, branchColumnIndex, rowVisible } from "@/lib/branch-context"
 import { branchName, rowBranchId } from "@/lib/branches"
+import { requireSingleBranch } from "@/lib/require-branch"
 import { DateTime } from "luxon"
 import { addNotification } from "@/lib/notifications"
 import { loadWarrantyPackages, buildContracts, saveContracts, type WarrantySelectionInput } from "@/lib/warranty"
@@ -563,6 +564,8 @@ export async function GET(request: NextRequest) {
 /* =================== POST: Xuất hàng 1 máy =================== */
 export async function POST(request: NextRequest) {
   try {
+  const chooseBranch = requireSingleBranch(request)
+  if (chooseBranch) return chooseBranch
   const body = await request.json()
   // Phân tách nếu FE gửi cấu trúc tối ưu: coreTotal, warrantySelections, warrantyTotal, finalThanhToan
   // Backward compatible: nếu không có coreTotal thì coi Giá Bán hiện gửi đã bao gồm.

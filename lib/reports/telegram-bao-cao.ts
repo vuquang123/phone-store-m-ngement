@@ -22,7 +22,8 @@ export function formatBaoCaoNgay(s: Summary): string {
   const blocks: string[] = []
 
   const ngayVN = String(s.ngay || "").split("-").reverse().join("/")
-  blocks.push(`📊 <b>BÁO CÁO TỔNG HỢP NGÀY ${ngayVN}</b>`)
+  const cn = (s as any).chi_nhanh && (s as any).chi_nhanh !== "all" ? ` - ${String((s as any).chi_nhanh_label || "")}` : ""
+  blocks.push(`📊 <b>BÁO CÁO TỔNG HỢP NGÀY ${ngayVN}${cn}</b>`)
 
   // --- Bán hàng ---
   const donOff = b.don_hang.filter((o: any) => /off/i.test(o.loai_don)).length

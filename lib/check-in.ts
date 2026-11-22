@@ -4,6 +4,7 @@
 import { DateTime } from "luxon"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, khoColIndex } from "@/lib/google-sheets"
 import { parseVietnameseNumber } from "@/lib/number"
+import { currentBranchContext, filterRowsByBranch } from "@/lib/branch-context"
 import {
   SERIES_KEYS,
   SERIES_LABELS,
@@ -26,7 +27,7 @@ function esc(s: any): string {
 }
 
 export function buildCheckinMessage(input: CheckinInput): string {
-  const { ca, khoNgoai, khoTrong, trangThai, lyDo, tienMat, nhanVien } = input
+  const { ca, khoNgoai, khoTrong, trangThai, lyDo, tienMat, nhanVien, chiNhanh } = input
 
   const tongThucTe = (khoNgoai.thucTe || 0) + (khoTrong.thucTe || 0)
   const tongWebsite = (khoNgoai.website || 0) + (khoTrong.website || 0)
@@ -45,7 +46,7 @@ export function buildCheckinMessage(input: CheckinInput): string {
     })
 
   const lines: string[] = [
-    `Báo cáo check in ca ${esc(ca)}`,
+    `Báo cáo check in ca ${esc(ca)}${chiNhanh ? ` - ${esc(chiNhanh)}` : ""}`,
     `  - KHO NGOÀI: Tổng máy ${khoNgoai.thucTe}/${khoNgoai.website}`,
     ...seriesLines(khoNgoai),
     `- KHO TRONG: Tổng ${khoTrong.thucTe}/${khoTrong.website}`,
@@ -147,7 +148,9 @@ export interface CheckinRecord {
 /** Đọc lịch sử check-in (mới nhất trước). */
 export async function getCheckins(force = false): Promise<CheckinRecord[]> {
   await ensureHeader()
-  const { header, rows } = await readFromGoogleSheets(SHEET, undefined, { force })
+  const { header, rows: allRows } = await readFromGoogleSheets(SHEET, undefined, { force })
+  // Mỗi chi nhánh chỉ thấy lịch sử check-in của mình (chủ shop/quản lý chọn "Tất cả" thì thấy hết)
+  const rows = filterRowsByBranch(header, allRows || [], await currentBranchContext())
   const lower = header.map((h) => (h || "").trim().toLowerCase())
   const idx = (name: string) => lower.indexOf(name.trim().toLowerCase())
   const g = (r: any[], name: string) => r[idx(name)]
@@ -201,7 +204,9 @@ const KHO_HANG_SHEET = "Kho_Hang"
  * ("Kho trong" / "Kho ngoài"), tách theo từng dòng máy.
  */
 export async function getWebStockCounts(force = false): Promise<WebStock> {
-  const { header, rows } = await readFromGoogleSheets(KHO_HANG_SHEET, undefined, { force })
+  const { header, rows: allRows } = await readFromGoogleSheets(KHO_HANG_SHEET, undefined, { force })
+  // Chỉ đếm máy của chi nhánh đang check-in
+  const rows = filterRowsByBranch(header, allRows || [], await currentBranchContext())
   const iTen = colIndex(header, "Tên Sản Phẩm")
   const iKho = khoColIndex(header)
   const iId = colIndex(header, "ID Máy")

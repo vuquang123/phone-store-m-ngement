@@ -6,16 +6,14 @@ import { buildCheckoutMessage, addCheckout, getCheckouts, type Ca, type TrangTha
 import { sendTelegramMessage, sendTelegramPhotoBase64, sendTelegramMediaGroup } from "@/lib/telegram"
 import { getServerUser } from "@/lib/auth"
 import { parseVietnameseNumber } from "@/lib/number"
+import { currentWriteBranchName } from "@/lib/branch-context"
+import { BAO_CAO_TONG_HOP } from "@/lib/telegram-topics"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-const CHECKOUT_THREAD = Number(process.env.TELEGRAM_THREAD_CHECKOUT) || 4901
-// Nếu topic 4901 nằm ở group KHÁC group "offline" mặc định, đặt TELEGRAM_CHAT_CHECKOUT = id group (-100...).
-const CHECKOUT_CHAT = Number(process.env.TELEGRAM_CHAT_CHECKOUT) || 0
-const TG_OPTS = CHECKOUT_CHAT
-  ? { message_thread_id: CHECKOUT_THREAD, chat_id: CHECKOUT_CHAT }
-  : { message_thread_id: CHECKOUT_THREAD }
+// Topic "Báo cáo tổng hợp" (dùng chung với check-in và yêu cầu duyệt lệch ca)
+const TG_OPTS = BAO_CAO_TONG_HOP
 
 const num = (v: any): number => {
   return parseVietnameseNumber(v)
@@ -81,6 +79,7 @@ export async function POST(req: NextRequest) {
         ghiChuCaSau: tc.ghiChuCaSau ? String(tc.ghiChuCaSau) : "",
       },
       nhanVien,
+      chiNhanh: (await currentWriteBranchName()) || undefined,
     }
 
     // 1) LƯU SHEET TRƯỚC (nguồn sự thật) — lỗi thì 500, không gửi Telegram.
@@ -92,22 +91,26 @@ export async function POST(req: NextRequest) {
     }
 
     // 2) Telegram (best-effort) — không throw, không ảnh hưởng kết quả lưu sheet.
+    let telegram = false
     try {
       const text = buildCheckoutMessage(data)
       const opts = TG_OPTS
+      let res: any
       if (images.length === 0) {
-        await sendTelegramMessage(text, "offline", opts)
+        res = await sendTelegramMessage(text, "offline", opts)
       } else if (images.length === 1) {
-        await sendTelegramPhotoBase64(images[0], "checkout.jpg", text, "offline", opts)
+        res = await sendTelegramPhotoBase64(images[0], "checkout.jpg", text, "offline", opts)
       } else {
         const buffers = images.map((b64) => Buffer.from(String(b64).replace(/^data:[^;]+;base64,/, ""), "base64"))
-        await sendTelegramMediaGroup(buffers, buffers.map((_, i) => `checkout_${i}.jpg`), [text], "offline", opts)
+        res = await sendTelegramMediaGroup(buffers, buffers.map((_, i) => `checkout_${i}.jpg`), [text], "offline", opts)
       }
+      telegram = !!res?.success
+      if (!telegram) console.warn("[CHECK-OUT] Gửi Telegram thất bại (đã lưu):", res?.error)
     } catch (e) {
       console.warn("[CHECK-OUT] Gửi Telegram thất bại (đã lưu sheet):", e)
     }
 
-    return NextResponse.json({ success: true, id: record.id })
+    return NextResponse.json({ success: true, id: record.id, telegram })
   } catch (e: any) {
     return NextResponse.json({ success: false, message: errText(e) }, { status: 500 })
   }

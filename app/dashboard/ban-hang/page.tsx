@@ -1256,6 +1256,11 @@ export default function BanHangPage() {
     <ProtectedRoute>
       <PullToRefresh onRefresh={handleRefreshAll}>
       <div className="space-y-4 pb-28 md:pb-0">
+        {me?.activeBranch === "all" && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            Đang xem <b>tất cả chi nhánh</b>: chỉ xem được. Muốn xuất đơn, đặt cọc, nhập hàng, gửi CNC… hãy chọn DEV PỒ hoặc T1s ở góc trên.
+          </div>
+        )}
         {/* Thẻ số liệu chỉ hiện trên desktop: trên mobile ưu tiên ô tìm kiếm để bán hàng. */}
         {!isMobile && <InventoryStats
           {...inventoryStats}

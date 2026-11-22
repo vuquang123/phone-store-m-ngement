@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
+import { BRANCHES, isBranchColumn, normalizeBranch, rowBranchId } from "@/lib/branches"
 import {
   Download,
   Loader2,
@@ -44,10 +45,46 @@ const PAGE_SIZE = 100
 const INTERNAL_COLUMNS = ["dang xu ly", "tg msg xu ly"]
 /** Cột hiện sẵn nút lọc nếu bảng có (so khớp không dấu, chữ thường). */
 const PRESET_FILTERS = [
-  "trang thai", "trang thai kho", "ten san pham", "loai may", "dung luong", "mau sac", "dang sim",
+  "chi nhanh", "trang thai", "trang thai kho", "ten san pham", "loai may", "dung luong", "mau sac", "dang sim",
   "nguon nhap", "nguon hang", "nguon", "loai", "loai don", "nguoi ban", "hinh thuc thanh toan", "hinh thuc van chuyen",
 ]
 const ek = (row: number, col: number) => `${row}:${col}`
+
+/* ------------------------------ Chi nhánh ------------------------------ */
+const BRANCH_STYLE: Record<string, string> = {
+  "1": "bg-blue-600 text-white border-blue-600",
+  "2": "bg-orange-500 text-white border-orange-500",
+}
+/** Nhãn chi nhánh có màu (dùng trong bộ lọc). Ô trống = DEV PỒ (dữ liệu cũ). */
+function BranchChip({ value }: { value: string }) {
+  const id = rowBranchId(value)
+  const name = BRANCHES.find((b) => b.id === id)?.name
+  return (
+    <span className={`rounded px-1.5 py-px text-xs font-medium ${BRANCH_STYLE[id]}`}>
+      {name}{!String(value || "").trim() ? " (trống)" : ""}
+    </span>
+  )
+}
+/** Hai nút bấm chuyển nhanh chi nhánh ngay trong ô. */
+function BranchToggle({ value, onPick, size = "sm" }: { value: string; onPick: (name: string) => void; size?: "sm" | "md" }) {
+  const id = normalizeBranch(value) || (String(value || "").trim() ? "" : "1")
+  return (
+    <div className="inline-flex overflow-hidden rounded-md border" onClick={(e) => e.stopPropagation()}>
+      {BRANCHES.map((b) => (
+        <button
+          key={b.id}
+          type="button"
+          onClick={() => onPick(b.name)}
+          className={`whitespace-nowrap border-l first:border-l-0 font-medium transition-colors ${size === "md" ? "px-3 py-1.5 text-sm" : "px-2 py-0.5 text-xs"} ${
+            id === b.id ? BRANCH_STYLE[b.id] : "bg-background text-muted-foreground hover:bg-muted"
+          }`}
+        >
+          {b.name}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 /* ------------------------------ CSV ------------------------------ */
 function toCsv(header: string[], rows: string[][]): string {
@@ -210,6 +247,14 @@ function DataAdmin() {
   const header = useMemo(() => data?.header || [], [data])
   const visibleCols = useMemo(() => header.map((h, i) => (h === null ? -1 : i)).filter((i) => i >= 0), [header])
   const valueOf = useCallback((r: Row, c: number) => edits[ek(r.rowNumber, c)] ?? r.cells[c] ?? "", [edits])
+  /** Ghi tạm giá trị một ô (bỏ đánh dấu nếu trùng giá trị gốc). */
+  const setCell = (r: Row, c: number, value: string) =>
+    setEdits((prev) => {
+      const next = { ...prev }
+      if (value === (r.cells[c] ?? "")) delete next[ek(r.rowNumber, c)]
+      else next[ek(r.rowNumber, c)] = value
+      return next
+    })
 
   const hfold = useCallback((c: number) => cellKey(String(header[c] ?? "")), [header])
   const presetCols = useMemo(() => {
@@ -553,7 +598,7 @@ function DataAdmin() {
               selected={colFilters[c] || []}
               onChange={(next) => { setColFilters((f) => ({ ...f, [c]: next })); setPage(0) }}
               onRemove={presetCols.includes(c) ? undefined : () => { setExtraCols((x) => x.filter((y) => y !== c)); setColFilters((f) => { const n = { ...f }; delete n[c]; return n }); setPage(0) }}
-              render={kind === "color" ? (v) => <ColorChip value={v} /> : kind === "type" ? (v) => <TypeChip value={v} /> : undefined}
+              render={isBranchColumn(header[c]) ? (v) => <BranchChip value={v} /> : kind === "color" ? (v) => <ColorChip value={v} /> : kind === "type" ? (v) => <TypeChip value={v} /> : undefined}
             />
           )
         })}
@@ -655,6 +700,13 @@ function DataAdmin() {
                     const isEditing = editing?.row === r.rowNumber && editing.col === c
                     const dirty = ek(r.rowNumber, c) in edits
                     const v = valueOf(r, c)
+                    if (isBranchColumn(header[c])) {
+                      return (
+                        <td key={c} className={`border-b border-l px-2 py-1 align-top ${dirty ? "bg-amber-100 dark:bg-amber-900/50" : ""}`}>
+                          <BranchToggle value={v} onPick={(name) => setCell(r, c, name)} />
+                        </td>
+                      )
+                    }
                     return (
                       <td
                         key={c}
@@ -715,7 +767,11 @@ function DataAdmin() {
                 {visibleCols.map((c) => <SelectItem key={c} value={String(c)}>{header[c] || `(cột ${c + 1})`}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Input placeholder="Giá trị mới (để trống = xoá nội dung ô)" value={bulkVal} onChange={(e) => setBulkVal(e.target.value)} />
+            {bulkCol !== "" && isBranchColumn(header[Number(bulkCol)]) ? (
+              <BranchToggle size="md" value={bulkVal || "?"} onPick={setBulkVal} />
+            ) : (
+              <Input placeholder="Giá trị mới (để trống = xoá nội dung ô)" value={bulkVal} onChange={(e) => setBulkVal(e.target.value)} />
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBulkOpen(false)}>Đóng</Button>
@@ -755,7 +811,11 @@ function DataAdmin() {
               return (
                 <label key={c} className="text-[11px] font-medium text-muted-foreground">
                   {h.trim()}
-                  <Input className="mt-0.5 h-8 text-sm" value={addVals[h] || ""} onChange={(e) => setAddVals((p) => ({ ...p, [h]: e.target.value }))} />
+                  {isBranchColumn(h) ? (
+                    <div className="mt-0.5"><BranchToggle value={addVals[h] || "?"} onPick={(name) => setAddVals((p) => ({ ...p, [h]: name }))} /></div>
+                  ) : (
+                    <Input className="mt-0.5 h-8 text-sm" value={addVals[h] || ""} onChange={(e) => setAddVals((p) => ({ ...p, [h]: e.target.value }))} />
+                  )}
                 </label>
               )
             })}

@@ -35,6 +35,8 @@ import {
   Table2,
 } from "lucide-react"
 import { useAuthMe } from "@/hooks/use-auth-me"
+import { useBranchBrand } from "@/components/layout/branch-brand"
+import { Layers2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { NavPendingReporter } from "./nav-loading"
 
@@ -114,6 +116,7 @@ export function AppSidebar() {
   const [userName, setUserName] = useState<string>("")
   const [storeName, setStoreName] = useState("DEV PỒ")
   const [logoUrl, setLogoUrl] = useState<string>("")
+  const brand = useBranchBrand()
 
   // Đóng sidebar (mobile) khi điều hướng
   useEffect(() => {
@@ -202,18 +205,40 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center mt-1 gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background">
-            <img
-              src={logoUrl || "/apple-touch-icon.png"}
-              alt="Logo"
-              className="h-full w-full object-cover"
-            />
-          </div>
+          {brand.kind === "loading" ? (
+            <div className="h-8 w-8 shrink-0 animate-pulse rounded-md bg-muted" />
+          ) : brand.kind === "all" ? (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center text-sidebar-foreground/80">
+              <Layers2 className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+          ) : brand.kind === "t1s" ? (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-zinc-900 p-1 dark:border dark:border-zinc-700">
+              <img src={brand.logo} alt="Logo T1s" className="h-full w-full object-contain" />
+            </div>
+          ) : (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background">
+              <img
+                src={logoUrl || "/apple-touch-icon.png"}
+                alt="Logo"
+                className="h-full w-full object-cover"
+              />
+            </div>
+          )}
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{storeName}</p>
-            <p className="truncate text-xs text-sidebar-foreground/60">
-              {role === "chu_shop" ? "Chủ shop" : role === "quan_ly" ? "Quản lý cửa hàng" : userName || "Nhân viên"}
-            </p>
+            {brand.kind === "loading" ? (
+              <div className="h-3.5 w-20 animate-pulse rounded bg-muted" />
+            ) : brand.kind === "all" ? (
+              <p className="truncate text-sm font-semibold tracking-wide text-sidebar-foreground">{brand.name}</p>
+            ) : (
+              <>
+                <p className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">
+                  {brand.kind === "t1s" ? brand.name : storeName}
+                </p>
+                <p className="truncate text-xs text-sidebar-foreground/60">
+                  {role === "chu_shop" ? "Chủ shop" : role === "quan_ly" ? "Quản lý cửa hàng" : userName || "Nhân viên"}
+                </p>
+              </>
+            )}
           </div>
         </div>
       </SidebarHeader>

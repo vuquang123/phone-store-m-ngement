@@ -19,7 +19,15 @@ import {
   HDR_EMPLOYEE,
   verifySession,
 } from "@/lib/auth"
-import { BRANCH_COOKIE, HDR_ACTIVE_BRANCH, HDR_BRANCH, normalizeBranch, resolveActiveBranch } from "@/lib/branches"
+import {
+  BRANCH_COOKIE,
+  CHOOSE_BRANCH_MESSAGE,
+  HDR_ACTIVE_BRANCH,
+  HDR_BRANCH,
+  normalizeBranch,
+  resolveActiveBranch,
+  writeNeedsSingleBranch,
+} from "@/lib/branches"
 
 // API công khai (không cần đăng nhập):
 const PUBLIC_API_EXACT = ["/api/login", "/api/logout", "/api/health"]
@@ -73,7 +81,16 @@ export async function middleware(req: NextRequest) {
   // Chi nhánh: nhân viên bị khoá vào chi nhánh gốc; chủ shop/quản lý chọn qua cookie.
   const home = normalizeBranch(user.branch) || "1"
   headers.set(HDR_BRANCH, home)
-  headers.set(HDR_ACTIVE_BRANCH, resolveActiveBranch(user.role, home, req.cookies.get(BRANCH_COOKIE)?.value))
+  const active = resolveActiveBranch(user.role, home, req.cookies.get(BRANCH_COOKIE)?.value)
+  headers.set(HDR_ACTIVE_BRANCH, active)
+
+  // Đang xem "Tất cả chi nhánh" (chỉ chủ shop/quản lý) -> chặn thao tác ghi nghiệp vụ
+  if (isApi && active === "all" && writeNeedsSingleBranch(req.method, pathname)) {
+    return NextResponse.json(
+      { success: false, code: "CHON_CHI_NHANH", error: CHOOSE_BRANCH_MESSAGE, message: CHOOSE_BRANCH_MESSAGE },
+      { status: 400 },
+    )
+  }
 
   return NextResponse.next({ request: { headers } })
 }

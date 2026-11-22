@@ -4,6 +4,9 @@
 import { DateTime } from "luxon"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
 import { parseVietnameseNumber } from "@/lib/number"
+import { currentBranchContext, filterRowsByBranch, branchColumnIndex } from "@/lib/branch-context"
+import { rowBranchId, type BranchId } from "@/lib/branches"
+import type { PrevCheckout } from "@/lib/check-in-shared"
 
 export type Ca = "1" | "2" | "3"
 export type TrangThai = "khop" | "khong_khop"
@@ -35,6 +38,8 @@ export interface CheckoutInput {
   lyDo?: string
   taiChinh: TaiChinh
   nhanVien?: string
+  /** Tên chi nhánh (chỉ để hiện trong tin Telegram; cột Chi Nhánh tự ghi khi lưu) */
+  chiNhanh?: string
 }
 
 export interface CheckoutRecord extends CheckoutInput {
@@ -52,7 +57,7 @@ function esc(s: any): string {
 }
 
 export function buildCheckoutMessage(input: CheckoutInput): string {
-  const { ca, khoNgoai: kn, khoTrong: kt, trangThai, lyDo, taiChinh: tc, nhanVien } = input
+  const { ca, khoNgoai: kn, khoTrong: kt, trangThai, lyDo, taiChinh: tc, nhanVien, chiNhanh } = input
 
   const tongThucTe = (kn.thucTe || 0) + (kt.thucTe || 0)
   const tongWebsite = (kn.website || 0) + (kt.website || 0)
@@ -64,7 +69,7 @@ export function buildCheckoutMessage(input: CheckoutInput): string {
   const tienMatK = tc.tienMatBanGiao ? `${Math.round(tc.tienMatBanGiao / 1000)}k` : ""
 
   const lines: string[] = [
-    `Báo cáo check out ca ${esc(ca)}`,
+    `Báo cáo check out ca ${esc(ca)}${chiNhanh ? ` - ${esc(chiNhanh)}` : ""}`,
     `  - KHO NGOÀI: Tổng máy ${kn.thucTe}/${kn.website}`,
     `17 Series: [${kn.s17}]`,
     `16 Series: [${kn.s16}]`,
@@ -157,7 +162,9 @@ export async function addCheckout(input: CheckoutInput, soAnh = 0): Promise<Chec
 
 export async function getCheckouts(limit = 100): Promise<CheckoutRecord[]> {
   await ensureHeader()
-  const { header, rows } = await readFromGoogleSheets(SHEET, undefined, { force: true } as any)
+  const { header, rows: allRows } = await readFromGoogleSheets(SHEET, undefined, { force: true } as any)
+  // Mỗi chi nhánh chỉ thấy báo cáo cuối ca của mình (chủ shop/quản lý chọn "Tất cả" thì thấy hết)
+  const rows = filterRowsByBranch(header, allRows || [], await currentBranchContext())
   const lower = header.map((h) => (h || "").trim().toLowerCase())
   const idx = (name: string) => lower.indexOf(name.trim().toLowerCase())
   const g = (r: any[], name: string) => r[idx(name)]
@@ -194,4 +201,49 @@ export async function getCheckouts(limit = 100): Promise<CheckoutRecord[]> {
 
   list.sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0))
   return list.slice(0, limit)
+}
+
+// ===================== BÁO CÁO CUỐI CA GẦN NHẤT CỦA 1 CHI NHÁNH =====================
+// Mốc để đối chiếu khi check-in ca sau. Lọc theo chi nhánh cụ thể (không theo "đang xem"),
+// vì quản lý đang xem "Tất cả" vẫn phải so đúng chi nhánh mình check-in.
+
+export async function getLastCheckoutForBranch(branch: BranchId): Promise<PrevCheckout | null> {
+  const { header, rows } = await readFromGoogleSheets(SHEET, undefined, { force: true } as any)
+  const lower = header.map((h) => (h || "").trim().toLowerCase())
+  const idx = (name: string) => lower.indexOf(name.trim().toLowerCase())
+  const g = (r: any[], name: string) => r[idx(name)]
+  const bi = branchColumnIndex(header)
+
+  let best: any[] | null = null
+  let bestTs = -1
+  for (const r of rows || []) {
+    if (!r || !r.length || !String(g(r, "ID") || "").trim()) continue
+    if (bi === -1 ? branch !== "1" : rowBranchId(r[bi]) !== branch) continue
+    const ts = Date.parse(String(g(r, "Created At") || "")) || 0
+    if (ts >= bestTs) {
+      bestTs = ts
+      best = r
+    }
+  }
+  if (!best) return null
+  const r = best
+  const kho = (p: "Ngoài" | "Trong") => ({
+    thucTe: num(g(r, `${p} Thực Tế`)),
+    s17: num(g(r, `${p} 17`)),
+    s16: num(g(r, `${p} 16`)),
+    s15: num(g(r, `${p} 15`)),
+    ipad: num(g(r, `${p} Ipad`)),
+    khac: num(g(r, `${p} Khác`)),
+  })
+  const created_at = String(g(r, "Created At") || "")
+  const dt = DateTime.fromISO(created_at, { zone: "utc" })
+  return {
+    id: String(g(r, "ID") || ""),
+    created_at,
+    thoi_gian: dt.isValid ? dt.setZone("Asia/Ho_Chi_Minh").toFormat("HH:mm dd/MM/yyyy") : created_at,
+    ca: String(g(r, "Ca") || ""),
+    nhanVien: String(g(r, "Nhân Viên") || ""),
+    khoNgoai: kho("Ngoài"),
+    khoTrong: kho("Trong"),
+  }
 }

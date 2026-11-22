@@ -1,7 +1,7 @@
 "use client"
 
 import { isManagerRole, roleLabel } from "@/lib/roles"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo } from "react"
 import { useRouter, usePathname } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
@@ -52,7 +52,6 @@ export function Header({ title, onMenuClick }: HeaderProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { me, isLoading, error } = useAuthMe()
-  const [logoUrl, setLogoUrl] = useState<string>("")
   const { toast } = useToast()
 
   const pageTitle = useMemo(() => {
@@ -66,39 +65,6 @@ export function Header({ title, onMenuClick }: HeaderProps) {
       router.replace("/auth/login")
     }
   }, [isLoading, me, error, router, toast])
-
-  const loadLogoFromStorage = () => {
-    try {
-      const saved = localStorage.getItem("store_settings")
-      if (saved) {
-        const s = JSON.parse(saved)
-        if (s && typeof s.logo_url === "string") {
-          let url = s.logo_url as string
-          if (url.startsWith("/public/")) url = url.replace(/^\/public/, "")
-          setLogoUrl(url)
-          return
-        }
-      }
-      setLogoUrl("")
-    } catch {
-      setLogoUrl("")
-    }
-  }
-
-  // Load logo URL from localStorage (store_settings) and subscribe to changes
-  useEffect(() => {
-    loadLogoFromStorage()
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "store_settings") loadLogoFromStorage()
-    }
-    const onCustom = () => loadLogoFromStorage()
-    window.addEventListener("storage", onStorage)
-    window.addEventListener("store_settings_changed", onCustom as EventListener)
-    return () => {
-      window.removeEventListener("storage", onStorage)
-      window.removeEventListener("store_settings_changed", onCustom as EventListener)
-    }
-  }, [])
 
   const handleLogout = async () => {
     try { await fetch("/api/logout", { method: "POST" }) } catch {}
@@ -119,13 +85,6 @@ export function Header({ title, onMenuClick }: HeaderProps) {
         <div className="flex items-center gap-3">
           {/* Toggle sidebar: thu gọn ở desktop, mở drawer ở mobile */}
           <SidebarTrigger className="-ml-1 h-9 w-9 text-muted-foreground" />
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt="Logo cửa hàng"
-              className="h-7 w-7 sm:h-8 sm:w-8 rounded-md object-contain border border-border bg-background"
-            />
-          ) : null}
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-foreground">
               {pageTitle}

@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { DateTime } from "luxon"
 import { TIMEZONE, getShift } from "@/lib/shift"
 import { buildSummary } from "@/lib/reports/tong-ket"
+import { branchContextFromHeaders } from "@/lib/branch-context"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -27,7 +28,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Tham số date không hợp lệ" }, { status: 400 })
     }
 
-    return NextResponse.json(await buildSummary(day, shift))
+    // Nhân viên: chi nhánh của mình; chủ shop/quản lý: chi nhánh đang chọn (hoặc Tất cả)
+    const ctx = branchContextFromHeaders(request.headers)
+    return NextResponse.json(await buildSummary(day, shift, ctx?.active ?? "all"))
   } catch (err: any) {
     console.error("[tong-ket-ca] error:", err)
     return NextResponse.json(

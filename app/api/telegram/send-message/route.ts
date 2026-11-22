@@ -8,7 +8,9 @@ export async function POST(request: NextRequest) {
     if (!orderInfo) return NextResponse.json({ error: 'No orderInfo' }, { status: 400 })
     const msg = formatOrderMessage(orderInfo, 'new')
   // forward orderType so helper can choose the correct group/thread
-  const res = await sendTelegramMessage(msg, orderType, options)
+  // Không cho client tự chọn chi nhánh/topic logic: luôn theo chi nhánh của phiên đăng nhập
+  const { branch: _b, topic: _t, ...safeOptions } = (options || {}) as any
+  const res = await sendTelegramMessage(msg, orderType, safeOptions)
     if (!res.success) return NextResponse.json({ ok: false, error: res.error }, { status: 500 })
     return NextResponse.json({ ok: true, result: res }, { status: 200 })
   } catch (e) {

@@ -1,11 +1,18 @@
 // app/api/check-in/route.ts
-// Nhận báo cáo check-in đầu ca -> gửi Telegram vào topic "Lịch làm off" (kèm ảnh nếu có).
+// Nhận báo cáo check-in đầu ca -> lưu -> gửi Telegram vào topic "Báo cáo tổng hợp" (kèm ảnh nếu có).
+// Số máy đếm phải khớp báo cáo cuối ca trước của chi nhánh; lệch thì cần yêu cầu đã được duyệt.
 
 import dns from "node:dns"
 import { NextRequest, NextResponse } from "next/server"
 import { buildCheckinMessage, saveCheckin, getCheckins, type Ca, type TrangThai, type KhoCounts, type SeriesCounts } from "@/lib/check-in"
 import { sendTelegramMessage, sendTelegramPhotoBase64, sendTelegramMediaGroup } from "@/lib/telegram"
 import { getServerUser } from "@/lib/auth"
+import { currentBranchContext } from "@/lib/branch-context"
+import { branchName } from "@/lib/branches"
+import { getLastCheckoutForBranch } from "@/lib/check-out"
+import { findApproved, setYeuCauStatus } from "@/lib/lech-ca"
+import { BAO_CAO_TONG_HOP } from "@/lib/telegram-topics"
+import { diffWithPrev, normalizeActual } from "@/lib/check-in-shared"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -14,7 +21,6 @@ export const runtime = "nodejs"
 // trên máy có IPv6 cấu hình lỗi (Node mặc định thử IPv6 trước).
 try { dns.setDefaultResultOrder("ipv4first") } catch {}
 
-const CHECKIN_THREAD = Number(process.env.TELEGRAM_THREAD_CHECKIN) || 1803
 
 // Lấy thông điệp lỗi DẠNG CHUỖI từ kết quả gửi Telegram (tránh "[object Object]").
 function errText(err: any): string {
@@ -65,6 +71,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Vui lòng nhập lý do khi không khớp" }, { status: 400 })
     }
 
+    const ctx = await currentBranchContext()
+    if (!user || !ctx) return NextResponse.json({ success: false, message: "Chưa đăng nhập" }, { status: 401 })
+    if (ctx.active === "all") {
+      return NextResponse.json({ success: false, message: "Chọn 1 chi nhánh (DEV PỒ hoặc T1s) trước khi check-in" }, { status: 400 })
+    }
+
+    // Đối chiếu với báo cáo cuối ca trước của chi nhánh. Lệch -> phải có yêu cầu đã duyệt.
+    const prev = await getLastCheckoutForBranch(ctx.writeBranch)
+    const soDem = normalizeActual({ khoNgoai, khoTrong })
+    const diffs = diffWithPrev(prev, soDem)
+    let approval: Awaited<ReturnType<typeof findApproved>> = null
+    if (prev && diffs.length) {
+      approval = await findApproved(ctx.writeBranch, user.email, soDem, prev.id)
+      if (!approval) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "LECH_CA_TRUOC",
+            message: "Số máy lệch với báo cáo cuối ca trước. Ghi chú và gửi yêu cầu cho chủ shop / quản lý duyệt trước khi check-in.",
+            diffs,
+            prev,
+          },
+          { status: 409 },
+        )
+      }
+    }
+
     const nhanVien = user?.name || user?.email || ""
     const checkinData = {
       ca: caStr as Ca,
@@ -74,42 +107,58 @@ export async function POST(req: NextRequest) {
       lyDo: lyDo ? String(lyDo) : undefined,
       tienMat: num(tienMat),
       nhanVien,
+      chiNhanh: branchName(ctx.writeBranch) || undefined,
     }
-    const text = buildCheckinMessage(checkinData)
+    let text = buildCheckinMessage(checkinData)
+    if (approval) {
+      text += `\nLệch ca trước: ${approval.chiTiet.replace(/&/g, "&amp;").replace(/</g, "&lt;")} - đã được ${approval.nguoiDuyet.replace(/</g, "&lt;")} duyệt`
+    }
 
-    const opts = { message_thread_id: CHECKIN_THREAD }
+    const opts = BAO_CAO_TONG_HOP
     const imgs: string[] = Array.isArray(images)
       ? images.filter((x: any) => typeof x === "string" && x).slice(0, 10)
       : []
 
-    // Lưu lịch sử vào sheet Check_in (luôn lưu, kể cả khi Telegram lỗi)
+    // 1) LƯU TRƯỚC (nguồn sự thật). Lưu lỗi thì báo lỗi, không gửi Telegram.
+    let saved: { id: string }
     try {
-      await saveCheckin(checkinData, imgs.length)
-    } catch (e) {
-      console.warn("[CHECK-IN] Lưu sheet thất bại:", e)
+      saved = await saveCheckin(checkinData, imgs.length)
+      if (approval) await setYeuCauStatus(approval.id, ["da_duyet"], { trangThai: "da_dung", checkinId: saved.id })
+    } catch (e: any) {
+      console.error("[CHECK-IN] Lưu thất bại:", e)
+      return NextResponse.json({ success: false, message: "Lưu check-in thất bại: " + errText(e) }, { status: 500 })
     }
 
+    // 2) Telegram best-effort: lỗi Telegram KHÔNG làm check-in thất bại (tránh nhân viên
+    //    bấm gửi lại -> trùng dòng). Trả telegram=false để trang báo cho nhân viên biết.
     let res: any
-    if (imgs.length === 0) {
-      res = await sendTelegramMessage(text, "offline", opts)
-    } else if (imgs.length === 1) {
-      res = await sendTelegramPhotoBase64(imgs[0], "checkin.jpg", text, "offline", opts)
-    } else {
-      const buffers = imgs.map((b64) => Buffer.from(String(b64).replace(/^data:[^;]+;base64,/, ""), "base64"))
-      res = await sendTelegramMediaGroup(
-        buffers,
-        buffers.map((_, i) => `checkin_${i}.jpg`),
-        [text],
-        "offline",
-        opts,
-      )
+    try {
+      if (imgs.length === 0) {
+        res = await sendTelegramMessage(text, "offline", opts)
+      } else if (imgs.length === 1) {
+        res = await sendTelegramPhotoBase64(imgs[0], "checkin.jpg", text, "offline", opts)
+      } else {
+        const buffers = imgs.map((b64) => Buffer.from(String(b64).replace(/^data:[^;]+;base64,/, ""), "base64"))
+        res = await sendTelegramMediaGroup(
+          buffers,
+          buffers.map((_, i) => `checkin_${i}.jpg`),
+          [text],
+          "offline",
+          opts,
+        )
+      }
+    } catch (e) {
+      res = { success: false, error: e }
     }
+    const telegram = !!res?.success
+    if (!telegram) console.warn("[CHECK-IN] Gửi Telegram thất bại (đã lưu):", errText(res?.error))
 
-    if (!res?.success) {
-      return NextResponse.json({ success: false, message: errText(res?.error) }, { status: 502 })
-    }
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      id: saved.id,
+      telegram,
+      ...(telegram ? {} : { message: errText(res?.error) }),
+    })
   } catch (e: any) {
     return NextResponse.json({ success: false, message: errText(e) }, { status: 500 })
   }

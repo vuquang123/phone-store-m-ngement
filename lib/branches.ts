@@ -42,6 +42,10 @@ export const BRANCH_TABS = [
   "DongTien_CongNoThu",
   "DongTien_GiaoDich",
   "DongTien_NguonTien",
+  "Check_in",
+  "Check_out",
+  "Yeu_Cau_Lech_Ca",
+  "Ghi_chu",
 ] as const
 
 const fold = (s: unknown) =>
@@ -104,4 +108,44 @@ export function branchMatches(value: unknown, active: ActiveBranch) {
 
 export function activeBranchLabel(active: ActiveBranch) {
   return active === "all" ? "Tất cả chi nhánh" : branchName(active)
+}
+
+// ---------------------------------------------------------------------------
+// Chủ shop / quản lý đang xem "Tất cả chi nhánh" chỉ được XEM. Mọi thao tác ghi ở các
+// mục nghiệp vụ dưới đây (xuất đơn, đặt cọc, hoàn trả, nhập hàng, CNC, bảo hành, đối tác,
+// phụ kiện, khách hàng, quỹ tiền mặt, ghi chú, check-in/out, gửi Telegram...) phải chọn
+// 1 chi nhánh trước, để dữ liệu và tin Telegram vào đúng chi nhánh. Nhân viên không bị
+// ảnh hưởng vì luôn bị khoá vào chi nhánh của mình. Middleware áp quy tắc này.
+// (Quản trị dữ liệu và Dòng tiền không nằm trong danh sách: sửa trực tiếp từng dòng.)
+// ---------------------------------------------------------------------------
+export const CHOOSE_BRANCH_MESSAGE =
+  "Đang xem tất cả chi nhánh. Chọn DEV PỒ hoặc T1s ở góc trên trước khi thao tác."
+
+const BRANCH_WRITE_API_PREFIXES = [
+  "/api/ban-hang",
+  "/api/dat-coc",
+  "/api/hoan-tra",
+  "/api/kho-hang",
+  "/api/delete-product-from-kho",
+  "/api/update-product-status",
+  "/api/phu-kien",
+  "/api/khach-hang",
+  "/api/tien-mat",
+  "/api/ghi-chu",
+  "/api/check-in",
+  "/api/check-out",
+  "/api/hang-doi-tac",
+  "/api/doi-tac",
+  "/api/telegram",
+  "/api/lich-su-trang-thai-may",
+]
+/** Ngoại lệ: duyệt / từ chối yêu cầu lệch ca được làm cả khi đang xem "Tất cả". */
+const BRANCH_WRITE_EXCEPTIONS = [/^\/api\/check-in\/yeu-cau\/[^/]+$/]
+
+/** Request ghi này có cần đang chọn 1 chi nhánh cụ thể không. */
+export function writeNeedsSingleBranch(method: string, pathname: string) {
+  const m = method.toUpperCase()
+  if (m === "GET" || m === "HEAD" || m === "OPTIONS") return false
+  if (BRANCH_WRITE_EXCEPTIONS.some((re) => re.test(pathname))) return false
+  return BRANCH_WRITE_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))
 }

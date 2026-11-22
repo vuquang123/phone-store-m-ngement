@@ -6,7 +6,16 @@ import { getLoaiMayLabel } from "@/lib/utils/inventory-helpers"
 try { dns.setDefaultResultOrder("ipv4first") } catch {}
 
 type OrderType = "online" | "offline" | "return" | "deposit" | string
-interface TelegramOptions { message_thread_id?: number; chat_id?: number }
+/** Topic logic (tên chung cho cả 2 chi nhánh). */
+export type TelegramTopic = "offline" | "online" | "return" | "deposit" | "note" | "kho" | "dangXuLy" | "cash" | "baoCao"
+interface TelegramOptions {
+  message_thread_id?: number
+  chat_id?: number
+  /** Ép chi nhánh ('1' DEV PỒ, '2' T1s). Mặc định: chi nhánh của người đang thao tác. */
+  branch?: "1" | "2"
+  /** Ép topic logic (ưu tiên hơn message_thread_id khi gửi sang nhóm chi nhánh khác). */
+  topic?: TelegramTopic
+}
 
 type DeviceSummary = {
   name?: string
@@ -159,8 +168,9 @@ function formatGia(v: string | number | undefined): string {
 // Trả về message_id để lưu lại (dùng xóa tin khi hủy xử lý hoặc khi bán máy).
 export async function sendProcessingDeviceMessage(d: ProcessingDevice, employee: string): Promise<{ success: boolean; message_id?: number; chat_id?: number; error?: any }> {
   try {
-    const botToken = getBotToken()
-    const chatId = ORDER_TYPE_CHAT_MAP['offline']
+    const route = await routeTelegram("offline", { topic: "dangXuLy" })
+    if (route.error) return { success: false, error: route.error }
+    const { botToken, chatId } = route
     if (!botToken || !chatId) return { success: false, error: "Thiếu cấu hình Telegram" }
 
     const title = [d.name || "Máy", d.dung_luong, d.mau_sac].filter(Boolean).join(" • ")
@@ -176,7 +186,7 @@ export async function sendProcessingDeviceMessage(d: ProcessingDevice, employee:
 
     const sendOnce = async (withThread: boolean) => {
       const payload: any = { chat_id: chatId, text, parse_mode: "HTML" }
-      const threadId = effectiveThreadId(chatId, PROCESSING_THREAD)
+      const threadId = route.messageThreadId
       if (withThread && threadId) payload.message_thread_id = threadId
       const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
@@ -202,8 +212,10 @@ export async function sendProcessingDeviceMessage(d: ProcessingDevice, employee:
 // Xóa 1 tin nhắn đã gửi trong group (mặc định group kho/offline).
 export async function deleteTelegramMessage(messageId: number, chatId?: number): Promise<{ success: boolean; error?: any }> {
   try {
-    const botToken = getBotToken()
-    const chat = (chatId && Number.isFinite(chatId)) ? chatId : ORDER_TYPE_CHAT_MAP['offline']
+    // Không truyền chatId -> nhóm của chi nhánh đang thao tác
+    const route = chatId && Number.isFinite(chatId) ? null : await routeTelegram("offline", { topic: "dangXuLy" })
+    const chat = (chatId && Number.isFinite(chatId)) ? chatId : (route?.chatId || 0)
+    const botToken = route ? route.botToken : tokenForChat(chat)
     if (!botToken || !chat || !Number.isFinite(messageId) || messageId <= 0) {
       return { success: false, error: "Thiếu botToken/chat_id/message_id" }
     }
@@ -268,6 +280,117 @@ const ORDER_TYPE_CHAT_MAP: Record<string, number> = {
   note: parseEnvChat('TELEGRAM_CHAT_NOTE', DEFAULT_CHAT),
 }
 
+// =====================================================================
+// TELEGRAM THEO CHI NHÁNH
+// - DEV PỒ ('1'): giữ nguyên cấu hình cũ (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_*, topic mặc định).
+// - T1s ('2'): nhóm Telegram riêng, đọc T1S_TELEGRAM_BOT_TOKEN, T1S_TELEGRAM_CHAT_ID và
+//   T1S_TELEGRAM_THREAD_<OFFLINE|ONLINE|DEPOSIT|NOTE|KHO|DANG_XU_LY|CASH|BAO_CAO|RETURN>.
+//   Topic để trống -> gửi thẳng nhóm chính. Thiếu token/chat -> KHÔNG gửi (không bao giờ
+//   rơi về nhóm DEV PỒ để tránh nhầm chi nhánh).
+// Chi nhánh lấy từ phiên đăng nhập của request (nhân viên = chi nhánh của mình; chủ shop/
+// quản lý = chi nhánh đang chọn). Code gọi vẫn truyền topic số kiểu DEV PỒ như cũ; khi gửi
+// sang T1s, số đó được dịch sang topic logic rồi sang topic của nhóm T1s.
+// =====================================================================
+const DEV_TOPIC_THREADS: Record<TelegramTopic, number> = {
+  offline: 9,
+  online: 7,
+  return: 5334,
+  deposit: 5747,
+  note: NOTE_THREAD,
+  kho: 22,
+  dangXuLy: PROCESSING_THREAD,
+  cash: Number(process.env.TELEGRAM_THREAD_CASH) || 37306,
+  baoCao: Number(process.env.TELEGRAM_THREAD_BAO_CAO) || Number(process.env.TELEGRAM_THREAD_CHECKOUT) || 4901,
+}
+const T1S_THREAD_ENV: Record<TelegramTopic, string> = {
+  offline: "OFFLINE",
+  online: "ONLINE",
+  return: "RETURN",
+  deposit: "DEPOSIT",
+  note: "NOTE",
+  kho: "KHO",
+  dangXuLy: "DANG_XU_LY",
+  cash: "CASH",
+  baoCao: "BAO_CAO",
+}
+
+function topicOfDevThread(thread: number): TelegramTopic | null {
+  for (const [k, v] of Object.entries(DEV_TOPIC_THREADS)) if (v === thread) return k as TelegramTopic
+  return null
+}
+function topicOfOrderType(orderType?: OrderType): TelegramTopic {
+  if (orderType === "online") return "online"
+  if (orderType === "return") return "return"
+  if (orderType === "deposit") return "deposit"
+  if (orderType === "note") return "note"
+  return "offline"
+}
+
+function t1sConfig() {
+  const token = process.env.T1S_TELEGRAM_BOT_TOKEN?.trim() || ""
+  const chat = Number(process.env.T1S_TELEGRAM_CHAT_ID)
+  return { token, chatId: Number.isFinite(chat) && chat !== 0 ? chat : 0 }
+}
+function t1sThread(topic: TelegramTopic | null): number {
+  if (!topic) return 0
+  const n = Number(process.env[`T1S_TELEGRAM_THREAD_${T1S_THREAD_ENV[topic]}`])
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+/** Chi nhánh của request hiện tại ('1' nếu không có phiên, vd cron/webhook). */
+async function currentTelegramBranch(): Promise<"1" | "2"> {
+  try {
+    const mod = await import("./branch-context")
+    const ctx = await mod.currentBranchContext()
+    return ctx?.writeBranch === "2" ? "2" : "1"
+  } catch {
+    return "1"
+  }
+}
+
+type Route = { botToken: string; chatId: number; messageThreadId: number; branch: "1" | "2"; error?: string }
+
+/** Chọn bot + nhóm + topic theo chi nhánh. */
+async function routeTelegram(orderType?: OrderType, options?: TelegramOptions, devThreadDefault?: number): Promise<Route> {
+  const branch = options?.branch || (await currentTelegramBranch())
+  if (branch === "2") {
+    const { token, chatId } = t1sConfig()
+    if (!token || !chatId) {
+      return { botToken: "", chatId: 0, messageThreadId: 0, branch, error: "Chưa cấu hình Telegram cho chi nhánh T1s" }
+    }
+    const topic =
+      options?.topic ||
+      (options?.message_thread_id ? topicOfDevThread(options.message_thread_id) : null) ||
+      (devThreadDefault ? topicOfDevThread(devThreadDefault) : null) ||
+      (options?.message_thread_id ? null : topicOfOrderType(orderType))
+    if (options?.message_thread_id && !options?.topic && !topicOfDevThread(options.message_thread_id)) {
+      console.warn("[TG] T1s: topic", options.message_thread_id, "không có trong bảng dịch, gửi thẳng nhóm chính")
+    }
+    return { botToken: token, chatId, messageThreadId: effectiveThreadId(chatId, t1sThread(topic)), branch }
+  }
+  const botToken = getBotToken()
+  if (devThreadDefault && !options?.message_thread_id && !options?.topic) {
+    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ORDER_TYPE_CHAT_MAP["offline"]
+    return { botToken, chatId, messageThreadId: effectiveThreadId(chatId, devThreadDefault), branch }
+  }
+  const o = options?.topic && !options?.message_thread_id ? { ...options, message_thread_id: DEV_TOPIC_THREADS[options.topic] } : options
+  const { chatId, messageThreadId } = resolveChatAndThread(orderType, o)
+  return { botToken, chatId, messageThreadId, branch }
+}
+
+/** Chẩn đoán: xem 1 tin sẽ đi nhóm/topic nào (không gửi, không lộ token). */
+export async function previewTelegramRoute(orderType?: OrderType, options?: TelegramOptions) {
+  const r = await routeTelegram(orderType, options)
+  return { branch: r.branch, chatId: r.chatId, messageThreadId: r.messageThreadId, hasToken: !!r.botToken, error: r.error }
+}
+
+/** Bot token theo nhóm (dùng khi sửa/xoá tin đã gửi: tin nằm ở nhóm nào thì dùng bot của nhóm đó). */
+function tokenForChat(chatId?: number): string {
+  const t = t1sConfig()
+  if (chatId && t.chatId && chatId === t.chatId) return t.token
+  return getBotToken()
+}
+
 /** Cắt thời gian chờ api.telegram.org để không treo luồng nghiệp vụ. */
 const TG_TIMEOUT_MS = 10_000
 
@@ -286,17 +409,12 @@ function describeTelegramError(error: unknown): string {
 
 export async function sendTelegramMessage(message: string, orderType?: OrderType, options?: TelegramOptions) {
   try {
-    const botToken = getBotToken()
-    // choose chat id from mapping, fallback to default
-    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
-    // choose topic/thread id based on orderType defaults, can be overridden by options.message_thread_id
-    let messageThreadId = 9 // default thread for offline
-    if (orderType === "online") messageThreadId = 7
-    if (orderType === "return") messageThreadId = 5334
-    if (orderType === "deposit") messageThreadId = 9
-    if (orderType === "note") messageThreadId = NOTE_THREAD
-    if (options?.message_thread_id) messageThreadId = options.message_thread_id
-    messageThreadId = effectiveThreadId(chatId, messageThreadId)
+    const route = await routeTelegram(orderType, options)
+    if (route.error) {
+      console.warn("[TG]", route.error)
+      return { success: false, error: route.error }
+    }
+    const { botToken, chatId, messageThreadId } = route
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
       return { success: false, error: "Thiếu cấu hình Telegram" }
@@ -379,8 +497,9 @@ export async function sendTelegramMessageWithButtons(
   options?: { message_thread_id?: number; chat_id?: number },
 ) {
   try {
-    const botToken = getBotToken()
-    const { chatId, messageThreadId } = resolveChatAndThread(orderType, options)
+    const route = await routeTelegram(orderType, options)
+    if (route.error) return { success: false, error: route.error }
+    const { botToken, chatId, messageThreadId } = route
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc chat_id")
       return { success: false, error: "Thiếu cấu hình Telegram" }
@@ -443,7 +562,7 @@ export async function answerCallbackQuery(callbackQueryId: string, text?: string
 /** Sửa nội dung tin nhắn (HTML). Truyền buttons=[] để GỠ nút (tránh bấm lại). */
 export async function editMessageText(chatId: number, messageId: number, text: string, buttons?: InlineButton[][]) {
   try {
-    const botToken = getBotToken()
+    const botToken = tokenForChat(chatId)
     if (!botToken) return { success: false }
     const payload: any = { chat_id: chatId, message_id: messageId, text, parse_mode: "HTML" }
     if (buttons) payload.reply_markup = { inline_keyboard: buttons }
@@ -464,7 +583,7 @@ export async function editMessageText(chatId: number, messageId: number, text: s
 /** Chỉ đổi/bỏ nút (không sửa text). buttons=[] để gỡ hết nút. */
 export async function editMessageReplyMarkup(chatId: number, messageId: number, buttons?: InlineButton[][]) {
   try {
-    const botToken = getBotToken()
+    const botToken = tokenForChat(chatId)
     if (!botToken) return { success: false }
     const res = await fetch(`https://api.telegram.org/bot${botToken}/editMessageReplyMarkup`, {
       method: "POST",
@@ -482,16 +601,10 @@ export async function editMessageReplyMarkup(chatId: number, messageId: number, 
 // Send photo from base64 string. Builds a multipart/form-data body and uploads directly to Telegram.
 export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
-    const botToken = getBotToken()
-    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
-    // choose thread id defaults
-    let messageThreadId = 9
-    if (orderType === "online") messageThreadId = 7
-    if (orderType === "return") messageThreadId = 5334
-    if (orderType === "deposit") messageThreadId = 9
-    if (orderType === "note") messageThreadId = NOTE_THREAD
-    if (options?.message_thread_id) messageThreadId = options.message_thread_id
-    messageThreadId = effectiveThreadId(chatId, messageThreadId)
+    const route = await routeTelegram(orderType, options)
+    if (route.error) return { success: false, error: route.error }
+    const { botToken, chatId } = route
+    const messageThreadId = route.messageThreadId
 
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
@@ -545,15 +658,10 @@ export async function sendTelegramPhotoBase64(imageBase64: string, filename = 'i
 // Send photo from raw Buffer (server-side file). Accepts filename and returns Telegram result.
 export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.jpg', caption = '', orderType?: OrderType, options?: TelegramOptions) {
   try {
-    const botToken = getBotToken()
-    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
-    let messageThreadId = 9
-    if (orderType === "online") messageThreadId = 7
-    if (orderType === "return") messageThreadId = 5334
-    if (orderType === "deposit") messageThreadId = 9
-    if (orderType === "note") messageThreadId = NOTE_THREAD
-    if (options?.message_thread_id) messageThreadId = options.message_thread_id
-    messageThreadId = effectiveThreadId(chatId, messageThreadId)
+    const route = await routeTelegram(orderType, options)
+    if (route.error) return { success: false, error: route.error }
+    const { botToken, chatId } = route
+    const messageThreadId = route.messageThreadId
 
     const boundary = '----telegramboundary' + Date.now()
     const nl = '\r\n'
@@ -593,15 +701,10 @@ export async function sendTelegramPhotoBuffer(buffer: Buffer, filename = 'image.
 // Send multiple photos as an album (media group). Accepts arrays of buffers and filenames.
 export async function sendTelegramMediaGroup(buffers: Buffer[], filenames: string[], captions?: string[], orderType?: OrderType, options?: TelegramOptions) {
   try {
-    const botToken = getBotToken()
-    const chatId = (options?.chat_id && Number.isFinite(options.chat_id)) ? options.chat_id : ((orderType && ORDER_TYPE_CHAT_MAP[orderType]) ? ORDER_TYPE_CHAT_MAP[orderType] : ORDER_TYPE_CHAT_MAP['offline'])
-    let messageThreadId = 9
-    if (orderType === "online") messageThreadId = 7
-    if (orderType === "return") messageThreadId = 5334
-    if (orderType === "deposit") messageThreadId = 9
-    if (orderType === "note") messageThreadId = NOTE_THREAD
-    if (options?.message_thread_id) messageThreadId = options.message_thread_id
-    messageThreadId = effectiveThreadId(chatId, messageThreadId)
+    const route = await routeTelegram(orderType, options)
+    if (route.error) return { success: false, error: route.error }
+    const { botToken, chatId } = route
+    const messageThreadId = route.messageThreadId
 
     if (!botToken || !chatId) {
       console.error("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")

@@ -15,13 +15,21 @@ import { Badge } from "@/components/ui/badge"
 import { ResponsiveTable } from "@/components/ui/responsive-table"
 import { RefreshButton } from "@/components/ui/refresh-button"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, ImagePlus, X, Send, Copy } from "lucide-react"
+import { useAuthMe } from "@/hooks/use-auth-me"
+import { Loader2, ImagePlus, X, Send, Copy, AlertTriangle, CheckCircle2, Clock, XCircle, ShieldCheck } from "lucide-react"
 import {
   SERIES_KEYS,
   SERIES_LABELS,
+  YEU_CAU_LABEL,
+  actualKey,
+  diffWithPrev,
+  formatDiffLine,
+  normalizeActual,
+  type PrevCheckout,
   type SeriesCounts,
   type SeriesKey,
   type WebStock,
+  type YeuCauLechCa,
 } from "@/lib/check-in-shared"
 
 interface CheckinRow {
@@ -85,6 +93,34 @@ export default function CheckInPage() {
     staleTime: 60_000,
   })
 
+  // Báo cáo cuối ca gần nhất của chi nhánh: mốc đối chiếu số máy
+  const { data: caTruoc, refetch: refetchCaTruoc } = useQuery<{ allView: boolean; branch?: string; prev: PrevCheckout | null }>({
+    queryKey: ["check-in-ca-truoc"],
+    queryFn: async () => {
+      const res = await fetch("/api/check-in/ca-truoc", { cache: "no-store" })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json?.success) throw new Error(json?.message || "Không đọc được báo cáo cuối ca trước")
+      return { allView: !!json.allView, branch: json.branch, prev: json.prev || null }
+    },
+    staleTime: 30_000,
+  })
+  const prev = caTruoc?.prev ?? null
+
+  // Yêu cầu duyệt lệch ca: nhân viên thấy của mình, chủ shop/quản lý thấy cả chi nhánh
+  const { data: yc, refetch: refetchYc } = useQuery<{ isManager: boolean; items: YeuCauLechCa[] }>({
+    queryKey: ["check-in-yeu-cau"],
+    queryFn: async () => {
+      const res = await fetch("/api/check-in/yeu-cau", { cache: "no-store" })
+      const json = await res.json().catch(() => ({}))
+      return { isManager: !!json?.isManager, items: Array.isArray(json?.items) ? json.items : [] }
+    },
+    refetchInterval: (q) => (q.state.data?.items?.some((y) => y.trangThai === "cho_duyet") ? 15_000 : 60_000),
+  })
+  const isManager = !!yc?.isManager
+  const { me } = useAuthMe()
+  const myEmail = me?.email || ""
+  const choDuyet = (yc?.items || []).filter((y) => y.trangThai === "cho_duyet")
+
   const webKhoNgoai = webStock?.khoNgoai ?? EMPTY_WEB
   const webKhoTrong = webStock?.khoTrong ?? EMPTY_WEB
 
@@ -96,6 +132,11 @@ export default function CheckInPage() {
   const [tienMatRaw, setTienMatRaw] = useState("")
   const [images, setImages] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [ghiChuLech, setGhiChuLech] = useState("")
+  const [sendingReq, setSendingReq] = useState(false)
+  const [decide, setDecide] = useState<{ id: string; action: "duyet" | "tu_choi" } | null>(null)
+  const [decideNote, setDecideNote] = useState("")
+  const [deciding, setDeciding] = useState(false)
 
   const tienMatDisplay = tienMatRaw ? Number(tienMatRaw).toLocaleString("vi-VN") : ""
 
@@ -122,6 +163,74 @@ export default function CheckInPage() {
     if (fileRef.current) fileRef.current.value = ""
   }
 
+  // ----- đối chiếu với ca trước -----
+  const daDem = SERIES_KEYS.some((k) => khoNgoai[k] !== "" || khoTrong[k] !== "")
+  const toActual = (k: CountState) => SERIES_KEYS.reduce((acc, key) => ({ ...acc, [key]: n(k[key]) }), {} as SeriesCounts)
+  const soDem = normalizeActual({ khoNgoai: toActual(khoNgoai), khoTrong: toActual(khoTrong) })
+  const diffs = daDem ? diffWithPrev(prev, soDem) : []
+  const soDemKey = actualKey(soDem)
+  // Yêu cầu mới nhất của mình cho đúng bộ số + đúng mốc ca trước
+  const myReq = (yc?.items || []).find(
+    (y) => y.key === soDemKey && y.mocId === prev?.id && y.trangThai !== "huy" && y.trangThai !== "da_dung" && (!isManager || y.email === myEmail),
+  )
+  const approved = myReq?.trangThai === "da_duyet"
+  const allView = !!caTruoc?.allView
+  const blocked = allView || (diffs.length > 0 && !approved)
+
+  const sendRequest = async () => {
+    if (!ghiChuLech.trim()) {
+      toast({ title: "Thiếu ghi chú", description: "Vui lòng ghi rõ lý do số máy lệch với ca trước", variant: "destructive" })
+      return
+    }
+    setSendingReq(true)
+    try {
+      const res = await fetch("/api/check-in/yeu-cau", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ca, khoNgoai: soDem.khoNgoai, khoTrong: soDem.khoTrong, ghiChu: ghiChuLech }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json?.success) throw new Error(json?.message || "Gửi yêu cầu thất bại")
+      toast({
+        title: "Đã gửi yêu cầu cho chủ shop / quản lý",
+        description: json.telegram === false ? "Đã lưu yêu cầu nhưng chưa gửi được Telegram." : "Chờ duyệt rồi bấm Gửi check-in.",
+      })
+      setGhiChuLech("")
+      refetchYc()
+    } catch (e: any) {
+      toast({ title: "Lỗi", description: e?.message || "Có lỗi xảy ra", variant: "destructive" })
+    } finally {
+      setSendingReq(false)
+    }
+  }
+
+  const submitDecision = async () => {
+    if (!decide) return
+    if (decide.action === "tu_choi" && !decideNote.trim()) {
+      toast({ title: "Thiếu lý do", description: "Ghi lý do từ chối để nhân viên biết", variant: "destructive" })
+      return
+    }
+    setDeciding(true)
+    try {
+      const res = await fetch(`/api/check-in/yeu-cau/${encodeURIComponent(decide.id)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: decide.action, ghiChu: decideNote }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json?.success) throw new Error(json?.message || "Thao tác thất bại")
+      toast({ title: decide.action === "duyet" ? "Đã duyệt yêu cầu" : "Đã từ chối yêu cầu" })
+      setDecide(null)
+      setDecideNote("")
+      refetchYc()
+    } catch (e: any) {
+      toast({ title: "Lỗi", description: e?.message || "Có lỗi xảy ra", variant: "destructive" })
+      refetchYc()
+    } finally {
+      setDeciding(false)
+    }
+  }
+
   const resetForm = () => {
     setCa("1")
     setKhoNgoai({ ...EMPTY })
@@ -130,6 +239,7 @@ export default function CheckInPage() {
     setLyDo("")
     setTienMatRaw("")
     setImages([])
+    setGhiChuLech("")
   }
 
   const handleSubmit = async () => {
@@ -163,11 +273,20 @@ export default function CheckInPage() {
         }),
       })
       const json = await res.json().catch(() => ({}))
+      if (json?.code === "LECH_CA_TRUOC") {
+        refetchCaTruoc()
+        refetchYc()
+      }
       if (!res.ok || !json?.success) throw new Error(json?.message || "Gửi check-in thất bại")
-      toast({ title: "Đã gửi báo cáo check-in" })
+      toast(
+        json.telegram === false
+          ? { title: "Đã lưu check-in", description: "Chưa gửi được Telegram (" + (json.message || "lỗi kết nối") + "). Không cần gửi lại, báo quản lý nếu cần." }
+          : { title: "Đã gửi báo cáo check-in" },
+      )
       resetForm()
       queryClient.invalidateQueries({ queryKey: ["check-in-history"] })
       queryClient.invalidateQueries({ queryKey: ["check-in-web-stock"] })
+      queryClient.invalidateQueries({ queryKey: ["check-in-yeu-cau"] })
     } catch (e: any) {
       toast({ title: "Lỗi", description: e?.message || "Có lỗi xảy ra", variant: "destructive" })
     } finally {
@@ -269,6 +388,76 @@ export default function CheckInPage() {
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Check-in đầu ca</h1>
         </div>
 
+        {/* Chủ shop / quản lý: yêu cầu lệch ca chờ duyệt */}
+        {isManager && choDuyet.length > 0 && (
+          <Card className="border-amber-300 dark:border-amber-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ShieldCheck className="h-4 w-4 text-amber-600" />
+                Yêu cầu lệch kho chờ duyệt ({choDuyet.length})
+              </CardTitle>
+              <CardDescription>Nhân viên đếm số máy lệch với báo cáo cuối ca trước. Duyệt thì nhân viên mới gửi được check-in.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {choDuyet.map((y) => (
+                <div key={y.id} className="space-y-2 rounded-lg border p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span>
+                      <span className="font-medium">{y.nhanVien}</span> · Ca {y.ca}
+                      {y.chiNhanh ? <> · <span className="font-medium">{y.chiNhanh}</span></> : null}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{y.thoi_gian}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">So với báo cáo cuối ca: {y.mocThoiGian}</div>
+                  <ul className="space-y-0.5 text-sm">
+                    {y.chiTiet.split("; ").map((l, i) => (
+                      <li key={i} className="tabular-nums text-amber-700 dark:text-amber-400">• {l}</li>
+                    ))}
+                  </ul>
+                  <div className="text-sm">Ghi chú: <span className="text-foreground">{y.ghiChu}</span></div>
+                  {decide?.id === y.id ? (
+                    <div className="space-y-2">
+                      <Textarea
+                        placeholder={decide.action === "duyet" ? "Ghi chú khi duyệt (không bắt buộc)" : "Lý do từ chối (bắt buộc)"}
+                        value={decideNote}
+                        onChange={(e) => setDecideNote(e.target.value)}
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => { setDecide(null); setDecideNote("") }} disabled={deciding}>Huỷ</Button>
+                        <Button
+                          size="sm"
+                          variant={decide.action === "duyet" ? "default" : "destructive"}
+                          onClick={submitDecision}
+                          disabled={deciding}
+                        >
+                          {deciding && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                          {decide.action === "duyet" ? "Xác nhận duyệt" : "Xác nhận từ chối"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" className="text-red-600" onClick={() => { setDecide({ id: y.id, action: "tu_choi" }); setDecideNote("") }}>
+                        <XCircle className="mr-1 h-4 w-4" /> Từ chối
+                      </Button>
+                      <Button size="sm" onClick={() => { setDecide({ id: y.id, action: "duyet" }); setDecideNote("") }}>
+                        <CheckCircle2 className="mr-1 h-4 w-4" /> Duyệt
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {allView && (
+          <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Đang xem tất cả chi nhánh. Chọn DEV PỒ hoặc T1s ở góc trên để check-in.
+          </div>
+        )}
+
         {/* Ca + Tiền mặt đầu ca */}
         <div className="flex flex-wrap gap-4">
           <div className="w-[160px] space-y-2">
@@ -302,8 +491,20 @@ export default function CheckInPage() {
             {webStock?.capturedAt ? ` (lúc ${webStock.capturedAt})` : ""}. Đếm máy thực tế rồi điền vào cột{" "}
             <span className="font-medium text-foreground">Thực tế</span>.
           </p>
-          <RefreshButton onRefresh={() => { refetchStock() }} loading={fetchingStock} />
+          <RefreshButton onRefresh={() => { refetchStock(); refetchCaTruoc() }} loading={fetchingStock} />
         </div>
+        {!allView && (
+          <p className="-mt-3 text-xs text-muted-foreground">
+            {prev ? (
+              <>
+                Số đếm phải khớp <span className="font-medium text-foreground">báo cáo cuối ca {prev.ca}</span> lúc {prev.thoi_gian}
+                {prev.nhanVien ? ` (${prev.nhanVien})` : ""}: Kho ngoài {prev.khoNgoai.thucTe} máy, Kho trong {prev.khoTrong.thucTe} máy.
+              </>
+            ) : caTruoc ? (
+              "Chưa có báo cáo cuối ca nào của chi nhánh này, không cần đối chiếu ca trước."
+            ) : null}
+          </p>
+        )}
         <div className="grid gap-4 md:grid-cols-2">
           {renderKhoCard("KHO NGOÀI", khoNgoai, setKhoNgoai, webKhoNgoai)}
           {renderKhoCard("KHO TRONG", khoTrong, setKhoTrong, webKhoTrong)}
@@ -388,8 +589,71 @@ export default function CheckInPage() {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end">
-          <Button onClick={handleSubmit} disabled={submitting} className="gap-2">
+        {/* Lệch với ca trước */}
+        {diffs.length > 0 && (
+          <Card className={approved ? "border-emerald-300 dark:border-emerald-800" : "border-red-300 dark:border-red-900"}>
+            <CardHeader className="pb-3">
+              <CardTitle className={`flex items-center gap-2 text-base ${approved ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                {approved ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                Lệch với báo cáo cuối ca trước
+              </CardTitle>
+              <CardDescription>
+                Ca {prev?.ca} lúc {prev?.thoi_gian}{prev?.nhanVien ? ` (${prev.nhanVien})` : ""}. Lệch thì không được check-in cho tới khi chủ shop / quản lý duyệt.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <ul className="space-y-0.5 text-sm tabular-nums">
+                {diffs.map((d, i) => (
+                  <li key={i}>• {formatDiffLine(d)}</li>
+                ))}
+              </ul>
+              {myReq?.trangThai === "cho_duyet" ? (
+                <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    Đã gửi yêu cầu lúc {myReq.thoi_gian}, đang chờ chủ shop / quản lý duyệt. Trang tự cập nhật khi có kết quả.
+                    <div className="text-xs opacity-80">Ghi chú: {myReq.ghiChu}</div>
+                  </div>
+                </div>
+              ) : approved ? (
+                <div className="flex items-start gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    {myReq?.nguoiDuyet} đã duyệt lúc {myReq?.thoiGianDuyet}{myReq?.ghiChuDuyet ? ` (${myReq.ghiChuDuyet})` : ""}. Bấm Gửi check-in để hoàn tất.
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {myReq?.trangThai === "tu_choi" && (
+                    <div className="flex items-start gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-900 dark:bg-red-950/40 dark:text-red-200">
+                      <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>{myReq.nguoiDuyet} đã từ chối: {myReq.ghiChuDuyet}. Đếm lại hoặc gửi yêu cầu mới.</div>
+                    </div>
+                  )}
+                  <Label htmlFor="ghichu-lech">Ghi chú lý do lệch <span className="text-red-500">*</span></Label>
+                  <Textarea
+                    id="ghichu-lech"
+                    placeholder="VD: 1 máy 16 Pro Max khách lấy bảo hành tối qua, chưa cập nhật..."
+                    value={ghiChuLech}
+                    onChange={(e) => setGhiChuLech(e.target.value)}
+                  />
+                  <div className="flex justify-end">
+                    <Button onClick={sendRequest} disabled={sendingReq || allView} variant="destructive" className="gap-2">
+                      {sendingReq ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      Gửi yêu cầu cho chủ shop / quản lý
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="flex items-center justify-end gap-3">
+          {blocked && !allView && (
+            <span className="text-xs text-muted-foreground">Cần được duyệt lệch ca trước mới gửi được check-in</span>
+          )}
+          <Button onClick={handleSubmit} disabled={submitting || blocked} className="gap-2">
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Gửi check-in
           </Button>

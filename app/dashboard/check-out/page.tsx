@@ -151,7 +151,11 @@ export default function CheckOutPage() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok || !json?.success) throw new Error(json?.message || "Gửi báo cáo thất bại")
-      toast({ title: "Đã gửi báo cáo cuối ca" })
+      toast(
+        json.telegram === false
+          ? { title: "Đã lưu báo cáo cuối ca", description: "Chưa gửi được Telegram. Không cần gửi lại, báo quản lý nếu cần." }
+          : { title: "Đã gửi báo cáo cuối ca" },
+      )
       resetForm()
       queryClient.invalidateQueries({ queryKey: ["check-out"] })
     } catch (e: any) {

@@ -1,3 +1,4 @@
+import { requireSingleBranch } from "@/lib/require-branch"
 function parseAmount(value: unknown) {
   const { parseVietnameseNumber } = require("@/lib/number")
   const numeric = parseVietnameseNumber(value)
@@ -218,6 +219,8 @@ export async function GET(req: Request) {
 // API route: POST /api/dat-coc
 export async function POST(req: Request) {
   try {
+    const chooseBranch = requireSingleBranch(req)
+    if (chooseBranch) return chooseBranch
     await compactDatCocSheet()
     const body = await req.json()
     // Nếu truyền vào là nhiều sản phẩm, ghi nhiều dòng

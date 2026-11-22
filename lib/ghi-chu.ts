@@ -5,6 +5,7 @@
 
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
 import { DateTime } from "luxon"
+import { currentBranchContext, rowVisible } from "@/lib/branch-context"
 
 export type NoteStatus = "chua_xu_ly" | "hoan_thanh"
 
@@ -131,8 +132,10 @@ export async function getNotes(limit = 300): Promise<Note[]> {
   const { header, rows } = await readFromGoogleSheets(SHEET_NAME, undefined, { force: true })
   const c = columnIndexes(header)
   if (c.iID === -1) return []
+  // Mỗi chi nhánh chỉ thấy ghi chú bàn giao của mình (chủ shop/quản lý chọn "Tất cả" thì thấy hết)
+  const ctx = await currentBranchContext()
   const items = rows
-    .filter((r) => (r[c.iID] || "").trim() !== "")
+    .filter((r) => (r[c.iID] || "").trim() !== "" && rowVisible(header, r, ctx))
     .map((r) => rowToNote(r, c))
   items.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
   return items.slice(0, limit)
@@ -149,6 +152,8 @@ export async function completeNote(id: string, nguoiHoanThanh: string): Promise<
   if (c.iID === -1) return null
   const rowIdx = rows.findIndex((r) => (r[c.iID] || "").trim() === String(id).trim())
   if (rowIdx === -1) return null
+  // Không cho hoàn thành ghi chú của chi nhánh khác
+  if (!rowVisible(header, rows[rowIdx], await currentBranchContext())) return null
 
   const current = rowToNote(rows[rowIdx], c)
   if (current.status === "hoan_thanh") return current // đã xong -> không ghi đè
