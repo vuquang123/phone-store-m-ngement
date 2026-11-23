@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { readFromGoogleSheets, colIndex } from "@/lib/google-sheets"
+import { currentBranchContext, filterRowsByBranch } from "@/lib/branch-context"
 
 
 
@@ -9,7 +10,9 @@ const SHEET = "CNC"
 
 export async function GET() {
   try {
-    const { header, rows } = await readFromGoogleSheets(SHEET)
+    const { header, rows: allRows } = await readFromGoogleSheets(SHEET)
+    // Mỗi chi nhánh chỉ thấy máy gửi xử lý của mình
+    const rows = filterRowsByBranch(header, allRows || [], await currentBranchContext())
     // Map dữ liệu đúng thứ tự cột sheet CNC
     const idx = {
       id: colIndex(header, "ID Máy"),
@@ -26,6 +29,7 @@ export async function GET() {
       ten_khach_hang: colIndex(header, "Tên khách hàng", "Khách hàng", "Tên khách"),
       so_dien_thoai: colIndex(header, "Số điện thoại", "SĐT", "sdt", "SDT"),
       do_sim: colIndex(header, "Dạng Sim", "Dạng sim", "Kiểu dạng sim"),
+      noi_dung: colIndex(header, "Nội dung xử lý"),
     }
 
     const data = rows.map(row => ({
@@ -43,6 +47,8 @@ export async function GET() {
       ten_khach_hang: row[idx.ten_khach_hang],
       so_dien_thoai: row[idx.so_dien_thoai],
       do_sim: idx.do_sim !== -1 ? row[idx.do_sim] : "",
+      // Dữ liệu cũ (trước khi có cột) = CNC
+      noi_dung: (idx.noi_dung !== -1 ? String(row[idx.noi_dung] || "").trim() : "") || "CNC",
     }))
     return NextResponse.json({ data })
   } catch (error) {

@@ -26,6 +26,9 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
   const [newAddress, setNewAddress] = useState("")
   const [employeeId, setEmployeeId] = useState("")
   const [doSim, setDoSim] = useState("Không rõ")
+  // Việc cần làm: CNC, thay pin, sửa lỗi... (gõ tự do). Mặc định CNC như trước.
+  const [noiDung, setNoiDung] = useState("CNC")
+  const isCNC = /cnc/i.test(noiDung)
 
   // Lấy danh sách địa chỉ từ window (giống AddCNCMachineDialog)
   const [addresses, setAddresses] = useState<{ label: string, value: string }[]>([])
@@ -48,8 +51,12 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
   }, [])
 
   const handleSend = async () => {
+    if (!noiDung.trim()) {
+      toast.error("Vui lòng nhập nội dung xử lý (VD: CNC, thay pin, sửa lỗi...)")
+      return
+    }
     if (!cncAddress && !newAddress) {
-      toast.error("Vui lòng chọn hoặc nhập địa chỉ CNC")
+      toast.error("Vui lòng chọn hoặc nhập nơi xử lý")
       return
     }
 
@@ -62,13 +69,15 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
         cncAddress: finalAddress,
         employeeId,
         products: selectedProducts,
-        doSim: doSim === "Không rõ" ? "" : doSim
+        doSim: isCNC && doSim !== "Không rõ" ? doSim : "",
+        noiDung: noiDung.trim(),
       })
-      toast.success(`Đã gửi ${selectedProducts.length} sản phẩm đi CNC`)
+      toast.success(`Đã gửi ${selectedProducts.length} máy đi xử lý: ${noiDung.trim()}`)
+      setNoiDung("CNC")
       if (onSuccess) onSuccess()
       onClose()
     } catch (error: any) {
-      toast.error("Lỗi khi gửi CNC: " + error.message)
+      toast.error("Lỗi khi gửi xử lý: " + error.message)
     }
   }
 
@@ -76,7 +85,7 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-card max-w-md w-[90%]">
         <DialogHeader>
-          <DialogTitle>Gửi sản phẩm đi CNC</DialogTitle>
+          <DialogTitle>Gửi máy đi xử lý</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
@@ -96,12 +105,24 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
                     {p.dung_luong && <span>•</span>}
                     <span>{p.dung_luong}</span>
                   </div>
-                  <div className="mt-1 font-mono text-muted-foreground">IMEI: {p.imei}</div>
+                  <div className="mt-1 font-mono text-muted-foreground">{p.imei ? `IMEI: ${p.imei}` : p.serial ? `Serial: ${p.serial}` : "IMEI: —"}</div>
                 </div>
               ))}
             </div>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="noi-dung-xu-ly">Nội dung xử lý <span className="text-red-500">*</span></Label>
+            <Input
+              id="noi-dung-xu-ly"
+              value={noiDung}
+              onChange={(e) => setNoiDung(e.target.value)}
+              placeholder="VD: CNC, thay pin, sửa lỗi Face ID..."
+              autoFocus
+            />
+          </div>
+
+          {isCNC && (
           <div className="space-y-2">
             <Label>Kiểu Dạng Sim</Label>
             <Select value={doSim} onValueChange={setDoSim}>
@@ -119,14 +140,15 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
               </SelectContent>
             </Select>
           </div>
+          )}
 
           <div className="space-y-2">
-            <Label>Địa chỉ CNC (Nơi nhận)</Label>
+            <Label>Nơi xử lý (địa chỉ / tên thợ)</Label>
             {!isAddingNewAddress ? (
               <div className="flex gap-2">
                 <Select value={cncAddress} onValueChange={setCncAddress}>
                   <SelectTrigger className="bg-card">
-                    <SelectValue placeholder="Chọn địa chỉ..." />
+                    <SelectValue placeholder="Chọn nơi xử lý..." />
                   </SelectTrigger>
                   <SelectContent className="bg-card">
                     {addresses.map(addr => (
@@ -139,7 +161,7 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
             ) : (
               <div className="space-y-2">
                 <Input
-                  placeholder="Nhập địa chỉ mới..."
+                  placeholder="Nhập nơi xử lý mới (địa chỉ, tên thợ)..."
                   value={newAddress}
                   onChange={e => setNewAddress(e.target.value)}
                   autoFocus
@@ -160,7 +182,7 @@ export function SendCNCDialog({ isOpen, onClose, selectedProducts, onSuccess }: 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isSendingCNC}>Hủy</Button>
           <Button onClick={handleSend} disabled={isSendingCNC}>
-            {isSendingCNC ? "Đang xử lý..." : "Xác nhận gửi CNC"}
+            {isSendingCNC ? "Đang gửi..." : "Gửi đi xử lý"}
           </Button>
         </DialogFooter>
       </DialogContent>

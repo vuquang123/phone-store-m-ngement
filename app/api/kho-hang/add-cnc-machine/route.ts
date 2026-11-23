@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { appendToGoogleSheets, logProductHistory } from "@/lib/google-sheets";
+import { appendToGoogleSheets, logProductHistory, ensureColumn } from "@/lib/google-sheets";
+import { sendStockEventNotification } from "@/lib/telegram";
+import { getServerUser } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
@@ -22,6 +24,9 @@ export async function POST(req: Request) {
     if (!ten_san_pham || !imei || !dia_chi_cnc || !ngay_gui || !khach_hang || !so_dien_thoai) {
       return NextResponse.json({ success: false, error: "Thiếu thông tin bắt buộc" }, { status: 400 });
     }
+    // Nội dung xử lý: CNC, thay pin, sửa lỗi... Không gửi lên = CNC như trước.
+    const job = String(body.noi_dung ?? "CNC").replace(/\s+/g, " ").trim() || "CNC";
+    await ensureColumn("CNC", "Nội dung xử lý");
     // Đọc header sheet CNC để map đúng thứ tự cột
     const { header } = await import("@/lib/google-sheets").then(m => m.readFromGoogleSheets("CNC"));
     const newRow = header.map(col => {
@@ -40,12 +45,25 @@ export async function POST(req: Request) {
       if (c === "số điện thoại" || c === "so dien thoai" || c === "sđt" || c === "sdt") return so_dien_thoai || "";
       if (c === "màu sắc" || c === "mau sac" || c === "màu" || c === "mau") return body.mau_sac || "";
       if (c === "dạng sim" || c === "dang sim" || c === "kiểu dạng sim") return body.do_sim || "";
+      if (c === "nội dung xử lý" || c === "noi dung xu ly") return job;
       return "";
     });
     await appendToGoogleSheets("CNC", newRow);
     // Ghi lịch sử trạng thái
   await logProductHistory([id_may], "Đang CNC", employeeId || "", ["Khách ngoài"]);
-    return NextResponse.json({ success: true, message: "Đã thêm máy CNC ngoài kho thành công!" });
+    // Telegram topic Kho: nhận máy khách gửi xử lý
+    try {
+      await sendStockEventNotification({
+        type: "send_cnc",
+        total: 1,
+        address: dia_chi_cnc,
+        devices: [{ name: ten_san_pham, imei, do_sim: body.do_sim || undefined }],
+        employee: getServerUser(req as any)?.name || employeeId || "",
+        job,
+        customer: `${khach_hang} - ${so_dien_thoai}`,
+      } as any);
+    } catch (e) { console.warn("[TG] add-cnc-machine fail:", e) }
+    return NextResponse.json({ success: true, message: `Đã nhận máy khách gửi xử lý (${job})` });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message || "Lỗi thêm máy CNC" }, { status: 500 });
   }

@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server"
-import { moveProductsToCNC, logProductHistory, colIndex } from "@/lib/google-sheets"
+import { moveProductsToCNC, logProductHistory, colIndex, ensureColumn } from "@/lib/google-sheets"
+import { getServerUser } from "@/lib/auth"
 
 import { addNotification } from "@/lib/notifications"
 import { sendStockEventNotification } from "@/lib/telegram"
 
 export async function POST(req: Request) {
   try {
-  const { productIds, cncAddress, employeeId, doSim } = await req.json()
+  const { productIds, cncAddress, employeeId, doSim, noiDung } = await req.json()
+    // Nội dung xử lý: CNC, thay pin, sửa lỗi... (nhập tự do). Không gửi lên = CNC như trước.
+    const job = String(noiDung ?? "CNC").replace(/\s+/g, " ").trim()
+    const employee = getServerUser(req as any)?.name || employeeId || ""
     if (!Array.isArray(productIds) || productIds.length === 0) {
-      return NextResponse.json({ error: "Vui lòng chọn sản phẩm cần gửi CNC." }, { status: 400 })
+      return NextResponse.json({ error: "Vui lòng chọn máy cần gửi xử lý." }, { status: 400 })
+    }
+    if (!job) {
+      return NextResponse.json({ error: "Vui lòng nhập nội dung xử lý (VD: CNC, thay pin, sửa lỗi...)." }, { status: 400 })
     }
     if (!cncAddress || !cncAddress.trim()) {
-      return NextResponse.json({ error: "Vui lòng nhập địa chỉ CNC." }, { status: 400 })
+      return NextResponse.json({ error: "Vui lòng nhập nơi xử lý (địa chỉ / tên thợ)." }, { status: 400 })
     }
+    await ensureColumn("CNC", "Nội dung xử lý")
     // Lấy trạng thái cũ từ sheet Kho_Hang
     const { header, rows } = await import("@/lib/google-sheets").then(m => m.readFromGoogleSheets("Kho_Hang"))
     const idxId = colIndex(header, "ID Máy")
@@ -42,7 +50,7 @@ export async function POST(req: Request) {
       return row ? row[idxTrangThai] : ""
     })
     // Di chuyển sản phẩm sang sheet CNC, cập nhật trạng thái, ghi lịch sử
-    const moveResult = await moveProductsToCNC(idsToMove, cncAddress, doSim)
+    const moveResult = await moveProductsToCNC(idsToMove, cncAddress, doSim, job)
     if (!moveResult.success) {
       return NextResponse.json({ error: moveResult.error || "Lỗi khi chuyển sản phẩm sang CNC." }, { status: 500 })
     }
@@ -52,8 +60,8 @@ export async function POST(req: Request) {
     }
     try {
       await addNotification({
-        tieu_de: "Chuyển sản phẩm sang CNC",
-        noi_dung: `Số lượng: ${idsToMove.length} • Địa chỉ: ${cncAddress}`,
+        tieu_de: `Gửi máy đi xử lý: ${job}`,
+        noi_dung: `Số lượng: ${idsToMove.length} • Nơi xử lý: ${cncAddress}`,
         loai: "kho_hang",
         nguoi_gui_id: employeeId || "system",
         nguoi_nhan_id: "all",
@@ -75,11 +83,12 @@ export async function POST(req: Request) {
         total: idsToMove.length,
         address: cncAddress,
         devices,
-        employee: employeeId,
+        employee,
         simType,
+        job,
       })
     } catch (e) { console.warn('[TG] send-cnc message fail:', e) }
-    return NextResponse.json({ success: true, message: `Đã gửi CNC thành công cho ${productIds.length} sản phẩm!` })
+    return NextResponse.json({ success: true, message: `Đã gửi ${idsToMove.length} máy đi xử lý (${job})` })
   } catch (e: any) {
     return NextResponse.json({ error: e.message ? `Lỗi hệ thống: ${e.message}` : "Lỗi gửi CNC, vui lòng thử lại." }, { status: 500 })
   }

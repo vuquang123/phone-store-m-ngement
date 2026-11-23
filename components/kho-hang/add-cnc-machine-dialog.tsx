@@ -32,7 +32,9 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
     khach_hang: "",
     so_dien_thoai: "",
     do_sim: "Không rõ",
-    employeeId: ""
+    employeeId: "",
+    // Việc cần làm: CNC, thay pin, sửa lỗi... (gõ tự do)
+    noi_dung: "CNC",
   })
 
   useEffect(() => {
@@ -81,22 +83,27 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
   }
 
   async function handleSubmit() {
+    if (!form.noi_dung.trim()) {
+      toast({ title: "Thiếu nội dung xử lý", description: "VD: CNC, thay pin, sửa lỗi...", variant: "destructive" })
+      return
+    }
     setIsLoading(true)
     const res = await fetch("/api/kho-hang/add-cnc-machine", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form)
+      body: JSON.stringify({ ...form, do_sim: /cnc/i.test(form.noi_dung) && form.do_sim !== "Không rõ" ? form.do_sim : "" })
     })
     const data = await res.json()
     setIsLoading(false)
     if (data.success) {
-      toast({ title: "Thành công", description: data.message || "Đã thêm máy CNC", variant: "success" as any })
+      toast({ title: "Thành công", description: data.message || "Đã nhận máy khách gửi xử lý", variant: "success" as any })
+      setForm((f) => ({ ...f, ten_san_pham: "", imei: "", mau_sac: "", tinh_trang: "", khach_hang: "", so_dien_thoai: "", noi_dung: "CNC" }))
       if (typeof onSuccess === "function") {
         onSuccess(); // reload danh sách sản phẩm CNC
       }
       onClose();
     } else {
-      toast({ title: "Lỗi", description: data.error || "Không thể thêm máy CNC", variant: "destructive" })
+      toast({ title: "Lỗi", description: data.error || "Không thể nhận máy", variant: "destructive" })
     }
   }
 
@@ -104,10 +111,20 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-card rounded-xl shadow-xl p-6 min-w-[350px] max-w-[600px] border border-border">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-blue-700 mb-2">Thêm máy CNC ngoài kho</DialogTitle>
-          <p className="text-muted-foreground text-sm mb-4">Nhập thông tin máy CNC ngoài kho để quản lý và theo dõi trạng thái.</p>
+          <DialogTitle className="text-xl font-bold text-blue-700 mb-2">Nhận máy khách gửi xử lý</DialogTitle>
+          <p className="text-muted-foreground text-sm mb-4">Máy của khách (không có trong kho) mang tới để làm CNC, thay pin, sửa lỗi...</p>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <Label className="font-medium text-foreground">Nội dung xử lý <span className="text-red-500">*</span></Label>
+            <Input
+              name="noi_dung"
+              value={form.noi_dung}
+              onChange={handleChange}
+              placeholder="VD: CNC, thay pin, sửa lỗi Face ID..."
+              className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
           <div className="flex flex-col gap-2">
             <Label className="font-medium text-foreground">Tên Sản Phẩm</Label>
             <SearchableSelect
@@ -132,7 +149,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
             <Label className="font-medium text-foreground">Tình trạng</Label>
             <Input name="tinh_trang" value={form.tinh_trang} onChange={handleChange} placeholder="Nhập tình trạng" className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
-          <div className="flex flex-col gap-2">
+          <div className={/cnc/i.test(form.noi_dung) ? "flex flex-col gap-2" : "hidden"}>
             <Label className="font-medium text-foreground">Kiểu Dạng Sim</Label>
             <Select value={form.do_sim} onValueChange={v => setForm(f => ({ ...f, do_sim: v }))}>
               <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
@@ -166,7 +183,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
             <Input name="loai_may" value={form.loai_may} readOnly />
           </div>
           <div className="flex flex-col gap-2">
-            <Label className="font-medium text-foreground">Địa chỉ CNC</Label>
+            <Label className="font-medium text-foreground">Nơi xử lý (địa chỉ / tên thợ)</Label>
             <Select value={form.dia_chi_cnc} onValueChange={val => {
               if (val === "__add__") {
                 setIsAddingCNCAddress(true)
@@ -175,7 +192,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
               }
             }}>
               <SelectTrigger className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-card text-foreground font-medium">
-                <SelectValue placeholder="Chọn địa chỉ CNC" />
+                <SelectValue placeholder="Chọn nơi xử lý" />
               </SelectTrigger>
               <SelectContent className="bg-card border border-border shadow-lg text-foreground">
                 {/* Địa chỉ mặc định và các địa chỉ đã thêm */}
@@ -191,7 +208,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
                 <Input
                   value={newCNCAddress}
                   onChange={e => setNewCNCAddress(e.target.value)}
-                  placeholder="Nhập địa chỉ CNC mới..."
+                  placeholder="Nhập nơi xử lý mới (địa chỉ, tên thợ)..."
                   className="px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
                 <div className="flex gap-2 mt-2">
@@ -225,7 +242,7 @@ export default function AddCNCMachineDialog({ isOpen, onClose, onSuccess }: { is
         </div>
         <DialogFooter className="mt-6 flex gap-3 justify-end">
           <Button onClick={onClose} variant="outline" className="rounded-lg px-5">Hủy</Button>
-          <Button onClick={handleSubmit} disabled={isLoading} className="bg-blue-600 text-white font-semibold rounded-lg px-5 shadow hover:bg-blue-700">Thêm máy CNC</Button>
+          <Button onClick={handleSubmit} disabled={isLoading} className="bg-blue-600 text-white font-semibold rounded-lg px-5 shadow hover:bg-blue-700">{isLoading ? "Đang lưu..." : "Nhận máy"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1298,7 +1298,7 @@ export default function BanHangPage() {
       <div className="space-y-4 pb-28 md:pb-0">
         {me?.activeBranch === "all" && (
           <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-            Đang xem <b>tất cả chi nhánh</b>: chỉ xem được. Muốn xuất đơn, đặt cọc, nhập hàng, gửi CNC… hãy chọn DEV PỒ hoặc T1s ở góc trên.
+            Đang xem <b>tất cả chi nhánh</b>: chỉ xem được. Muốn xuất đơn, đặt cọc, nhập hàng, gửi xử lý… hãy chọn DEV PỒ hoặc T1s ở góc trên.
           </div>
         )}
         {/* Thẻ số liệu chỉ hiện trên desktop: trên mobile ưu tiên ô tìm kiếm để bán hàng. */}
@@ -1404,7 +1404,7 @@ export default function BanHangPage() {
                       className="h-9 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-700 dark:border-amber-500/40 dark:text-amber-400 dark:hover:bg-amber-500/10"
                       onClick={() => setIsSendCNCDialogOpen(true)}
                     >
-                      Gửi CNC
+                      Gửi xử lý
                     </Button>
                     <Button
                       size="sm"

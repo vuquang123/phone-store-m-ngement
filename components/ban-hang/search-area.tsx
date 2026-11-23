@@ -362,7 +362,7 @@ export function SearchArea({
                           )}
                           {onSendCNC && (
                             <Button variant="outline" size="icon" className="h-8 w-8 text-muted-foreground hover:text-orange-500"
-                              title="Gửi CNC" onClick={() => onSendCNC(product)}>
+                              title="Gửi xử lý (CNC, thay pin, sửa lỗi...)" onClick={() => onSendCNC(product)}>
                               <Hammer className="h-4 w-4" />
                             </Button>
                           )}
@@ -575,7 +575,7 @@ export function SearchArea({
                                     )}
                                     {onSendCNC && (
                                       <Button variant="outline" size="icon" className="h-7 w-7 text-muted-foreground hover:text-orange-500"
-                                        title="Gửi CNC" onClick={() => onSendCNC(product)}>
+                                        title="Gửi xử lý (CNC, thay pin, sửa lỗi...)" onClick={() => onSendCNC(product)}>
                                         <Hammer className="h-3.5 w-3.5" />
                                       </Button>
                                     )}

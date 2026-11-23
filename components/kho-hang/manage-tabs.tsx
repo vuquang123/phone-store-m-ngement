@@ -38,7 +38,7 @@ const PAGE_SIZE = 10
 export type ManageTab = "dang-cnc" | "giao-doi-tac" | "hang-doi-tac" | "bao-hanh" | "phu-kien"
 
 export const MANAGE_TABS: { key: ManageTab; label: string }[] = [
-  { key: "dang-cnc", label: "CNC" },
+  { key: "dang-cnc", label: "Gửi xử lý" },
   { key: "bao-hanh", label: "Bảo hành" },
   { key: "hang-doi-tac", label: "Hàng đối tác" },
   { key: "phu-kien", label: "Tồn phụ kiện" },
@@ -105,12 +105,17 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
 
   const processingCNC = useMemo(() => {
     let result = cncProducts.filter(
-      (p: any) => p.trang_thai !== "Hoàn thành CNC" && (p.trang_thai_cnc || "").toLowerCase() !== "đã nhận",
+      // Đang gửi đi = chưa xong và khách chưa nhận lại
+      (p: any) =>
+        p.trang_thai !== "Hoàn thành CNC" &&
+        p.trang_thai !== "Khách đã nhận" &&
+        (p.trang_thai_cnc || "").toLowerCase() !== "đã nhận",
     )
     if (cncProcessingSearch) {
       const q = cncProcessingSearch.toLowerCase()
-      result = result.filter(
-        (p: any) => p.ten_san_pham?.toLowerCase().includes(q) || p.imei?.toLowerCase().includes(q),
+      result = result.filter((p: any) =>
+        [p.ten_san_pham, p.imei, p.noi_dung, p.dia_chi_cnc, p.ten_khach_hang, p.so_dien_thoai]
+          .some((v) => String(v || "").toLowerCase().includes(q)),
       )
     }
     return result
@@ -118,12 +123,16 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
 
   const completedCNC = useMemo(() => {
     let result = cncProducts.filter(
-      (p: any) => p.trang_thai === "Hoàn thành CNC" || (p.trang_thai_cnc || "").toLowerCase() === "đã nhận",
+      (p: any) =>
+        p.trang_thai === "Hoàn thành CNC" ||
+        p.trang_thai === "Khách đã nhận" ||
+        (p.trang_thai_cnc || "").toLowerCase() === "đã nhận",
     )
     if (cncCompletedSearch) {
       const q = cncCompletedSearch.toLowerCase()
-      result = result.filter(
-        (p: any) => p.ten_san_pham?.toLowerCase().includes(q) || p.imei?.toLowerCase().includes(q),
+      result = result.filter((p: any) =>
+        [p.ten_san_pham, p.imei, p.noi_dung, p.dia_chi_cnc, p.ten_khach_hang, p.so_dien_thoai]
+          .some((v) => String(v || "").toLowerCase().includes(q)),
       )
     }
     return result
@@ -204,19 +213,19 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-2">
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                Đang CNC
+                Đang gửi xử lý
                 <Badge variant="secondary" className="ml-2 bg-blue-50 text-blue-600 border-blue-100">{processingCNC.length}</Badge>
               </h3>
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <Input
-                  placeholder="Tìm máy đang CNC..."
+                  placeholder="Tìm máy, nội dung, nơi xử lý..."
                   className="h-9 bg-card w-full sm:w-[240px]"
                   value={cncProcessingSearch}
                   onChange={(e) => { setCncProcessingSearch(e.target.value); setCncProcessingPage(1) }}
                 />
                 <div className="flex gap-2">
                   <Button onClick={() => setIsAddCNCMachineOpen(true)} className="bg-blue-600 h-9 shrink-0">
-                    + Thêm mới
+                    + Máy khách
                   </Button>
                   <Button
                     variant="outline"
@@ -244,7 +253,7 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
                   }}
                   disabled={isCompletingCNC}
                 >
-                  Hoàn thành CNC ({selectedIds.length})
+                  Xong ({selectedIds.length})
                 </Button>
               </div>
             )}
@@ -279,12 +288,12 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-2">
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Đã hoàn thành CNC
+                Đã xử lý xong
                 <Badge variant="secondary" className="ml-2 bg-emerald-50 text-emerald-600 border-emerald-100">{completedCNC.length}</Badge>
               </h3>
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <Input
-                  placeholder="Tìm máy đã hoàn thành..."
+                  placeholder="Tìm máy đã xong..."
                   className="h-9 bg-card w-full sm:w-[240px]"
                   value={cncCompletedSearch}
                   onChange={(e) => { setCncCompletedSearch(e.target.value); setCncCompletedPage(1) }}

@@ -743,7 +743,7 @@ export async function updateProductsStatus(productIds: string[], newStatus: stri
   }
   return { success: true, count: productIds.length }
 }
-export async function moveProductsToCNC(productIds: string[], cncAddress: string, doSim?: string) {
+export async function moveProductsToCNC(productIds: string[], cncAddress: string, doSim?: string, noiDung?: string) {
   // Đọc dữ liệu kho hàng (force: bỏ cache 15s để không ghi đè thay đổi của người khác,
   // vì syncToGoogleSheets ghi lại TOÀN BỘ sheet từ snapshot đọc được)
   const { header: khoHeader, rows } = await readFromGoogleSheets("Kho_Hang", undefined, { force: true })
@@ -793,6 +793,8 @@ export async function moveProductsToCNC(productIds: string[], cncAddress: string
       }
       if (col === "Địa chỉ CNC") return cncAddress
       if (col === "Ngày gửi") return nowVN
+      // Việc cần làm (CNC, thay pin, sửa lỗi...). Cột tên "Nội dung xử lý".
+      if (colIndex([col], "Nội dung xử lý") !== -1) return String(noiDung || "").trim() || "CNC"
       const idxInKho = colIndex(khoHeader, col)
       if (idxInKho !== -1) {
         return row[idxInKho]

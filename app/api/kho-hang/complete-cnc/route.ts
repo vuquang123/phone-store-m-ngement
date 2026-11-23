@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       })
       .map(row => row[idxIMEI])
     if (imeisToProcess.length === 0) {
-      return NextResponse.json({ success: false, error: "Không tìm thấy sản phẩm cần hoàn thành CNC" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Không tìm thấy máy đang gửi xử lý" }, { status: 400 });
     }
     // Chuẩn hóa: lấy 5 số cuối IMEI cho logProductHistory
     const productIds5 = imeisToProcess.map(imei => imei.slice(-5));
@@ -150,7 +150,7 @@ export async function POST(req: Request) {
       employee: employeeId,
     })
   } catch (e) { console.warn('[TG] complete-cnc message fail:', e) }
-  return NextResponse.json({ success: true, message: `Đã hoàn thành CNC cho ${imeisToProcess.length} sản phẩm!` });
+  return NextResponse.json({ success: true, message: `Đã xử lý xong ${imeisToProcess.length} sản phẩm!` });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message || "Lỗi xử lý hoàn thành CNC" }, { status: 500 });
   }

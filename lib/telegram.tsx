@@ -76,8 +76,8 @@ function formatDeviceSummaryLine(device: DeviceSummary, index: number) {
 
 type StockEvent =
   | { type: "import"; total: number; devices: DeviceSummary[]; employee?: string }
-  | { type: "send_cnc"; total: number; address: string; devices: DeviceSummary[]; employee?: string; simType?: string }
-  | { type: "complete_cnc"; total: number; devices: DeviceSummary[]; employee?: string }
+  | { type: "send_cnc"; total: number; address: string; devices: DeviceSummary[]; employee?: string; simType?: string; job?: string; customer?: string }
+  | { type: "complete_cnc"; total: number; devices: DeviceSummary[]; employee?: string; job?: string }
   | { type: "send_warranty"; total: number; address: string; devices: DeviceSummary[]; employee?: string }
   | { type: "complete_warranty"; total: number; devices: DeviceSummary[]; employee?: string }
   | { type: "send_partner"; total: number; partner: string; devices: DeviceSummary[]; employee?: string }
@@ -88,8 +88,12 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
   const header = (() => {
     switch (event.type) {
       case "import": return "📥 Nhập hàng"
-      case "send_cnc": return "🚚 Gửi CNC"
-      case "complete_cnc": return "✅ Hoàn thành CNC"
+      case "send_cnc": {
+        const e = event as any
+        if (e.customer) return "📥 Nhận máy khách gửi xử lý"
+        return "🚚 Gửi máy đi xử lý"
+      }
+      case "complete_cnc": return "✅ Máy xử lý xong"
       case "send_warranty": return "🛠️ Gửi bảo hành"
       case "complete_warranty": return "✅ Hoàn thành bảo hành"
       case "send_partner": return "🤝 Gửi máy cho đối tác"
@@ -98,7 +102,10 @@ export function buildStockEventMessage(event: StockEvent): { text: string; threa
     }
   })()
 
+  const escH = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   const lines: string[] = [header]
+  if ((event as any).job) lines.push(`Nội dung: ${escH((event as any).job)}`)
+  if ((event as any).customer) lines.push(`Khách: ${escH((event as any).customer)}`)
   if (event.employee) lines.push(`Nhân viên: ${event.employee}`)
   if (event.type === "send_cnc" || event.type === "send_warranty") {
     const addr = (event as any).address

@@ -46,6 +46,7 @@ export const BRANCH_TABS = [
   "Check_out",
   "Yeu_Cau_Lech_Ca",
   "Ghi_chu",
+  "CNC",
 ] as const
 
 const fold = (s: unknown) =>
