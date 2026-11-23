@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { docFileBang } from "@/lib/client/doc-bang-tinh"
 import { OTien, vnd } from "@/components/tai-chinh/chung"
 import { FileSpreadsheet, Loader2, Upload } from "lucide-react"
+import { ChonDauHang } from "@/components/tai-chinh/chon-dau-hang"
 
 type LoNgan = { ma: string; dauHang: string; ngayNhap: string }
 type May = {
@@ -247,16 +248,15 @@ function Trang() {
           </select>
         ) : (
           <div className="flex flex-wrap gap-2">
-            <select className="h-9 rounded-md border bg-background px-2 text-sm" value={loMoi.dauHangId} onChange={(e) => setLoMoi({ ...loMoi, dauHangId: e.target.value })}>
-              <option value="">Chọn đầu hàng</option>
-              {dauHang.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.ten}
-                </option>
-              ))}
-            </select>
+            <ChonDauHang
+              className="min-w-[220px]"
+              value={loMoi.dauHangId}
+              onChange={(id) => setLoMoi({ ...loMoi, dauHangId: id })}
+              dauHang={dauHang}
+              onCreated={(x) => setDauHang((d) => [...d, x])}
+            />
             <Input type="date" className="w-44" value={loMoi.ngayNhap} onChange={(e) => setLoMoi({ ...loMoi, ngayNhap: e.target.value })} />
-            <span className="w-full text-xs text-muted-foreground">Đầu hàng chưa có thì chủ shop thêm ở Tài chính → Đầu hàng & CTV. Chi phí lô, tiền đã trả, hạn trả nhập ở Tài chính → Lô hàng.</span>
+            <span className="w-full text-xs text-muted-foreground">Đầu hàng chưa có thì chọn “+ Thêm đầu hàng mới”. Chi phí lô, tiền đã trả, hạn trả nhập ở Tài chính → Lô hàng.</span>
           </div>
         )}
       </section>

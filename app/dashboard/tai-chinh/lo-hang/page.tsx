@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { DangTai, KhungTrang, Nhan, OTien, The, goiApi, homNayISO, ngayVN, pt, vnd, xuatCsv } from "@/components/tai-chinh/chung"
 import { ArrowLeft, Download, Plus } from "lucide-react"
+import { ChonDauHang } from "@/components/tai-chinh/chon-dau-hang"
 
 type Lo = { ma: string; dauHangId: string; ngayNhap: string; chiPhiLo: number; chiPhiTinhNo: boolean; daTraLucNhap: number; hanTra: string; tongHoaDon: number; ghiChu: string; chiNhanh: string; trangThai: string }
 type DongLo = {
@@ -205,7 +206,7 @@ function DanhSach() {
           {!data.lo.length && <div className="py-8 text-center text-sm text-muted-foreground">Chưa có lô nào khớp bộ lọc</div>}
           {data.chuaLo.length > 0 && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40">
-              Có {data.chuaLo.length} máy đang tồn chưa thuộc lô nào. Mở một lô rồi bấm “Gán máy chưa có lô” để thêm vào.
+              Có {data.chuaLo.length} máy đang tồn chưa thuộc lô nào. Mở một lô rồi bấm “Thêm máy tồn vào lô” để thêm vào.
             </div>
           )}
         </>
@@ -221,6 +222,7 @@ function TaoLoDialog({ open, onClose, dauHang, onDone, lo }: { open: boolean; on
   const trong = { dauHangId: "", ngayNhap: homNayISO(), chiPhiLo: "" as number | "", chiPhiTraDauHang: false, daTraLucNhap: "" as number | "", hanTra: "", tongHoaDon: "" as number | "", ghiChu: "", trangThai: "" }
   const [f, setF] = useState(trong)
   const [dang, setDang] = useState(false)
+  const [themDH, setThemDH] = useState<DauHang[]>([])
   useEffect(() => {
     if (!open) return
     setF(
@@ -248,7 +250,8 @@ function TaoLoDialog({ open, onClose, dauHang, onDone, lo }: { open: boolean; on
       setDang(false)
     }
   }
-  const dh = dauHang.find((x) => x.id === f.dauHangId)
+  const dsDH = [...dauHang, ...themDH.filter((x) => !dauHang.some((d) => d.id === x.id))]
+  const dh = dsDH.find((x) => x.id === f.dauHangId)
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
@@ -256,17 +259,10 @@ function TaoLoDialog({ open, onClose, dauHang, onDone, lo }: { open: boolean; on
           <DialogTitle>{lo ? `Sửa lô ${lo.ma}` : "Tạo lô nhập"}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3 text-sm">
-          <label className="grid gap-1">
+          <div className="grid gap-1">
             Đầu hàng
-            <select className="h-9 rounded-md border bg-background px-2" value={f.dauHangId} onChange={(e) => setF({ ...f, dauHangId: e.target.value })}>
-              <option value="">Chọn đầu hàng</option>
-              {dauHang.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.ten} ({d.soNgayNo} ngày nợ)
-                </option>
-              ))}
-            </select>
-          </label>
+            <ChonDauHang value={f.dauHangId} onChange={(id) => setF({ ...f, dauHangId: id })} dauHang={dsDH} onCreated={(x) => setThemDH((t) => [...t, x])} />
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="grid gap-1">
               Ngày nhập
@@ -363,7 +359,7 @@ function ChiTietLo({ ma }: { ma: string }) {
             Sửa lô
           </Button>
           <Button variant="outline" size="sm" onClick={() => setGan(true)}>
-            Gán máy chưa có lô
+            Thêm máy tồn vào lô
           </Button>
           <Button variant="outline" size="sm" onClick={xuat}>
             <Download className="mr-1 h-4 w-4" /> Excel
@@ -577,61 +573,127 @@ function SuaMayDialog({ may, ctv, onClose, onDone }: { may: MayCT | null; ctv: {
   )
 }
 
+type MayChon = { khoa: number; ten: string; imei: string; giaNhap: number; ngayNhap: string; phu: string }
 function GanMayDialog({ open, ma, onClose, onDone }: { open: boolean; ma: string; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast()
-  const [ds, setDs] = useState<{ dongKho: number; ten: string; imei: string; giaNhap: number; ngayNhap: string; chiNhanh: string }[] | null>(null)
+  const [nguon, setNguon] = useState<"cu" | "chua">("cu")
+  const [data, setData] = useState<{ cu: MayChon[]; chua: MayChon[] } | null>(null)
   const [chon, setChon] = useState<Set<number>>(new Set())
   const [q, setQ] = useState("")
+  const [dan, setDan] = useState("")
+  const [dang, setDang] = useState(false)
   useEffect(() => {
     if (!open) return
     setChon(new Set())
-    goiApi<{ chuaLo: any[] }>("/api/tai-chinh/lo-hang").then((r) => setDs(r.chuaLo)).catch(() => setDs([]))
+    setData(null)
+    setDan("")
+    goiApi<{ chuaLo: any[]; loCu: any[] }>("/api/tai-chinh/lo-hang")
+      .then((r) => {
+        const cu = (r.loCu || []).map((m: any) => ({ khoa: m.dong, ten: m.ten, imei: m.imei, giaNhap: m.giaNhap, ngayNhap: m.ngayNhap, phu: [m.dungLuong, m.mau, m.loaiMay].filter(Boolean).join(" · ") }))
+        const chua = (r.chuaLo || []).map((m: any) => ({ khoa: m.dongKho, ten: m.ten, imei: m.imei, giaNhap: m.giaNhap, ngayNhap: m.ngayNhap, phu: m.chiNhanh }))
+        setData({ cu, chua })
+        setNguon(cu.length || !chua.length ? "cu" : "chua")
+      })
+      .catch(() => setData({ cu: [], chua: [] }))
   }, [open])
-  const loc = (ds || []).filter((m) => !q || `${m.ten} ${m.imei}`.toLowerCase().includes(q.toLowerCase()))
+  const ds = data ? data[nguon] : []
+  const loc = ds.filter((m) => !q || `${m.ten} ${m.imei} ${m.phu}`.toLowerCase().includes(q.toLowerCase()))
+  const tongChon = ds.filter((m) => chon.has(m.khoa)).reduce((s, m) => s + m.giaNhap, 0)
+  const doiNguon = (n: "cu" | "chua") => {
+    setNguon(n)
+    setChon(new Set())
+  }
+  const chonTheoDan = () => {
+    const ids = new Set(dan.split(/[\s,;]+/).map((x) => x.trim().toUpperCase()).filter(Boolean))
+    const s = new Set(chon)
+    let n = 0
+    for (const m of ds) if (ids.has(String(m.imei).toUpperCase())) s.add(m.khoa), n++
+    setChon(s)
+    toast({ title: `Đã chọn ${n}/${ids.size} máy theo danh sách dán` })
+  }
   const gan = async () => {
+    setDang(true)
     try {
-      const r = await goiApi<{ added: number }>(`/api/tai-chinh/lo-hang/${encodeURIComponent(ma)}`, "POST", { dongKho: [...chon] })
-      toast({ title: `Đã gán ${r.added} máy vào ${ma}` })
+      const body = nguon === "cu" ? { dongSo: [...chon] } : { dongKho: [...chon] }
+      const r = await goiApi<{ added: number }>(`/api/tai-chinh/lo-hang/${encodeURIComponent(ma)}`, "POST", body)
+      toast({ title: `Đã đưa ${r.added} máy vào ${ma}` })
       onDone()
       onClose()
     } catch (e: any) {
-      toast({ title: "Không gán được", description: e.message, variant: "destructive" })
+      toast({ title: "Không chuyển được", description: e.message, variant: "destructive" })
+    } finally {
+      setDang(false)
     }
   }
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Gán máy chưa có lô vào {ma}</DialogTitle>
+          <DialogTitle>Thêm máy tồn vào {ma}</DialogTitle>
         </DialogHeader>
-        <Input placeholder="Tìm tên, IMEI…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="max-h-[50vh] divide-y overflow-y-auto text-sm">
-          {ds === null && <DangTai />}
-          {ds && !loc.length && <div className="py-6 text-center text-muted-foreground">Không có máy nào chưa có lô</div>}
+        <div className="flex gap-1 text-sm">
+          <button className={cn("rounded-md border px-3 py-1", nguon === "cu" && "bg-foreground text-background")} onClick={() => doiNguon("cu")}>
+            Ở lô cũ ({data?.cu.length ?? "…"})
+          </button>
+          <button className={cn("rounded-md border px-3 py-1", nguon === "chua" && "bg-foreground text-background")} onClick={() => doiNguon("chua")}>
+            Chưa có lô ({data?.chua.length ?? "…"})
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Chỉ hiện máy còn trong kho. Giá nhập và ngày nhập của máy giữ nguyên nên tuổi tồn vẫn đúng. Nợ của lô = tổng giá nhập các máy này − “Đã trả lúc nhập” (sửa ở nút Sửa lô).
+        </p>
+        <details className="text-sm">
+          <summary className="cursor-pointer text-muted-foreground">Dán danh sách IMEI để chọn nhanh</summary>
+          <Textarea rows={3} className="mt-1 font-mono text-xs" placeholder="Mỗi IMEI/Serial một dòng (copy cột IMEI từ Excel)" value={dan} onChange={(e) => setDan(e.target.value)} />
+          <Button size="sm" variant="outline" className="mt-1" onClick={chonTheoDan} disabled={!dan.trim()}>
+            Chọn theo danh sách
+          </Button>
+        </details>
+        <div className="flex gap-2">
+          <Input placeholder="Tìm tên, IMEI, màu…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Button
+            variant="outline"
+            onClick={() => {
+              const s = new Set(chon)
+              const het = loc.every((m) => s.has(m.khoa))
+              loc.forEach((m) => (het ? s.delete(m.khoa) : s.add(m.khoa)))
+              setChon(s)
+            }}
+          >
+            {loc.length && loc.every((m) => chon.has(m.khoa)) ? "Bỏ chọn" : "Chọn hết"}
+          </Button>
+        </div>
+        <div className="max-h-[45vh] divide-y overflow-y-auto text-sm">
+          {data === null && <DangTai />}
+          {data && !loc.length && <div className="py-6 text-center text-muted-foreground">Không có máy nào</div>}
           {loc.map((m) => (
-            <label key={m.dongKho} className="flex items-center gap-2 py-1.5">
+            <label key={m.khoa} className="flex items-center gap-2 py-1.5">
               <input
                 type="checkbox"
-                checked={chon.has(m.dongKho)}
+                checked={chon.has(m.khoa)}
                 onChange={(e) => {
                   const s = new Set(chon)
-                  e.target.checked ? s.add(m.dongKho) : s.delete(m.dongKho)
+                  e.target.checked ? s.add(m.khoa) : s.delete(m.khoa)
                   setChon(s)
                 }}
               />
-              <span className="min-w-0 flex-1 truncate">
-                {m.ten} <span className="font-mono text-xs text-muted-foreground">{m.imei}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{m.ten}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  <span className="font-mono">{m.imei}</span> · {m.phu} · nhập {ngayVN(m.ngayNhap)}
+                </span>
               </span>
-              <span className="text-xs tabular-nums text-muted-foreground">{vnd(m.giaNhap)}</span>
+              <span className="text-xs tabular-nums text-muted-foreground">{m.giaNhap ? vnd(m.giaNhap) : "chưa có giá"}</span>
             </label>
           ))}
         </div>
-        <DialogFooter>
+        <DialogFooter className="items-center gap-2">
+          <span className="mr-auto text-xs text-muted-foreground">Tổng giá nhập đã chọn: {vnd(tongChon)}</span>
           <Button variant="outline" onClick={onClose}>
             Huỷ
           </Button>
-          <Button onClick={gan} disabled={!chon.size}>
-            Gán {chon.size} máy
+          <Button onClick={gan} disabled={!chon.size || dang}>
+            {dang ? "Đang chuyển…" : `Đưa ${chon.size} máy vào lô`}
           </Button>
         </DialogFooter>
       </DialogContent>

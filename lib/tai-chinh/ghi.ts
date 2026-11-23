@@ -32,7 +32,7 @@ export type NhapDauHang = { ten: string; sdt?: string; soNgayNo?: number; nganHa
 export async function themDauHang(x: NhapDauHang) {
   if (!String(x.ten || "").trim()) throw new LoiNghiepVu("Nhập tên đầu hàng")
   const { dong } = await docBang(BANG.DAU_HANG)
-  if (dong.some((d) => d["Tên"].toLowerCase() === x.ten.trim().toLowerCase())) throw new LoiNghiepVu("Đã có đầu hàng tên này")
+  if (dong.some((d) => String(d["Tên"] || "").trim().toLowerCase() === x.ten.trim().toLowerCase())) throw new LoiNghiepVu("Đã có đầu hàng tên này")
   const id = `DH${String(dong.length + 1).padStart(3, "0")}`
   const idDung = dong.some((d) => d["ID"] === id) ? genId("DH") : id
   await themDong(BANG.DAU_HANG, [
@@ -482,4 +482,31 @@ export async function huyChiPhi(id: string, nguoiGhi: string) {
     })
   }
   await suaDong(BANG.CHI_PHI, header, [{ dong: d._dong, giaTri: { "Trạng Thái": `Đã huỷ (${nguoiGhi} ${bayGio()})` } }])
+}
+
+/**
+ * Chuyển máy CÒN TỒN đang nằm ở lô cũ (lô "không tính nợ", vd LO-CU-KHONG-RO) sang một lô thật.
+ * Dùng khi chia lại hàng tồn cũ theo từng đầu hàng. Chỉ đổi Mã Lô của dòng sổ lô (không tạo dòng mới).
+ */
+export async function chuyenMayTuLoCu(maLoDich: string, dongSo: number[]) {
+  const { header, dong } = await docBang(BANG.CHI_TIET_LO)
+  const { dong: loDong } = await docBang(BANG.LO_NHAP)
+  const dich = loDong.find((l) => l["Mã Lô"] === maLoDich)
+  if (!dich) throw new LoiNghiepVu(`Không tìm thấy lô ${maLoDich}`)
+  if (/không tính nợ/i.test(dich["Trạng Thái"] || "")) throw new LoiNghiepVu("Không chuyển vào lô cũ được, hãy chọn lô của đầu hàng")
+  const loCu = new Set(loDong.filter((l) => /không tính nợ/i.test(l["Trạng Thái"] || "")).map((l) => l["Mã Lô"]))
+  const chon = new Set(dongSo)
+  const sua = dong
+    .filter((d) => chon.has(d._dong) && loCu.has(d["Mã Lô"]) && !/đã bán|không còn/i.test(d["Trạng Thái"] || ""))
+    .map((d) => ({
+      dong: d._dong,
+      giaTri: {
+        "Mã Lô": maLoDich,
+        "Ghi Chú": [d["Ghi Chú"], `Chuyển từ ${d["Mã Lô"]}`].filter(Boolean).join(" · "),
+        "Cập Nhật Lúc": bayGio(),
+      },
+    }))
+  if (!sua.length) throw new LoiNghiepVu("Không có máy nào hợp lệ để chuyển (máy phải còn tồn và đang ở lô cũ)")
+  await suaDong(BANG.CHI_TIET_LO, header, sua)
+  return sua.length
 }

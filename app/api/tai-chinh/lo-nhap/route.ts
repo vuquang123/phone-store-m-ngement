@@ -2,9 +2,9 @@
 // Chỉ trả mã lô + tên đầu hàng + ngày nhập, không có tiền. Tạo nhanh lô: chỉ đầu hàng + ngày + ghi chú.
 import { NextResponse, type NextRequest } from "next/server"
 import { getServerUser } from "@/lib/auth"
-import { isOwnerRole } from "@/lib/roles"
+import { isManagerRole, isOwnerRole } from "@/lib/roles"
 import { docBang, BANG } from "@/lib/tai-chinh/bang"
-import { loChoNhapHang, taoLo } from "@/lib/tai-chinh/ghi"
+import { loChoNhapHang, taoLo, themDauHang } from "@/lib/tai-chinh/ghi"
 import { loiApi, nguCanh } from "@/lib/tai-chinh/api"
 
 export const runtime = "nodejs"
@@ -31,8 +31,15 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 })
   try {
     const c = nguCanh(req, user)
-    if (c.active === "all") return NextResponse.json({ error: "Chọn chi nhánh trước khi tạo lô" }, { status: 400 })
     const b = await req.json()
+    // Tạo nhanh đầu hàng ngay trong ô chọn (quản lý + chủ shop)
+    if (b.action === "dau-hang") {
+      if (!isManagerRole(user.role)) return NextResponse.json({ error: "Chỉ quản lý hoặc chủ shop được thêm đầu hàng" }, { status: 403 })
+      const ten = String(b.ten || "").trim()
+      const id = await themDauHang({ ten, soNgayNo: Number(b.soNgayNo) || 0, sdt: b.sdt ? String(b.sdt) : "" })
+      return NextResponse.json({ ok: true, id, ten })
+    }
+    if (c.active === "all") return NextResponse.json({ error: "Chọn chi nhánh trước khi tạo lô" }, { status: 400 })
     const ma = await taoLo({
       dauHangId: String(b.dauHangId || ""),
       ngayNhap: b.ngayNhap || undefined,

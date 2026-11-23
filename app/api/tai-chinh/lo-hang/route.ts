@@ -1,7 +1,8 @@
 // /api/tai-chinh/lo-hang — danh sách lô + chỉ số (GET), tạo lô (POST), sửa lô (PATCH). Chủ shop.
 import { NextResponse, type NextRequest } from "next/server"
 import { chiChuShop, loiApi } from "@/lib/tai-chinh/api"
-import { taiDuLieu, luuTinhTrangSoLo } from "@/lib/tai-chinh/du-lieu"
+import { taiDuLieu, luuTinhTrangSoLo, theoChiNhanh } from "@/lib/tai-chinh/du-lieu"
+import { khongTinhNo, daRaKhoi } from "@/lib/tai-chinh/tinh-toan"
 import { danhSachLo, mayTon } from "@/lib/tai-chinh/bao-cao"
 import { taoLo, suaLo } from "@/lib/tai-chinh/ghi"
 
@@ -23,10 +24,15 @@ export async function GET(req: NextRequest) {
       q: sp.get("q") || undefined,
     })
     const chuaLo = mayTon(d, c.active).filter((m) => !m.coLo)
+    const maLoCu = new Set(d.lo.filter((l) => khongTinhNo(l)).map((l) => l.ma))
+    const loCu = theoChiNhanh(d.may, c.active)
+      .filter((m) => maLoCu.has(m.maLo) && !daRaKhoi(m.trangThai))
+      .map((m) => ({ dong: m._dong, maLo: m.maLo, ten: m.ten, imei: m.imei || m.serial, mau: m.mau, dungLuong: m.dungLuong, loaiMay: m.loaiMay, giaNhap: m.giaNhap, ngayNhap: m.ngayNhap }))
     return NextResponse.json({
       lo: ds.map(({ lo, ...x }) => ({ ...x, lo })),
       dauHang: d.dauHang,
       chuaLo: chuaLo.map((m) => ({ dongKho: m.dongKho, ten: m.ten, imei: m.imei || m.serial, giaNhap: m.giaNhap, ngayNhap: m.ngayNhap, chiNhanh: m.chiNhanh })),
+      loCu,
       homNay: d.homNay,
       active: c.active,
     })

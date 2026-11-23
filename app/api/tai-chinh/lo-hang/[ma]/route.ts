@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { chiChuShop, loiApi } from "@/lib/tai-chinh/api"
 import { taiDuLieu } from "@/lib/tai-chinh/du-lieu"
 import { chiTietLo } from "@/lib/tai-chinh/bao-cao"
-import { suaMayLo, ganMayKhoVaoLo } from "@/lib/tai-chinh/ghi"
+import { suaMayLo, ganMayKhoVaoLo, chuyenMayTuLoCu } from "@/lib/tai-chinh/ghi"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -52,6 +52,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ma:
   try {
     const { ma } = await params
     const b = await req.json()
+    // { dongSo: number[] } — chuyển máy còn tồn từ lô cũ (LO-CU-KHONG-RO) sang lô này
+    if (Array.isArray(b.dongSo)) {
+      const n = await chuyenMayTuLoCu(decodeURIComponent(ma), b.dongSo.map(Number).filter((x: number) => x >= 2))
+      return NextResponse.json({ ok: true, added: n })
+    }
     const ds = Array.isArray(b.dongKho) ? b.dongKho.map(Number).filter((n: number) => n >= 2) : []
     if (!ds.length) return NextResponse.json({ error: "Chọn máy" }, { status: 400 })
     const n = await ganMayKhoVaoLo(decodeURIComponent(ma), ds)

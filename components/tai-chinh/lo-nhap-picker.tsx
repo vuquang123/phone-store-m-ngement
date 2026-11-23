@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { ChonDauHang } from "./chon-dau-hang"
 
 type LoNgan = { ma: string; dauHang: string; ngayNhap: string }
 
@@ -70,14 +71,7 @@ export function LoNhapPicker({ value, onChange, className }: { value: string; on
       </div>
       {moTao && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <select className="h-8 rounded-md border bg-background px-2" value={dh} onChange={(e) => setDh(e.target.value)}>
-            <option value="">Chọn đầu hàng</option>
-            {dauHang.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.ten}
-              </option>
-            ))}
-          </select>
+          <ChonDauHang className="h-8" value={dh} onChange={setDh} dauHang={dauHang} onCreated={(x) => setDauHang((d) => [...d, x])} hienSoNgay={false} />
           <Input type="date" className="h-8 w-40" value={ngay} onChange={(e) => setNgay(e.target.value)} />
           <Button type="button" size="sm" className="h-8" disabled={dangTao} onClick={tao}>
             {dangTao ? "Đang tạo…" : "Tạo lô"}
