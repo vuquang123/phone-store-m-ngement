@@ -9,6 +9,7 @@ import { isOwnerRole } from "@/lib/roles"
 const TABS = [
   { href: "/dashboard/quan-tri", label: "Tổng quan", ownerOnly: true },
   { href: "/dashboard/quan-tri/du-lieu", label: "Sửa dữ liệu" },
+  { href: "/dashboard/quan-tri/nhap-lo", label: "Nhập lô từ Excel" },
 ]
 
 export function QuanTriTabs() {

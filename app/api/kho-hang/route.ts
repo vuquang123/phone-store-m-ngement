@@ -272,7 +272,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { header, rows } = await readFromGoogleSheets(SHEET)
+    const { header, rows } = await readFromGoogleSheets(SHEET, undefined, body?.bo_qua_trung ? { force: true } : undefined)
     const sendImportMessage = async (count: number, items: any[]) => {
       if (!count || !Array.isArray(items) || !items.length) return
       try {
@@ -301,6 +301,25 @@ export async function POST(request: NextRequest) {
     if (body.products && Array.isArray(body.products)) {
       // Thêm nhiều sản phẩm dựa trên tiêu đề dòng 1
       const startRow = rows.length + 2 // +1 vì header, +1 vì 1-indexed
+      // Nhập lô từ Excel (body.bo_qua_trung): bỏ qua máy đã có trong kho hoặc lặp lại trong cùng file
+      const boQua: string[] = []
+      if (body.bo_qua_trung) {
+        const iIm = colIndex(header, "IMEI")
+        const iSe = colIndex(header, "Serial")
+        const daCo = new Set<string>()
+        for (const r of rows) {
+          for (const j of [iIm, iSe]) if (j !== -1 && String(r[j] || "").trim()) daCo.add(String(r[j]).trim().toUpperCase())
+        }
+        body.products = body.products.filter((p: any) => {
+          const ids = [p.imei || p["IMEI"], p.serial || p["Serial"]].map((x) => String(x || "").trim().toUpperCase()).filter(Boolean)
+          if (ids.some((id) => daCo.has(id))) {
+            boQua.push(ids[0])
+            return false
+          }
+          ids.forEach((id) => daCo.add(id))
+          return true
+        })
+      }
       let added = 0
       const soLoItems: { p: any; idMay: string; imei: string; serial: string }[] = []
       const now = new Date()
@@ -331,7 +350,7 @@ export async function POST(request: NextRequest) {
         await sendImportMessage(added, body.products)
       }
       const soLo = await ghiSoLo(request, String(body.ma_lo || "").trim(), soLoItems)
-      return NextResponse.json({ ok: true, added, so_lo: soLo }, { status: 200 })
+      return NextResponse.json({ ok: true, added, so_lo: soLo, bo_qua: boQua }, { status: 200 })
     } else if (body.action === "bulk_update_nguon" && Array.isArray(body.productIds) && body.nguon) {
       const result: any = await updateProductsNguon(body.productIds, body.nguon, body.employeeId || "NV-UNKNOWN")
       if (!result.success) {
