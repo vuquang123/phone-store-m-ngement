@@ -13,7 +13,8 @@
     "db:import": "tsx scripts/import-sheets-to-postgres.ts",
     "db:check": "tsx scripts/import-sheets-to-postgres.ts --check",
     "db:export": "tsx scripts/export-postgres-to-sheets.ts",
-    "db:branches": "tsx scripts/setup-branches.ts"
+    "db:branches": "tsx scripts/setup-branches.ts",
+    "db:tai-chinh": "tsx scripts/setup-tai-chinh.ts"
   },
   "dependencies": {
     "@google/genai": "^2.13.0",

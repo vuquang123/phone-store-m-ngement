@@ -7,6 +7,7 @@ import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex
 import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { isConHangStatus } from "@/lib/utils/inventory-helpers"
 import { sendStockEventNotification, sendProcessingDeviceMessage, deleteTelegramMessage } from "@/lib/telegram"
+import { themMayVaoLo } from "@/lib/tai-chinh/ghi"
 
 export const dynamic = "force-dynamic"
 
@@ -193,6 +194,40 @@ function idxKho(header: string[]) {
   }
 }
 
+/**
+ * Tài chính: máy nhập kèm "Lô nhập" (body.ma_lo) -> ghi thêm vào sổ lô Chi_Tiet_Lo.
+ * Lỗi ở bước này không làm hỏng việc nhập kho (máy đã vào Kho_Hang), chỉ báo lại cho người nhập.
+ */
+async function ghiSoLo(request: NextRequest, maLo: string, items: { p: any; idMay: string; imei: string; serial: string }[]) {
+  if (!maLo || !items.length) return { ok: true as const, added: 0 }
+  try {
+    const ctx = branchContextFromHeaders(request.headers)
+    const chiNhanh = branchName(ctx?.writeBranch || "1")
+    const added = await themMayVaoLo(
+      maLo,
+      items.map(({ p, idMay, imei, serial }) => ({
+        idMay,
+        imei,
+        serial,
+        ten: p.ten_san_pham || p["Tên Sản Phẩm"] || "",
+        loaiMay: p.loai_phu_kien || p.loai_may || p["Loại Máy"] || "",
+        dungLuong: p.dung_luong || p["Dung Lượng"] || "",
+        mau: p.mau_sac || p["Màu Sắc"] || "",
+        pin: p.pin || p["Pin (%)"] || "",
+        tinhTrang: p.tinh_trang || p.tinh_trang_may || p["Tình Trạng Máy"] || "",
+        dangSim: p.do_sim || p["Dạng Sim"] || "",
+        giaNhap: p.gia_nhap ?? p["Giá Nhập"] ?? p["Giá nhập"] ?? "",
+        giaBan: p.gia_ban ?? p["Giá Bán"] ?? "",
+      })),
+      chiNhanh,
+    )
+    return { ok: true as const, added }
+  } catch (e: any) {
+    console.error("[Tài chính] ghi sổ lô lỗi:", e)
+    return { ok: false as const, error: `Máy đã nhập kho nhưng chưa ghi được vào lô ${maLo}: ${e?.message || e}` }
+  }
+}
+
 /* ========== GET: list + filters + pagination ========== */
 export async function GET(request: NextRequest) {
   try {
@@ -267,6 +302,7 @@ export async function POST(request: NextRequest) {
       // Thêm nhiều sản phẩm dựa trên tiêu đề dòng 1
       const startRow = rows.length + 2 // +1 vì header, +1 vì 1-indexed
       let added = 0
+      const soLoItems: { p: any; idMay: string; imei: string; serial: string }[] = []
       const now = new Date()
       const ngayNhap = now.toLocaleDateString("vi-VN")
       for (const [offset, p] of body.products.entries()) {
@@ -286,12 +322,16 @@ export async function POST(request: NextRequest) {
         const targetRow = startRow + offset
         const range = `${SHEET}!A${targetRow}`
         const result = await updateRangeValues(range, [newRow])
-        if (result.success) added++
+        if (result.success) {
+          added++
+          soLoItems.push({ p, idMay, imei: imeiStr, serial: serialStr })
+        }
       }
       if (added > 0) {
         await sendImportMessage(added, body.products)
       }
-      return NextResponse.json({ ok: true, added }, { status: 200 })
+      const soLo = await ghiSoLo(request, String(body.ma_lo || "").trim(), soLoItems)
+      return NextResponse.json({ ok: true, added, so_lo: soLo }, { status: 200 })
     } else if (body.action === "bulk_update_nguon" && Array.isArray(body.productIds) && body.nguon) {
       const result: any = await updateProductsNguon(body.productIds, body.nguon, body.employeeId || "NV-UNKNOWN")
       if (!result.success) {
@@ -402,7 +442,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Lỗi ghi Google Sheets" }, { status: 500 })
       }
       await sendImportMessage(1, [body])
-      return NextResponse.json({ ok: true, created: true, id_may: idMay }, { status: 201 })
+      const soLo = await ghiSoLo(request, String(body.ma_lo || "").trim(), [{ p: body, idMay, imei: imeiStr, serial: serialStr }])
+      return NextResponse.json({ ok: true, created: true, id_may: idMay, so_lo: soLo }, { status: 201 })
     }
   } catch (err) {
     console.error("Kho_Hang POST error:", err)

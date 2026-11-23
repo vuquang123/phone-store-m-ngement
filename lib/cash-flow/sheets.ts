@@ -2624,3 +2624,70 @@ export async function syncCashFlowForGhtkCode(code: string) {
     })
   }
 }
+
+// ---------------------------------------------------------------------------
+// Dùng cho trang "Công nợ đầu hàng" (Tài chính): danh sách nguồn tiền và ghi một
+// khoản chi trả đầu hàng (trừ số dư nguồn tiền + ghi DongTien_GiaoDich), giống trả nợ cũ.
+// ---------------------------------------------------------------------------
+export async function listCashAccountsForFinance() {
+  try {
+    const { header, rows } = await readFromGoogleSheets(SHEETS.ACCOUNTS, undefined, { force: true })
+    const idxBranch = colIndex(header, "Chi Nhánh")
+    return rows
+      .filter((row) => String(row[0] || "").trim())
+      .map((row) => ({
+        id: String(row[colIndex(header, "ID")] || ""),
+        name: String(row[colIndex(header, "Tên Nguồn")] || ""),
+        balance: toNumber(row[colIndex(header, "Số Dư")]),
+        available: String(row[colIndex(header, "Trạng Thái Khả Dụng")] || "AVAILABLE") === "AVAILABLE",
+        branch: idxBranch === -1 ? "" : String(row[idxBranch] || ""),
+      }))
+  } catch {
+    return []
+  }
+}
+
+export async function recordSupplierPaymentCash(input: {
+  amount: number
+  accountId: string
+  refId: string
+  counterparty: string
+  note: string
+  actor: string
+  occurredAt?: string
+  /** mặc định trả đầu hàng; "expense" = chi phí ngoài; "expense_reversal" = huỷ chi phí (cộng lại tiền) */
+  kind?: "supplier_payment" | "expense" | "expense_reversal"
+}) {
+  const accounts = await readAccounts()
+  const account = findAccountById(accounts, input.accountId)
+  if (!account) throw new Error("Không tìm thấy nguồn tiền")
+  const amount = Math.max(0, Math.floor(input.amount || 0))
+  if (amount <= 0) throw new Error("Số tiền phải lớn hơn 0")
+  const kind = input.kind || "supplier_payment"
+  if (kind === "expense_reversal") {
+    await appendToGoogleSheets(SHEETS.TRANSACTIONS, buildTransactionRow({
+      type: "expense_reversal", amount, occurredAt: input.occurredAt || todayYmd(), accountId: account.id, accountName: account.name,
+      refType: "external_cost", refId: input.refId, counterparty: input.counterparty, source: "TaiChinh", note: input.note,
+      automatic: false, createdBy: input.actor,
+    }))
+    await applyAccountDeltas(new Map([[account.id, amount]]))
+    return { accountName: account.name }
+  }
+  if (amount > account.balance) throw new Error(`Số dư "${account.name}" không đủ (${account.balance.toLocaleString("vi-VN")} đ)`)
+  await appendToGoogleSheets(SHEETS.TRANSACTIONS, buildTransactionRow({
+    type: kind === "expense" ? "expense" : "payable_payment",
+    amount,
+    occurredAt: input.occurredAt || todayYmd(),
+    accountId: account.id,
+    accountName: account.name,
+    refType: kind === "expense" ? "external_cost" : "supplier_payment",
+    refId: input.refId,
+    counterparty: input.counterparty,
+    source: "TaiChinh",
+    note: input.note,
+    automatic: false,
+    createdBy: input.actor,
+  }))
+  await applyAccountDeltas(new Map([[account.id, -amount]]))
+  return { accountName: account.name }
+}

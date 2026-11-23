@@ -33,6 +33,23 @@ function nowVN(): string {
   return DateTime.now().setZone("Asia/Ho_Chi_Minh").toFormat("dd/MM/yyyy HH:mm")
 }
 
+async function lienKetChuShop(ma: string, chatId: number) {
+  try {
+    const { docCaiDat, ghiCaiDat, KHOA_PHU } = await import("@/lib/tai-chinh/cai-dat")
+    const { guiTelegramChuShop } = await import("@/lib/tai-chinh/bao-cao-21h")
+    const { phu } = await docCaiDat()
+    const han = Number(phu[KHOA_PHU.telegramMaHan] || 0)
+    if (!ma || ma !== phu[KHOA_PHU.telegramMa] || Date.now() > han) {
+      await guiTelegramChuShop(String(chatId), "Mã liên kết không đúng hoặc đã hết hạn. Vào Tài chính > Cài đặt bấm \"Kết nối Telegram\" lại.")
+      return
+    }
+    await ghiCaiDat({ [KHOA_PHU.telegramChatId]: String(chatId), [KHOA_PHU.telegramMa]: "", [KHOA_PHU.telegramMaHan]: "" })
+    await guiTelegramChuShop(String(chatId), "✅ Đã kết nối. Báo cáo tài chính 21h mỗi ngày sẽ gửi riêng vào đây.")
+  } catch (e) {
+    console.error("[TG] liên kết chủ shop lỗi:", e)
+  }
+}
+
 export async function POST(req: Request) {
   try {
     // BẢO MẬT: chỉ chấp nhận request kèm đúng secret token (Telegram gắn vào header khi setWebhook).
@@ -43,6 +60,12 @@ export async function POST(req: Request) {
     }
 
     const update = await req.json().catch(() => null)
+    // Tài chính: chủ shop bấm Start trên link liên kết (t.me/<bot>?start=cs_...) -> lưu chat riêng nhận báo cáo 21h
+    const startText = String(update?.message?.text || "")
+    if (startText.startsWith("/start cs_") && update?.message?.chat?.type === "private") {
+      await lienKetChuShop(startText.slice(7).trim(), update.message.chat.id)
+      return NextResponse.json({ ok: true })
+    }
     const cb = update?.callback_query
     if (!cb) {
       // Không phải callback (vd message thường) -> bỏ qua, vẫn 200.

@@ -47,6 +47,11 @@ export const BRANCH_TABS = [
   "Yeu_Cau_Lech_Ca",
   "Ghi_chu",
   "CNC",
+  // Tài chính: lô nhập và sổ lô chia theo chi nhánh (đầu hàng, CTV, trả nợ dùng chung)
+  "Lo_Nhap",
+  "Chi_Tiet_Lo",
+  "Lich_Su_Gia",
+  "Bao_Cao_21h", "Chi_Phi_Ngoai",
 ] as const
 
 const fold = (s: unknown) =>

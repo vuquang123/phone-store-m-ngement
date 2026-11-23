@@ -26,6 +26,7 @@ import {
   getColorOptions,
   getLoaiMayOptions,
 } from "@/lib/constants/apple-devices"
+import { LoNhapPicker } from "@/components/tai-chinh/lo-nhap-picker"
 
 interface Product {
   id: string
@@ -56,6 +57,8 @@ interface ProductDialogProps {
 }
 
 export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDialogProps) {
+  // Tài chính: lô nhập của các máy đang thêm (ghi vào sổ lô Chi_Tiet_Lo)
+  const [maLo, setMaLo] = useState("")
   // Helper: Đảm bảo giá trị truyền vào Select luôn có trong options.
   // Nhờ nó, máy cũ trong sheet đang mang tên/màu không còn trong danh mục
   // (vd "iPhone 17 E" trước khi đổi sang "iPhone 17e") vẫn sửa được bình thường.
@@ -238,7 +241,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         },
         body: JSON.stringify({
           action,
-          ...(product ? { id: product.id } : {}),
+          ...(product ? { id: product.id } : { ma_lo: maLo }),
           ...formData,
           gia_nhap: Number(formData.gia_nhap),
           gia_ban: Number(formData.gia_ban),
@@ -255,6 +258,11 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
         // vì "Internal server error" một mình không nói được gì.
         const detail = [error?.error || "Failed to save product", error?.raw].filter(Boolean).join(" — ");
         throw new Error(detail);
+      }
+
+      const saved = await response.json().catch(() => ({} as any))
+      if (saved?.so_lo && saved.so_lo.ok === false) {
+        toast({ title: "Chưa ghi vào lô", description: saved.so_lo.error, variant: "destructive" })
       }
 
       toast({
@@ -333,7 +341,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
       const response = await fetch("/api/kho-hang", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({ products }),
+        body: JSON.stringify({ products, ma_lo: maLo }),
       })
 
       if (!response.ok) {
@@ -343,6 +351,9 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
 
       const result = await response.json().catch(() => ({}))
       const added = result?.added ?? 0
+      if (result?.so_lo && result.so_lo.ok === false) {
+        toast({ title: "Chưa ghi vào lô", description: result.so_lo.error, variant: "destructive" })
+      }
 
       toast({
         title: "Kết quả nhập hàng",
@@ -392,6 +403,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
               </TabsList>
             </Tabs>
           )}
+          {!product && <LoNhapPicker value={maLo} onChange={setMaLo} className="mt-2" />}
         </DialogHeader>
 
         {isBulkMode ? (

@@ -33,6 +33,7 @@ import {
   StickyNote,
   ClipboardList,
   Table2,
+  Landmark,
 } from "lucide-react"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { useBranchBrand } from "@/components/layout/branch-brand"
@@ -68,6 +69,8 @@ const getNavigation = () => [
     items: [
       { title: "Ghi chú", href: "/dashboard/ghi-chu", icon: StickyNote, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Quản trị dữ liệu", href: "/dashboard/quan-tri", icon: Table2, roles: ["quan_ly"] as Role[] },
+      // Lô hàng, công nợ đầu hàng, chi phí ngoài, báo cáo 21h: chỉ chủ shop.
+      { title: "Tài chính", href: "/dashboard/tai-chinh", icon: Landmark, roles: ["chu_shop"] as Role[] },
       { title: "Nhân viên", href: "/dashboard/nhan-vien", icon: UserCheck, roles: ["quan_ly"] as Role[] },
       { title: "Thông báo", href: "/dashboard/thong-bao", icon: Bell, roles: ["quan_ly", "nhan_vien"] as Role[] },
       { title: "Cài đặt", href: "/dashboard/cai-dat", icon: Settings, roles: ["quan_ly"] as Role[] },
