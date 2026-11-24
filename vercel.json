@@ -8,10 +8,6 @@
       "schedule": "0 11 * * *"
     },
     {
-      "path": "/api/cron/bao-cao-ngay",
-      "schedule": "0 15 * * *"
-    },
-    {
       "path": "/api/cron/bao-cao-21h",
       "schedule": "0 14 * * *"
     }

@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
-// Báo cáo tổng hợp cuối ngày -> Telegram. Chạy tự động 22h hằng ngày
-// (vercel.json: "0 15 * * *" = 15h UTC = 22h giờ VN).
+// Báo cáo tổng hợp cuối ngày -> Telegram.
+// ĐÃ TẮT (24/11/2026, theo yêu cầu chủ shop): bỏ lịch chạy 22h trong vercel.json và
+// không gửi Telegram nữa. Chỉ còn xem trước bằng ?dry=1.
 //
 // Mỗi chi nhánh 1 báo cáo riêng, gửi vào nhóm Telegram của chi nhánh đó:
 //   DEV PỒ -> nhóm DEV PỒ, T1s -> nhóm T1s (lib/telegram định tuyến theo `branch`).
@@ -32,7 +33,8 @@ export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams
     // dry=1: xem trước nội dung mà không bắn tin (dùng khi kiểm thử).
-    const dryRun = sp.get("dry") === "1"
+    // Đã tắt gửi Telegram: luôn chạy ở chế độ xem trước.
+    const dryRun = true
     const dateParam = sp.get("date")
     const only = sp.get("branch")
     const day = dateParam
