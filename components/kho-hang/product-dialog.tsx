@@ -728,7 +728,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                     <p className="text-xs text-muted-foreground">{(formData.serial || "").length}/12 ký tự</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="pin">Pin (%)</Label>
                     <Input id="pin" value={formData.pin} onChange={(e) => setFormData({ ...formData, pin: e.target.value })} placeholder="VD: 99" />
@@ -768,7 +768,7 @@ export function ProductDialog({ isOpen, onClose, product, onSuccess }: ProductDi
                   <span className="w-1.5 h-4 bg-orange-500 rounded-full"></span>
                   Giá & Giao dịch
                 </div>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="gia_nhap">Giá nhập <span className="text-red-500">*</span></Label>
                     <div className="relative">

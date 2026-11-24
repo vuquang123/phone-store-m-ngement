@@ -109,22 +109,22 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
 
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="ho_ten" className="text-right">
+            <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-4 sm:gap-4">
+              <Label htmlFor="ho_ten" className="sm:text-right">
                 Họ tên
               </Label>
               <Input
                 id="ho_ten"
                 value={formData.ho_ten}
                 onChange={(e) => handleChange("ho_ten", e.target.value)}
-                className="col-span-3"
+                className="sm:col-span-3"
                 required
                 disabled={loading}
               />
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
+            <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-4 sm:gap-4">
+              <Label htmlFor="email" className="sm:text-right">
                 Email
               </Label>
               <Input
@@ -132,7 +132,7 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
                 type="email"
                 value={formData.email}
                 onChange={(e) => handleChange("email", e.target.value)}
-                className="col-span-3"
+                className="sm:col-span-3"
                 required
                 disabled={!!employee || loading}
                 autoComplete="email"
@@ -140,8 +140,8 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
             </div>
 
             {!employee && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="password" className="text-right">
+              <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-4 sm:gap-4">
+                <Label htmlFor="password" className="sm:text-right">
                   Mật khẩu
                 </Label>
                 <Input
@@ -149,7 +149,7 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
                   type="password"
                   value={formData.password}
                   onChange={(e) => handleChange("password", e.target.value)}
-                  className="col-span-3"
+                  className="sm:col-span-3"
                   required
                   minLength={6}
                   disabled={loading}
@@ -158,29 +158,29 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
               </div>
             )}
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="so_dien_thoai" className="text-right">
+            <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-4 sm:gap-4">
+              <Label htmlFor="so_dien_thoai" className="sm:text-right">
                 Số điện thoại
               </Label>
               <Input
                 id="so_dien_thoai"
                 value={formData.so_dien_thoai}
                 onChange={(e) => handleChange("so_dien_thoai", e.target.value)}
-                className="col-span-3"
+                className="sm:col-span-3"
                 required
                 disabled={loading}
                 inputMode="tel"
               />
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Vai trò</Label>
+            <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-4 sm:gap-4">
+              <Label className="sm:text-right">Vai trò</Label>
               <Select
                 value={formData.vai_tro}
                 onValueChange={(value) => handleChange("vai_tro", value as Role)}
                 disabled={loading}
               >
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger className="sm:col-span-3">
                   <SelectValue placeholder="Chọn vai trò" />
                 </SelectTrigger>
                 <SelectContent>
@@ -191,14 +191,14 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
               </Select>
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Chi nhánh</Label>
+            <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-4 sm:gap-4">
+              <Label className="sm:text-right">Chi nhánh</Label>
               <Select
                 value={formData.chi_nhanh}
                 onValueChange={(value) => handleChange("chi_nhanh", value as "1" | "2")}
                 disabled={loading}
               >
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger className="sm:col-span-3">
                   <SelectValue placeholder="Chọn chi nhánh" />
                 </SelectTrigger>
                 <SelectContent>
@@ -211,14 +211,14 @@ export function EmployeeDialog({ open, onOpenChange, employee, onSave }: Employe
               </Select>
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Trạng thái</Label>
+            <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-4 sm:gap-4">
+              <Label className="sm:text-right">Trạng thái</Label>
               <Select
                 value={formData.trang_thai}
                 onValueChange={(value) => handleChange("trang_thai", value as Status)}
                 disabled={loading}
               >
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger className="sm:col-span-3">
                   <SelectValue placeholder="Chọn trạng thái" />
                 </SelectTrigger>
                 <SelectContent>

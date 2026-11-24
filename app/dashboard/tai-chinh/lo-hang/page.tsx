@@ -118,7 +118,7 @@ function DanhSach() {
         <DangTai />
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <The nhan="Vốn tồn các lô" giaTri={vnd(tong.vonTon)} />
             <The nhan="Lãi đã chốt" giaTri={vnd(tong.lai)} />
             <The nhan="Nợ còn lại" giaTri={vnd(tong.no)} />
@@ -133,7 +133,7 @@ function DanhSach() {
                 <div className="text-xs text-muted-foreground">
                   {x.tenDauHang} · {ngayVN(x.lo.ngayNhap)}
                 </div>
-                <div className="mt-2 grid grid-cols-3 gap-1 text-xs tabular-nums">
+                <div className="mt-2 grid grid-cols-2 gap-1 text-xs tabular-nums">
                   <div>Bán {x.slBan}/{x.slNhap}</div>
                   <div>Thu hồi {pt(x.phanTramThuHoi)}</div>
                   <div>Lãi {vnd(x.laiDaChot)}</div>

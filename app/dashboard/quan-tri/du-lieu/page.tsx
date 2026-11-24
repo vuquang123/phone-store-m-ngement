@@ -603,11 +603,11 @@ function DataAdmin() {
           )
         })}
         {dateCol >= 0 && (
-          <div className={`flex h-9 items-center gap-1 rounded-md border px-2 text-sm ${dateFrom || dateTo ? "border-blue-500 bg-blue-50 dark:bg-blue-950" : ""}`}>
+          <div className={`flex min-h-9 w-full sm:w-auto flex-wrap items-center gap-1 rounded-md border px-2 py-1 text-sm ${dateFrom || dateTo ? "border-blue-500 bg-blue-50 dark:bg-blue-950" : ""}`}>
             <span className="whitespace-nowrap text-muted-foreground">{String(header[dateCol] ?? "").trim()}</span>
-            <input type="date" className="bg-transparent text-sm outline-none" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(0) }} />
+            <input type="date" className="min-w-0 flex-1 sm:flex-none bg-transparent text-sm outline-none" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(0) }} />
             <span className="text-muted-foreground">→</span>
-            <input type="date" className="bg-transparent text-sm outline-none" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(0) }} />
+            <input type="date" className="min-w-0 flex-1 sm:flex-none bg-transparent text-sm outline-none" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(0) }} />
           </div>
         )}
         <Select value="" onValueChange={(v) => setExtraCols((x) => [...x, Number(v)])}>

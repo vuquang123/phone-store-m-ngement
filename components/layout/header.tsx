@@ -14,7 +14,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Settings, User, LogOut, ClipboardCheck, ClipboardX } from "lucide-react"
+import { Settings, User, LogOut, ClipboardCheck, ClipboardX, Moon } from "lucide-react"
+import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { BranchSwitcher } from "@/components/layout/branch-switcher"
@@ -49,6 +50,7 @@ const PAGE_TITLES: [string, string][] = [
 ]
 
 export function Header({ title, onMenuClick }: HeaderProps) {
+  const { setTheme, resolvedTheme } = useTheme()
   const router = useRouter()
   const pathname = usePathname()
   const { me, isLoading, error } = useAuthMe()
@@ -81,21 +83,23 @@ export function Header({ title, onMenuClick }: HeaderProps) {
 
   return (
     <header className="border-b border-border bg-sidebar/80 backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/60 shadow-sm">
-      <div className="flex h-14 sm:h-16 items-center justify-between px-3 sm:px-6">
-        <div className="flex items-center gap-3">
+      <div className="flex h-14 sm:h-16 items-center justify-between gap-2 px-3 sm:px-6">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {/* Toggle sidebar: thu gọn ở desktop, mở drawer ở mobile */}
           <SidebarTrigger className="-ml-1 h-9 w-9 text-muted-foreground" />
-          <div>
-            <h1 className="text-lg sm:text-xl font-bold text-foreground">
+          <div className="min-w-0">
+            <h1 className="truncate text-base sm:text-xl font-bold text-foreground">
               {pageTitle}
             </h1>
             <p className="hidden sm:block text-xs text-muted-foreground mt-0.5">{todayStr}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           <BranchSwitcher />
-          <ModeToggle />
+          <div className="hidden sm:block">
+            <ModeToggle />
+          </div>
 
           <NotificationsBell disabled={isLoading} />
 
@@ -132,6 +136,11 @@ export function Header({ title, onMenuClick }: HeaderProps) {
               </DropdownMenuLabel>
 
               <DropdownMenuSeparator />
+              {/* Điện thoại: nút sáng/tối ẩn khỏi thanh trên cho đỡ chật, đưa vào đây */}
+              <DropdownMenuItem onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} className="cursor-pointer hover:bg-accent sm:hidden">
+                <Moon className="mr-3 h-4 w-4" />
+                <span>{resolvedTheme === "dark" ? "Giao diện sáng" : "Giao diện tối"}</span>
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => router.push("/dashboard/check-in")}
                 className="cursor-pointer hover:bg-accent"

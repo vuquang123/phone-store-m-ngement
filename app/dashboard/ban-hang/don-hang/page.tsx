@@ -348,14 +348,14 @@ export default function DonHangPage() {
                         <div className="my-4 border-t" />
 
                         {/* Sản phẩm + nút Xem */}
-                        <div className="flex items-end justify-between gap-3">
-                          <div className="min-w-0">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                          <div className="min-w-0 w-full sm:flex-1">
                             <div className="text-[12px] font-medium uppercase tracking-wider text-muted-foreground">Sản phẩm</div>
                             <div className="mt-1">
                               <OrderProductsCell orderId={order.ma_don_hang || order.id} editableCosts={isManager} />
                             </div>
                           </div>
-                          <Button variant="secondary" size="sm" className="shrink-0 gap-1.5" onClick={() => handleViewOrder(order.ma_don_hang || order.id)}>
+                          <Button variant="secondary" size="sm" className="shrink-0 gap-1.5 self-end" onClick={() => handleViewOrder(order.ma_don_hang || order.id)}>
                             <Eye className="h-4 w-4" /> Xem
                           </Button>
                         </div>

@@ -74,14 +74,14 @@ export function The({ nhan, giaTri, phu, mau }: { nhan: string; giaTri: React.Re
   return (
     <div
       className={cn(
-        "rounded-xl border bg-card p-3",
+        "min-w-0 rounded-xl border bg-card p-3",
         mau === "do" && "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/40",
         mau === "vang" && "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40",
         mau === "xanh" && "border-emerald-300 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40",
       )}
     >
       <div className="text-xs text-muted-foreground">{nhan}</div>
-      <div className="mt-1 text-lg font-semibold tabular-nums md:text-xl">{giaTri}</div>
+      <div className="mt-1 break-words text-base font-semibold tabular-nums sm:text-lg md:text-xl">{giaTri}</div>
       {phu && <div className="mt-0.5 text-xs text-muted-foreground">{phu}</div>}
     </div>
   )

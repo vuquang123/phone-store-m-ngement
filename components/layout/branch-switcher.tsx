@@ -67,7 +67,7 @@ export function BranchSwitcher() {
       <SelectTrigger
         aria-label="Chọn chi nhánh"
         className={cn(
-          "h-8 sm:h-9 w-auto min-w-[7.5rem] gap-1.5 rounded-full border px-3 text-xs sm:text-sm font-medium shadow-none",
+          "h-8 sm:h-9 w-auto sm:min-w-[7.5rem] gap-1 sm:gap-1.5 rounded-full border px-2 sm:px-3 text-xs sm:text-sm font-medium shadow-none",
           BRANCH_STYLE[active] || BRANCH_STYLE["1"],
         )}
       >

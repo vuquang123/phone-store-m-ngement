@@ -73,21 +73,21 @@ export default function TongKetCaPage() {
             Ca trước bán được gì, tiền nong ra sao, còn việc gì phải nhận bàn giao.
           </p>
         </div>
-        <div className="flex gap-2">
-          <div className="space-y-1">
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <div className="min-w-0 space-y-1">
             <Label htmlFor="ngay" className="text-xs text-muted-foreground">Ngày</Label>
             <DatePickerVN
               id="ngay"
               value={date}
               max={todayISO()}
               onChange={setDate}
-              className="w-[150px]"
+              className="w-full sm:w-[150px]"
             />
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <Label htmlFor="ca" className="text-xs text-muted-foreground">Ca làm</Label>
             <Select value={shift} onValueChange={setShift}>
-              <SelectTrigger id="ca" className="h-9 w-[180px]">
+              <SelectTrigger id="ca" className="h-9 w-full sm:w-[180px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

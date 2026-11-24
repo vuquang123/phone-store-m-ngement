@@ -96,7 +96,7 @@ export default function OrderProductsCell({ orderId, editableCosts = false }: Pr
   const list = showCompact && !expanded ? products.slice(0, visibleCount) : products
 
   return (
-    <div className="space-y-1.5 max-w-[220px]">
+    <div className="space-y-1.5 w-full max-w-[320px]">
       {list.map((p, i) => (
         <div key={p.id || p.san_pham?.imei || i} className="text-xs leading-tight">
           <div className="font-medium break-words">{p.san_pham?.ten_san_pham || p.san_pham?.model || 'Thiết bị'}</div>
@@ -107,7 +107,7 @@ export default function OrderProductsCell({ orderId, editableCosts = false }: Pr
             </div>
           )}
           {editableCosts && (
-            <div className="mt-2 rounded-md border p-2 space-y-2 bg-muted/30 min-w-[220px]">
+            <div className="mt-2 rounded-md border p-2 space-y-2 bg-muted/30">
               <div className="text-[11px] text-muted-foreground">
                 Lãi: <span className="font-medium text-foreground">₫{Number(p.lai || 0).toLocaleString("vi-VN")}</span>
               </div>

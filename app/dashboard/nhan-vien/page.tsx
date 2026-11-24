@@ -257,7 +257,7 @@ export default function NhanVienPage() {
                 key={employee.id}
                 className="relative p-4 border rounded-lg hover:bg-muted/50 flex flex-col gap-3 sm:flex-row sm:items-center"
               >
-                <div className="flex items-start gap-3 pr-16 sm:pr-0 w-full">
+                <div className="flex items-start gap-3 pr-24 sm:pr-0 w-full min-w-0">
                   <UserAvatar name={employee.ho_ten} email={employee.email} className="h-10 w-10" />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2">
