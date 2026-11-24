@@ -359,7 +359,7 @@ function ChiTietLo({ ma }: { ma: string }) {
             Sửa lô
           </Button>
           <Button variant="outline" size="sm" onClick={() => setGan(true)}>
-            Thêm máy tồn vào lô
+            Thêm máy vào lô (tồn hoặc đã bán)
           </Button>
           <Button variant="outline" size="sm" onClick={xuat}>
             <Download className="mr-1 h-4 w-4" /> Excel
@@ -573,12 +573,13 @@ function SuaMayDialog({ may, ctv, onClose, onDone }: { may: MayCT | null; ctv: {
   )
 }
 
-type MayChon = { khoa: number; ten: string; imei: string; giaNhap: number; ngayNhap: string; phu: string }
+type MayChon = { khoa: string; ten: string; imei: string; giaNhap: number; ngayNhap: string; phu: string; ngayBan?: string }
+type NguonGan = "cu" | "chua" | "ban"
 function GanMayDialog({ open, ma, onClose, onDone }: { open: boolean; ma: string; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast()
-  const [nguon, setNguon] = useState<"cu" | "chua">("cu")
-  const [data, setData] = useState<{ cu: MayChon[]; chua: MayChon[] } | null>(null)
-  const [chon, setChon] = useState<Set<number>>(new Set())
+  const [nguon, setNguon] = useState<NguonGan>("cu")
+  const [data, setData] = useState<{ cu: MayChon[]; chua: MayChon[]; ban: MayChon[] } | null>(null)
+  const [chon, setChon] = useState<Set<string>>(new Set())
   const [q, setQ] = useState("")
   const [dan, setDan] = useState("")
   const [dang, setDang] = useState(false)
@@ -587,19 +588,20 @@ function GanMayDialog({ open, ma, onClose, onDone }: { open: boolean; ma: string
     setChon(new Set())
     setData(null)
     setDan("")
-    goiApi<{ chuaLo: any[]; loCu: any[] }>("/api/tai-chinh/lo-hang")
+    goiApi<{ chuaLo: any[]; loCu: any[]; daBan: any[] }>("/api/tai-chinh/lo-hang")
       .then((r) => {
-        const cu = (r.loCu || []).map((m: any) => ({ khoa: m.dong, ten: m.ten, imei: m.imei, giaNhap: m.giaNhap, ngayNhap: m.ngayNhap, phu: [m.dungLuong, m.mau, m.loaiMay].filter(Boolean).join(" · ") }))
-        const chua = (r.chuaLo || []).map((m: any) => ({ khoa: m.dongKho, ten: m.ten, imei: m.imei, giaNhap: m.giaNhap, ngayNhap: m.ngayNhap, phu: m.chiNhanh }))
-        setData({ cu, chua })
+        const cu = (r.loCu || []).map((m: any) => ({ khoa: String(m.dong), ten: m.ten, imei: m.imei, giaNhap: m.giaNhap, ngayNhap: m.ngayNhap, phu: [m.dungLuong, m.mau, m.loaiMay].filter(Boolean).join(" · ") }))
+        const chua = (r.chuaLo || []).map((m: any) => ({ khoa: String(m.dongKho), ten: m.ten, imei: m.imei, giaNhap: m.giaNhap, ngayNhap: m.ngayNhap, phu: m.chiNhanh }))
+        const ban = (r.daBan || []).map((m: any) => ({ khoa: m.khoa, ten: m.ten, imei: m.id, giaNhap: m.giaNhap, ngayNhap: "", ngayBan: m.ngayBan, phu: [m.phu, m.maDon, m.loCu && `đang ở ${m.loCu}`].filter(Boolean).join(" · ") }))
+        setData({ cu, chua, ban })
         setNguon(cu.length || !chua.length ? "cu" : "chua")
       })
-      .catch(() => setData({ cu: [], chua: [] }))
+      .catch(() => setData({ cu: [], chua: [], ban: [] }))
   }, [open])
   const ds = data ? data[nguon] : []
   const loc = ds.filter((m) => !q || `${m.ten} ${m.imei} ${m.phu}`.toLowerCase().includes(q.toLowerCase()))
   const tongChon = ds.filter((m) => chon.has(m.khoa)).reduce((s, m) => s + m.giaNhap, 0)
-  const doiNguon = (n: "cu" | "chua") => {
+  const doiNguon = (n: NguonGan) => {
     setNguon(n)
     setChon(new Set())
   }
@@ -614,7 +616,7 @@ function GanMayDialog({ open, ma, onClose, onDone }: { open: boolean; ma: string
   const gan = async () => {
     setDang(true)
     try {
-      const body = nguon === "cu" ? { dongSo: [...chon] } : { dongKho: [...chon] }
+      const body = nguon === "ban" ? { daBan: [...chon] } : nguon === "cu" ? { dongSo: [...chon].map(Number) } : { dongKho: [...chon].map(Number) }
       const r = await goiApi<{ added: number }>(`/api/tai-chinh/lo-hang/${encodeURIComponent(ma)}`, "POST", body)
       toast({ title: `Đã đưa ${r.added} máy vào ${ma}` })
       onDone()
@@ -629,19 +631,28 @@ function GanMayDialog({ open, ma, onClose, onDone }: { open: boolean; ma: string
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Thêm máy tồn vào {ma}</DialogTitle>
+          <DialogTitle>Thêm máy vào {ma}</DialogTitle>
         </DialogHeader>
-        <div className="flex gap-1 text-sm">
+        <div className="flex flex-wrap gap-1 text-sm">
           <button className={cn("rounded-md border px-3 py-1", nguon === "cu" && "bg-foreground text-background")} onClick={() => doiNguon("cu")}>
             Ở lô cũ ({data?.cu.length ?? "…"})
           </button>
           <button className={cn("rounded-md border px-3 py-1", nguon === "chua" && "bg-foreground text-background")} onClick={() => doiNguon("chua")}>
             Chưa có lô ({data?.chua.length ?? "…"})
           </button>
+          <button className={cn("rounded-md border px-3 py-1", nguon === "ban" && "bg-foreground text-background")} onClick={() => doiNguon("ban")}>
+            Đã bán ({data?.ban.length ?? "…"})
+          </button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Chỉ hiện máy còn trong kho. Giá nhập và ngày nhập của máy giữ nguyên nên tuổi tồn vẫn đúng. Nợ của lô = tổng giá nhập các máy này − “Đã trả lúc nhập” (sửa ở nút Sửa lô).
-        </p>
+        {nguon === "ban" ? (
+          <p className="text-xs text-muted-foreground">
+            Máy đã xuất bán nhưng chưa thuộc lô của đầu hàng nào. Gắn vào đây thì lô tính đủ số máy, giá nhập (cộng vào nợ lô) và doanh thu, lãi của đơn đã bán.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Chỉ hiện máy còn trong kho. Giá nhập và ngày nhập của máy giữ nguyên nên tuổi tồn vẫn đúng. Nợ của lô = tổng giá nhập các máy này − “Đã trả lúc nhập” (sửa ở nút Sửa lô).
+          </p>
+        )}
         <details className="text-sm">
           <summary className="cursor-pointer text-muted-foreground">Dán danh sách IMEI để chọn nhanh</summary>
           <Textarea rows={3} className="mt-1 font-mono text-xs" placeholder="Mỗi IMEI/Serial một dòng (copy cột IMEI từ Excel)" value={dan} onChange={(e) => setDan(e.target.value)} />
@@ -679,8 +690,8 @@ function GanMayDialog({ open, ma, onClose, onDone }: { open: boolean; ma: string
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate">{m.ten}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  <span className="font-mono">{m.imei}</span> · {m.phu} · nhập {ngayVN(m.ngayNhap)}
+                <span className="block break-words text-xs text-muted-foreground">
+                  <span className="font-mono">{m.imei}</span> · {m.ngayBan ? `bán ${ngayVN(m.ngayBan)}` : `nhập ${ngayVN(m.ngayNhap)}`} · {m.phu}
                 </span>
               </span>
               <span className="text-xs tabular-nums text-muted-foreground">{m.giaNhap ? vnd(m.giaNhap) : "chưa có giá"}</span>

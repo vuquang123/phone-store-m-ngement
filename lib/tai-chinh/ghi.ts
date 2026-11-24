@@ -510,3 +510,76 @@ export async function chuyenMayTuLoCu(maLoDich: string, dongSo: number[]) {
   await suaDong(BANG.CHI_TIET_LO, header, sua)
   return sua.length
 }
+
+/**
+ * Gắn bù máy ĐÃ BÁN vào một lô (vd lô A 10 máy, đã bán 2 trước khi tạo lô).
+ * - Máy đang ở lô cũ "không tính nợ" -> đổi Mã Lô của dòng đó.
+ * - Máy chưa có trong sổ lô -> thêm 1 dòng mới chụp từ đơn bán (giá nhập lấy từ đơn bán).
+ * Ngày nhập của dòng mới = ngày nhập của lô, hoặc ngày bán nếu lô nhập sau ngày bán (để khớp đúng đơn).
+ */
+export async function ganMayDaBanVaoLo(maLoDich: string, khoaChon: string[]) {
+  const { mayDaBanChoGan } = await import("./bao-cao")
+  const d = await taiDuLieu()
+  const dich = d.lo.find((l) => l.ma === maLoDich)
+  if (!dich) throw new LoiNghiepVu(`Không tìm thấy lô ${maLoDich}`)
+  if (/không tính nợ/i.test(dich.trangThai || "")) throw new LoiNghiepVu("Không gắn vào lô cũ được, hãy chọn lô của đầu hàng")
+  const chon = new Set(khoaChon)
+  const ds = mayDaBanChoGan(d, "all").filter((m) => chon.has(m.khoa))
+  if (!ds.length) throw new LoiNghiepVu("Không có máy nào hợp lệ (máy phải đã bán và chưa thuộc lô của đầu hàng nào)")
+  const banTheoKhoa = new Map(d.ban.filter((b) => b.laMay).map((b) => [`${b.maDon}|${b.imei || b.serial}`, b]))
+  const now = bayGio()
+
+  const sua = ds
+    .filter((m) => m.dongSoCu)
+    .map((m) => {
+      const goc = d.may.find((x) => x._dong === m.dongSoCu)
+      return {
+        dong: m.dongSoCu as number,
+        giaTri: {
+          "Mã Lô": maLoDich,
+          "Ghi Chú": [goc?._goc["Ghi Chú"], `Chuyển từ ${m.loCu} (đã bán)`].filter(Boolean).join(" · "),
+          "Cập Nhật Lúc": now,
+        },
+      }
+    })
+  if (sua.length) {
+    const { header } = await docBang(BANG.CHI_TIET_LO)
+    await suaDong(BANG.CHI_TIET_LO, header, sua)
+  }
+
+  const moi = ds
+    .filter((m) => !m.dongSoCu)
+    .map((m) => {
+      const b = banTheoKhoa.get(m.khoa)
+      const ngayNhap = dich.ngayNhap && b?.ngayBan && dich.ngayNhap > b.ngayBan ? b.ngayBan : dich.ngayNhap || b?.ngayBan || homNayVN()
+      const imei = String(b?.imei || "").trim()
+      return {
+        "Mã Lô": maLoDich,
+        "ID Máy": (imei || String(b?.serial || "")).slice(-5),
+        IMEI: imei,
+        Serial: String(b?.serial || "").trim().toUpperCase(),
+        "Tên Sản Phẩm": b?.ten || m.ten,
+        "Loại Máy": b?.loaiMay || "",
+        "Dung Lượng": b?.dungLuong || "",
+        "Màu Sắc": b?.mau || "",
+        "Pin (%)": b?.pin || "",
+        "Tình Trạng Máy": b?.tinhTrang || "",
+        "Giá Nhập": m.giaNhap || "",
+        "Ngày Nhập": ngayVN(ngayNhap),
+        "Trạng Thái": "Đã bán",
+        "Ghi Chú": `Thêm vào lô sau khi đã bán (đơn ${m.maDon})`,
+        "Cập Nhật Lúc": now,
+        "Chi Nhánh": m.chiNhanh || dich.chiNhanh,
+      }
+    })
+  if (moi.length) {
+    await damBaoBang(BANG.CHI_TIET_LO)
+    await themDong(BANG.CHI_TIET_LO, moi)
+  }
+  // ghi lại tình trạng (mã đơn, ngày bán, lãi) cho các dòng vừa đổi/thêm
+  try {
+    const { luuTinhTrangSoLo } = await import("./du-lieu")
+    await luuTinhTrangSoLo(await taiDuLieu())
+  } catch {}
+  return sua.length + moi.length
+}

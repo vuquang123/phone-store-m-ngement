@@ -360,3 +360,71 @@ export function tongQuan(d: DuLieu, active: ActiveBranch) {
 
 export { congNgay, hanTraLo }
 export type { MayKho, MayLo }
+
+/* ----------------------------------------------- máy đã bán, gắn bù vào lô */
+export type MayDaBanChoGan = {
+  khoa: string // `${maDon}|${IMEI/Serial}`
+  maDon: string
+  ngayBan: string
+  id: string
+  ten: string
+  phu: string
+  giaNhap: number
+  doanhThu: number
+  chiNhanh: string
+  dongSoCu: number | null // đang nằm ở lô cũ (không tính nợ) -> chuyển dòng đó; null -> thêm dòng mới vào sổ lô
+  loCu: string
+}
+
+/**
+ * Máy đã bán (theo Ban_Hang) chưa thuộc lô thật nào: chưa có trong sổ lô, hoặc đang ở lô cũ "không tính nợ".
+ * Bỏ qua máy đã quay lại kho (máy đó dùng "Thêm máy tồn"). Mới nhất trước.
+ */
+export function mayDaBanChoGan(d: DuLieu, active: ActiveBranch): MayDaBanChoGan[] {
+  const loCu = new Set(d.lo.filter((l) => /không tính nợ/i.test(l.trangThai || "")).map((l) => l.ma))
+  const trongKho = new Set<string>()
+  for (const k of d.kho) {
+    if (k.trangThai === "Đã bán") continue
+    if (k.imei) trongKho.add(khoa(k.imei))
+    if (k.serial) trongKho.add(khoa(k.serial))
+  }
+  const soTheoId = new Map<string, MaySo[]>()
+  for (const m of d.may) {
+    for (const id of [m.imei, m.serial]) {
+      if (!id) continue
+      const k = khoa(id)
+      if (!soTheoId.has(k)) soTheoId.set(k, [])
+      soTheoId.get(k)!.push(m)
+    }
+  }
+  const daThay = new Set<string>()
+  const out: MayDaBanChoGan[] = []
+  const ban = theoChiNhanh(d.ban, active)
+    .filter((b) => b.laMay)
+    .sort((a, b) => b.ngayBan.localeCompare(a.ngayBan))
+  for (const b of ban) {
+    const id = b.imei || b.serial
+    const k = khoa(id)
+    if (!k || daThay.has(k)) continue // chỉ lần bán gần nhất của mỗi máy
+    daThay.add(k)
+    if (trongKho.has(k) || (b.serial && trongKho.has(khoa(b.serial)))) continue
+    const so = soTheoId.get(k) || (b.serial ? soTheoId.get(khoa(b.serial)) : undefined) || []
+    // dòng sổ lô ứng với đúng lần bán này (hoặc dòng cuối cùng nếu chưa khớp đơn nào)
+    const khop = so.find((m) => m.maDon === b.maDon) || [...so].sort((a, c) => c.ngayNhap.localeCompare(a.ngayNhap))[0]
+    if (khop && !loCu.has(khop.maLo)) continue // đã thuộc một lô thật
+    out.push({
+      khoa: `${b.maDon}|${id}`,
+      maDon: b.maDon,
+      ngayBan: b.ngayBan,
+      id,
+      ten: b.ten,
+      phu: [b.dungLuong, b.mau, b.loaiMay].filter(Boolean).join(" · "),
+      giaNhap: khop?.giaNhap || b.giaNhap,
+      doanhThu: b.doanhThu,
+      chiNhanh: b.chiNhanh,
+      dongSoCu: khop ? khop._dong : null,
+      loCu: khop ? khop.maLo : "",
+    })
+  }
+  return out
+}

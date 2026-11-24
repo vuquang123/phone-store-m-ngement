@@ -88,6 +88,10 @@ export type DongBan = {
   chiNhanh: string
   laMay: boolean
   tongThuDon: number
+  dungLuong?: string
+  mau?: string
+  pin?: string
+  tinhTrang?: string
 }
 export type MaySo = MayLo & { _dong: number; _goc: Dong; daThuDu: boolean; luuLai: Record<string, string> }
 
@@ -263,6 +267,10 @@ export async function docBanHang(): Promise<DongBan[]> {
     nb: colIndex(H, "Người Bán"),
     vc: colIndex(H, "Hình Thức Vận Chuyển"),
     cn: colIndex(H, "Chi Nhánh"),
+    dl: colIndex(H, "Dung Lượng"),
+    mau: colIndex(H, "Màu Sắc"),
+    pin: colIndex(H, "Pin (%)"),
+    tt: colIndex(H, "Tình Trạng Máy"),
   }
   const c = (r: any[], j: number) => (j === -1 ? "" : String(r[j] ?? "").trim())
   type Tam = Omit<DongBan, "doanhThu" | "chuaThu" | "tongThuDon"> & { tongThu: number; ht: string; vc: string; k: number }
@@ -289,6 +297,10 @@ export async function docBanHang(): Promise<DongBan[]> {
       tongThu: so(c(r, i.tong)),
       ht: c(r, i.ht),
       vc: c(r, i.vc),
+      dungLuong: c(r, i.dl),
+      mau: c(r, i.mau),
+      pin: c(r, i.pin),
+      tinhTrang: c(r, i.tt),
     }
     tatCa.push(t)
     const key = `${ma}|${t.ngayBan}`

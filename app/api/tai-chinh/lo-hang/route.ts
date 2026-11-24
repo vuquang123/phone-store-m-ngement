@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { chiChuShop, loiApi } from "@/lib/tai-chinh/api"
 import { taiDuLieu, luuTinhTrangSoLo, theoChiNhanh } from "@/lib/tai-chinh/du-lieu"
 import { khongTinhNo, daRaKhoi } from "@/lib/tai-chinh/tinh-toan"
-import { danhSachLo, mayTon } from "@/lib/tai-chinh/bao-cao"
+import { danhSachLo, mayTon, mayDaBanChoGan } from "@/lib/tai-chinh/bao-cao"
 import { taoLo, suaLo } from "@/lib/tai-chinh/ghi"
 
 export const runtime = "nodejs"
@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
       dauHang: d.dauHang,
       chuaLo: chuaLo.map((m) => ({ dongKho: m.dongKho, ten: m.ten, imei: m.imei || m.serial, giaNhap: m.giaNhap, ngayNhap: m.ngayNhap, chiNhanh: m.chiNhanh })),
       loCu,
+      daBan: mayDaBanChoGan(d, c.active).slice(0, 400),
       homNay: d.homNay,
       active: c.active,
     })
