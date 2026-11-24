@@ -16,6 +16,8 @@ import { extractGhtkCode, mapGhtkStatus } from "@/lib/ghtk-status"
 import { syncCashFlowFromSale, syncCashFlowForGhtkCode } from "@/lib/cash-flow/sheets"
 import { getGhtkTracking } from "@/lib/ghtk"
 import { parseVietnameseNumber } from "@/lib/number"
+import { docMayThu, nhapKhoMayThu } from "@/lib/kho/thu-may"
+import { currentWriteBranchName } from "@/lib/branch-context"
 
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
@@ -1062,6 +1064,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Lỗi ghi Google Sheets" }, { status: 500 })
     }
 
+    // Máy thu cũ (thanh toán "Thu máy") -> nhập kho luôn (tên + loại + IMEI + giá thu)
+    let thuMayKho: string | null = null
+    try {
+      const mayThu = docMayThu(body)
+      if (mayThu) thuMayKho = await nhapKhoMayThu(mayThu, { maDon: idDonHang, chiNhanh: await currentWriteBranchName() })
+    } catch (e) {
+      console.warn("[THU MÁY] Không nhập kho được máy thu:", e)
+      thuMayKho = "error"
+    }
+
     // Giảm số lượng phụ kiện trong kho.
     // Cả block bọc try/catch: đơn hàng đã ghi xong ở trên nên không được để lỗi ở đây
     // làm request trả 500 (FE sẽ báo lỗi sai và nhân viên xuất đơn lại -> trùng đơn).
@@ -1477,6 +1489,7 @@ export async function POST(request: NextRequest) {
       finalTotalServer,
       telegram: telegramStatus,
       phuKienWarnings,
+      thuMayKho,
     }, { status: 201 })
   } catch (error) {
     console.error("Ban_Hang POST error:", error)

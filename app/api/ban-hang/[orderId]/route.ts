@@ -233,6 +233,8 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ orderI
               : 0,
             lai: idxLai !== -1 ? toNumber(row[idxLai]) : 0,
             nguon_hang: idxNguon !== -1 ? (row[idxNguon] || "") : "",
+            // Máy đã hoàn trả (không cho hoàn lần nữa)
+            da_hoan: [idx("Trạng Thái"), idx("Loại Đơn")].some((j) => j !== -1 && String(row[j] || "").trim() === "Hoàn trả"),
             san_pham: {
               ten_san_pham: row[idx("Tên Sản Phẩm")],
               loai_may: row[idx("Loại Máy")],

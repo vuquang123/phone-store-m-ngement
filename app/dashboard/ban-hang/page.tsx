@@ -1066,6 +1066,9 @@ export default function BanHangPage() {
           "Lãi": "",
           "Ghi Chú": ghiChuFull,
           "Giảm Giá": giamGiaToUse,
+          thu_may: thuMayEnabled && thuMayImei.trim()
+            ? { ten: thuMayTenSanPham.trim(), loai: thuMayLoaiMay.trim(), imei: thuMayImei.trim(), gia: thuMayAmount || 0 }
+            : null,
           products: products.map(p => ({
             id: p.id,
             ten_san_pham: p.ten_san_pham,

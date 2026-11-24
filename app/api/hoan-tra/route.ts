@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
     const { header: BH, rows: BRall } = await readFromGoogleSheets("Ban_Hang", undefined, { force })
     const BR = filterRowsByBranch(BH, BRall, branchContextFromHeaders(req.headers))
     const b = {
-      idDon: colIndex(BH, "ID Đơn Hàng"),
+      idDon: colIndex(BH, "Mã đơn hàng", "Mã Đơn Hàng", "ID Đơn Hàng"),
       tenSP: colIndex(BH, "Tên Sản Phẩm"),
       loaiMay: colIndex(BH, "Loại Máy"),
       dungLuong: colIndex(BH, "Dung Lượng"),
@@ -104,9 +104,10 @@ export async function GET(req: NextRequest) {
       serial: colIndex(BH, "Serial"),
       tenKH: colIndex(BH, "Tên Khách Hàng"),
       sdt: colIndex(BH, "Số Điện Thoại"),
-      ngayXuat: colIndex(BH, "Ngày Xuất"),
+      ngayXuat: colIndex(BH, "Ngày bán", "Ngày Bán", "Ngày Xuất"),
       ghiChu: colIndex(BH, "Ghi Chú"),
       trangThai: colIndex(BH, "Trạng Thái"),
+      loaiDon: colIndex(BH, "Loại Đơn"),
     }
 
     // ENRICH: đọc Hoan_Tra để bổ sung số tiền hoàn / lý do / người xử lý / ngày.
@@ -257,39 +258,39 @@ export async function POST(req: NextRequest) {
       if (replay) return NextResponse.json(replay.result, { status: 200 })
     }
 
-    // ===== VALIDATE — natural idempotency: chặn hoàn trả 2 lần theo MÃ ĐƠN HÀNG =====
-    // Mã đơn hàng là DUY NHẤT; IMEI/Serial có thể trùng giữa nhiều đơn (1 máy bán lại
-    // nhiều lần vẫn còn trong sheet) nên KHÔNG dùng đứng một mình để chặn.
+    // ===== VALIDATE: tìm đúng máy trong đơn trước khi ghi gì =====
+    // Mã đơn là DUY NHẤT; IMEI/Serial chỉ để chọn đúng máy TRONG đơn (1 máy có thể bán nhiều lần).
+    // Đơn nhiều máy bắt buộc chỉ rõ máy (IMEI/Serial), không thì sẽ hoàn nhầm cả đơn.
     if (ma_don_hang) {
-      try {
-        const { header: BH, rows: BR } = await readFromGoogleSheets("Ban_Hang")
-        const bIdDon = colIndex(BH, "ID Đơn Hàng")
-        const bImei = colIndex(BH, "IMEI")
-        const bSerial = colIndex(BH, "Serial")
-        const bTrang = colIndex(BH, "Trạng Thái")
-        if (bIdDon !== -1 && bTrang !== -1) {
-          const already = BR.some((r) => {
-            if (String(r[bIdDon] || "") !== String(ma_don_hang)) return false
-            // Chỉ hoàn 1 máy trong đơn -> thu hẹp theo IMEI (iPhone) hoặc Serial (iPad)
-            // để không chặn nhầm máy khác cùng đơn.
-            if (imei && bImei !== -1 && String(r[bImei] || "") !== String(imei)) return false
-            if (serial && bSerial !== -1 && String(r[bSerial] || "") !== String(serial)) return false
-            return String(r[bTrang] || "").trim() === "Hoàn trả"
-          })
-          if (already) {
-            const deviceLabel = imei ? ` (IMEI ${imei})` : serial ? ` (Serial ${serial})` : ""
-            return NextResponse.json(
-              {
-                ok: false,
-                code: "ALREADY_RETURNED",
-                error: `Đơn ${ma_don_hang}${deviceLabel} đã được hoàn trả trước đó`,
-              },
-              { status: 409 },
-            )
-          }
-        }
-      } catch (e) {
-        console.warn("[RETURN VALIDATE] đọc Ban_Hang thất bại (bỏ qua chặn cứng):", e)
+      const { header: BH, rows: BR } = await readFromGoogleSheets("Ban_Hang", undefined, { force: true })
+      const v = {
+        idDon: colIndex(BH, "Mã đơn hàng", "Mã Đơn Hàng", "ID Đơn Hàng"),
+        imei: colIndex(BH, "IMEI"),
+        serial: colIndex(BH, "Serial"),
+        trang: colIndex(BH, "Trạng Thái"),
+        loaiDon: colIndex(BH, "Loại Đơn"),
+      }
+      if (v.idDon === -1) return NextResponse.json({ ok: false, error: "Ban_Hang thiếu cột Mã đơn hàng" }, { status: 500 })
+      const cell = (r: any[], j: number) => (j === -1 ? "" : String(r[j] ?? "").trim())
+      const donRows = BR.filter((r) => cell(r, v.idDon) === String(ma_don_hang).trim())
+      if (!donRows.length) return NextResponse.json({ ok: false, error: `Không tìm thấy đơn ${ma_don_hang}` }, { status: 404 })
+      const mayRows = donRows.filter((r) => cell(r, v.imei) || cell(r, v.serial))
+      const im = String(imei || "").trim()
+      const sr = String(serial || "").trim().toUpperCase()
+      if (!im && !sr && mayRows.length > 1) {
+        return NextResponse.json({ ok: false, code: "CHOOSE_DEVICE", error: `Đơn ${ma_don_hang} có ${mayRows.length} máy, hãy chọn máy cần hoàn` }, { status: 400 })
+      }
+      const khop = mayRows.filter((r) => (!im || cell(r, v.imei) === im) && (!sr || cell(r, v.serial).toUpperCase() === sr))
+      if (!khop.length) {
+        return NextResponse.json({ ok: false, error: `Không tìm thấy máy ${im || sr} trong đơn ${ma_don_hang}` }, { status: 404 })
+      }
+      const daHoan = (r: any[]) => cell(r, v.trang) === "Hoàn trả" || cell(r, v.loaiDon) === "Hoàn trả"
+      if (khop.every(daHoan)) {
+        const deviceLabel = im ? ` (IMEI ${im})` : sr ? ` (Serial ${sr})` : ""
+        return NextResponse.json(
+          { ok: false, code: "ALREADY_RETURNED", error: `Đơn ${ma_don_hang}${deviceLabel} đã được hoàn trả trước đó` },
+          { status: 409 },
+        )
       }
     }
 
@@ -377,12 +378,12 @@ export async function POST(req: NextRequest) {
       })
     } catch (e) { console.warn('[NOTIFY] hoan-tra POST fail:', e) }
 
-    // 1) Mark Ban_Hang rows as Hoàn trả; zero out Lãi & Tổng Thu; add note; and reconstruct Kho_Hang row for in-house items
+    // 1) Đánh dấu máy hoàn trong Ban_Hang, tính lại Tổng Thu/Lãi của đơn, nhập lại máy vào kho
     try {
       if (ma_don_hang || imei || serial) {
-        const { header: BH, rows: BR } = await readFromGoogleSheets('Ban_Hang')
+        const { header: BH, rows: BR } = await readFromGoogleSheets('Ban_Hang', undefined, { force: true })
         const bIdx = {
-          idDon: colIndex(BH, 'ID Đơn Hàng'),
+          idDon: colIndex(BH, 'Mã đơn hàng', 'Mã Đơn Hàng', 'ID Đơn Hàng'),
           tenSP: colIndex(BH, 'Tên Sản Phẩm'),
           loaiMay: colIndex(BH, 'Loại Máy'),
           dungLuong: colIndex(BH, 'Dung Lượng'),
@@ -391,6 +392,7 @@ export async function POST(req: NextRequest) {
           imei: colIndex(BH, 'IMEI'),
           serial: colIndex(BH, 'Serial'),
           tinhTrang: colIndex(BH, 'Tình Trạng Máy'),
+          dangSim: colIndex(BH, 'Dạng Sim'),
           giaNhap: colIndex(BH, 'Giá Nhập'),
           giaBan: colIndex(BH, 'Giá Bán'),
           lai: colIndex(BH, 'Lãi'),
@@ -398,53 +400,76 @@ export async function POST(req: NextRequest) {
           loaiDon: colIndex(BH, 'Loại Đơn'),
           trangThai: colIndex(BH, 'Trạng Thái'),
           ghiChu: colIndex(BH, 'Ghi Chú'),
-          nguonHang: colIndex(BH, 'Nguồn Hàng', 'Nguồn'),
-          tenDoiTac: colIndex(BH, 'Tên Đối Tác'),
-          sdtDoiTac: colIndex(BH, 'SĐT Đối Tác'),
+          chiNhanh: colIndex(BH, 'Chi Nhánh'),
         }
+        const cell = (r: any[], j: number) => (j === -1 ? '' : String(r[j] ?? '').trim())
+        const daHoan = (r: any[]) => cell(r, bIdx.trangThai) === 'Hoàn trả' || cell(r, bIdx.loaiDon) === 'Hoàn trả'
 
-        const targetId = String(ma_don_hang || '')
-        const imeiStr = String(imei || '')
-        const serialStr = String(serial || '')
+        const targetId = String(ma_don_hang || '').trim()
+        const imeiStr = String(imei || '').trim()
+        const serialStr = String(serial || '').trim().toUpperCase()
         const matchedIndexes: number[] = []
+        const donIndexes: number[] = []
         for (let i = 0; i < BR.length; i++) {
           const row = BR[i]
-          // Khớp theo MÃ ĐƠN HÀNG (duy nhất). IMEI/Serial chỉ để chọn đúng máy TRONG
-          // đơn — không dùng đứng một mình vì IMEI có thể trùng giữa các đơn khác.
           let isMatch = false
           if (targetId && bIdx.idDon !== -1) {
-            if (String(row[bIdx.idDon] || '') === targetId) {
-              const imeiOk = !imeiStr || (bIdx.imei !== -1 && String(row[bIdx.imei] || '') === imeiStr)
-              const serialOk = !serialStr || (bIdx.serial !== -1 && String(row[bIdx.serial] || '') === serialStr)
-              isMatch = imeiOk && serialOk
-            }
+            if (cell(row, bIdx.idDon) !== targetId) continue
+            donIndexes.push(i)
+            const coMay = !!(cell(row, bIdx.imei) || cell(row, bIdx.serial))
+            const imeiOk = !imeiStr || cell(row, bIdx.imei) === imeiStr
+            const serialOk = !serialStr || cell(row, bIdx.serial).toUpperCase() === serialStr
+            isMatch = coMay && imeiOk && serialOk && !daHoan(row)
           } else if (imeiStr) {
-            // Fallback hiếm: không có mã đơn thì mới khớp theo IMEI
-            isMatch = bIdx.imei !== -1 && String(row[bIdx.imei] || '') === imeiStr
+            // Hiếm: không có mã đơn -> chỉ lấy lần bán GẦN NHẤT của IMEI đó (xử lý bên dưới)
+            isMatch = cell(row, bIdx.imei) === imeiStr && !daHoan(row)
           } else if (serialStr) {
-            isMatch = bIdx.serial !== -1 && String(row[bIdx.serial] || '') === serialStr
+            isMatch = cell(row, bIdx.serial).toUpperCase() === serialStr && !daHoan(row)
           }
-          if (isMatch) {
-            // Mark Hoàn trả, zero Lãi & Tổng Thu, set Loại Đơn
-            if (bIdx.trangThai !== -1) row[bIdx.trangThai] = 'Hoàn trả'
-            if (bIdx.lai !== -1) row[bIdx.lai] = '0'
-            if (bIdx.tongThu !== -1) row[bIdx.tongThu] = '0'
-            if (bIdx.loaiDon !== -1) row[bIdx.loaiDon] = 'Hoàn trả'
-            if (bIdx.ghiChu !== -1) {
-              const prev = row[bIdx.ghiChu] || ''
-              const extra = `Hoàn trả: ${newId}${ly_do?` - ${ly_do}`:''}`
-              row[bIdx.ghiChu] = prev ? `${prev} | ${extra}` : extra
-            }
-            matchedIndexes.push(i)
+          if (isMatch) matchedIndexes.push(i)
+        }
+        if (!targetId && matchedIndexes.length > 1) matchedIndexes.splice(0, matchedIndexes.length - 1)
+
+        for (const i of matchedIndexes) {
+          const row = BR[i]
+          if (bIdx.trangThai !== -1) row[bIdx.trangThai] = 'Hoàn trả'
+          if (bIdx.loaiDon !== -1) row[bIdx.loaiDon] = 'Hoàn trả'
+          if (bIdx.lai !== -1) row[bIdx.lai] = '0'
+          if (bIdx.ghiChu !== -1) {
+            const prev = row[bIdx.ghiChu] || ''
+            const extra = `Hoàn trả: ${newId}${ly_do ? ` - ${ly_do}` : ''}`
+            row[bIdx.ghiChu] = prev ? `${prev} | ${extra}` : extra
           }
         }
-        // Write back Ban_Hang if changes
+
+        // Tổng Thu của đơn chỉ nằm ở 1 dòng (thường là dòng đầu). Hoàn 1 máy:
+        //   Tổng Thu mới = Tổng Thu cũ − số tiền hoàn, đặt vào dòng đầu tiên CHƯA hoàn của đơn.
+        //   Lãi dòng đó = Tổng Thu mới − giá nhập dòng đó (các dòng khác giữ −giá nhập như cũ).
+        // Trước đây dòng hoàn bị đặt Tổng Thu = 0 -> hoàn đúng dòng đầu là mất doanh thu cả đơn.
+        if (matchedIndexes.length && bIdx.tongThu !== -1) {
+          const nhom = donIndexes.length ? donIndexes : matchedIndexes
+          const giaTri = nhom.map((i) => parseVietnameseNumber(BR[i][bIdx.tongThu]))
+          const coTong = giaTri.filter((x) => x > 0)
+          const lapLai = coTong.length > 1 && coTong.every((x) => x === coTong[0])
+          const tongCu = lapLai ? coTong[0] : coTong.reduce((s2, x) => s2 + x, 0)
+          const hoan = Math.max(0, Math.round(Number(so_tien_hoan) || 0))
+          const tongMoi = Math.max(0, tongCu - hoan)
+          const conLai = nhom.filter((i) => !daHoan(BR[i]))
+          const dongMang = conLai.find((i) => cell(BR[i], bIdx.imei) || cell(BR[i], bIdx.serial)) ?? conLai[0]
+          for (const i of nhom) BR[i][bIdx.tongThu] = '0'
+          if (dongMang !== undefined) {
+            BR[dongMang][bIdx.tongThu] = String(tongMoi)
+            if (bIdx.lai !== -1) {
+              const gn = bIdx.giaNhap !== -1 ? parseVietnameseNumber(BR[dongMang][bIdx.giaNhap]) : 0
+              BR[dongMang][bIdx.lai] = String(tongMoi - gn)
+            }
+          }
+        }
         if (matchedIndexes.length) await syncToGoogleSheets('Ban_Hang', BR)
 
-        // Re-create Kho_Hang rows for non-partner items
+        // Nhập lại máy vào kho (Kho ngoài), đúng chi nhánh của đơn; bỏ qua nếu máy đã có trong kho
         try {
-          // Load Kho_Hang header once
-          const { header: KH, rows: KR } = await readFromGoogleSheets('Kho_Hang')
+          const { header: KH, rows: KR } = await readFromGoogleSheets('Kho_Hang', undefined, { force: true })
           const kIdx = {
             idMay: colIndex(KH, 'ID Máy'),
             ngayNhap: colIndex(KH, 'Ngày Nhập'),
@@ -456,57 +481,60 @@ export async function POST(req: NextRequest) {
             imei: colIndex(KH, 'IMEI'),
             serial: colIndex(KH, 'Serial'),
             tinhTrang: colIndex(KH, 'Tình Trạng Máy', 'Tình Trạng'),
+            dangSim: colIndex(KH, 'Dạng Sim'),
             giaNhap: colIndex(KH, 'Giá Nhập'),
             giaBan: colIndex(KH, 'Giá Bán'),
             nguon: colIndex(KH, 'Nguồn', 'Nguồn Hàng'),
             trangThaiKho: colIndex(KH, 'Trạng Thái Kho', 'Trạng thái kho', 'Tình Trạng Tồn', 'Kho Hiển Thị'),
             ghiChu: colIndex(KH, 'Ghi Chú'),
             trangThai: colIndex(KH, 'Trạng Thái'),
+            dangXuLy: colIndex(KH, 'Đang xử lý', 'Đang Xử Lý'),
+            chiNhanh: colIndex(KH, 'Chi Nhánh'),
           }
-
-          // Chỉ lấy ngày dạng dd/mm/yyyy theo múi giờ VN
-          const nowVN = new Date()
-          const ngayVN = nowVN.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+          const coTrongKho = new Set<string>()
+          for (const r of KR) {
+            const a1 = kIdx.imei !== -1 ? String(r[kIdx.imei] || '').trim().toUpperCase() : ''
+            const a2 = kIdx.serial !== -1 ? String(r[kIdx.serial] || '').trim().toUpperCase() : ''
+            if (a1) coTrongKho.add(a1)
+            if (a2) coTrongKho.add(a2)
+          }
+          const ngayVN = new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
           const computeIdMay = (im: string, sr: string) => {
-            const deviceId = getDeviceId({ IMEI: (im||'').trim(), Serial: (sr||'').trim().toUpperCase() })
+            const deviceId = getDeviceId({ IMEI: (im || '').trim(), Serial: (sr || '').trim().toUpperCase() })
             return deviceId ? last5FromDeviceId(deviceId) : ''
           }
-          const toNum = (v:any) => parseVietnameseNumber(v)
-          // Giá bán ở Ban_Hang là chuỗi có dấu ngăn cách nghìn + " đ" (vd "6.800.000 đ").
-          // Bỏ MỌI ký tự không phải số để ra số nguyên đúng (6800000).
-          const parsePrice = (v:any) => parseVietnameseNumber(v)
-          // Ghi vào đúng dòng kế tiếp, NEO CỘT A. Không dùng values.append vì nó
-          // tự "dò bảng" và có thể neo nhầm sang cột P khi sheet có hàng lệch.
-          let appendRowNum = KR.length + 2 // +1 header, +1 sang dòng mới
+          // Ghi vào đúng dòng kế tiếp, NEO CỘT A (không dùng values.append vì có thể neo lệch cột).
+          let appendRowNum = KR.length + 2
           for (const idxRow of matchedIndexes) {
             const r = BR[idxRow]
-            // Mọi đơn hoàn đều nhập lại kho dưới dạng "Kho ngoài" (không phân biệt nguồn gốc)
-            const im = bIdx.imei !== -1 ? String(r[bIdx.imei]||'') : ''
-            const sr = bIdx.serial !== -1 ? String(r[bIdx.serial]||'') : ''
-            if (!im && !sr) continue // không có định danh thì bỏ qua để tránh nhập nhầm
-            const newRow = KH.map((col, ci) => {
+            const im = cell(r, bIdx.imei)
+            const sr = cell(r, bIdx.serial)
+            if (!im && !sr) continue
+            if ((im && coTrongKho.has(im.toUpperCase())) || (sr && coTrongKho.has(sr.toUpperCase()))) continue
+            const newRow = KH.map((_col, ci) => {
               if (ci === kIdx.idMay) return computeIdMay(im, sr)
               if (ci === kIdx.ngayNhap) return ngayVN
-              if (ci === kIdx.tenSP) return bIdx.tenSP !== -1 ? r[bIdx.tenSP] : ''
-              if (ci === kIdx.loaiMay) return bIdx.loaiMay !== -1 ? r[bIdx.loaiMay] : ''
-              if (ci === kIdx.dungLuong) return bIdx.dungLuong !== -1 ? r[bIdx.dungLuong] : ''
-              if (ci === kIdx.pin) return bIdx.pin !== -1 ? r[bIdx.pin] : ''
-              if (ci === kIdx.mauSac) return bIdx.mauSac !== -1 ? r[bIdx.mauSac] : ''
+              if (ci === kIdx.tenSP) return cell(r, bIdx.tenSP)
+              if (ci === kIdx.loaiMay) return cell(r, bIdx.loaiMay)
+              if (ci === kIdx.dungLuong) return cell(r, bIdx.dungLuong)
+              if (ci === kIdx.pin) return cell(r, bIdx.pin)
+              if (ci === kIdx.mauSac) return cell(r, bIdx.mauSac)
               if (ci === kIdx.imei) return im
               if (ci === kIdx.serial) return sr
-              if (ci === kIdx.tinhTrang) return bIdx.tinhTrang !== -1 ? r[bIdx.tinhTrang] : ''
-              if (ci === kIdx.giaNhap) return bIdx.giaNhap !== -1 ? toNum(r[bIdx.giaNhap]) : ''
-              // Giá bán ở kho = GIÁ BÁN KHÁCH HÀNG (cột Giá Bán của Ban_Hang)
-              if (ci === kIdx.giaBan) return bIdx.giaBan !== -1 ? parsePrice(r[bIdx.giaBan]) : ''
+              if (ci === kIdx.tinhTrang) return cell(r, bIdx.tinhTrang)
+              if (ci === kIdx.dangSim) return cell(r, bIdx.dangSim)
+              if (ci === kIdx.giaNhap) return bIdx.giaNhap !== -1 ? parseVietnameseNumber(r[bIdx.giaNhap]) : ''
+              // Giá bán ở kho = giá bán cho khách lúc trước
+              if (ci === kIdx.giaBan) return bIdx.giaBan !== -1 ? parseVietnameseNumber(r[bIdx.giaBan]) : ''
               if (ci === kIdx.nguon) return 'Kho ngoài'
               if (ci === kIdx.trangThaiKho) return 'Kho ngoài'
-              // Yêu cầu: Ghi chú không cần ghi gì cả
+              // Yêu cầu cũ của shop: Ghi chú kho để trống
               if (ci === kIdx.ghiChu) return ''
               if (ci === kIdx.trangThai) return 'Còn hàng'
+              if (ci === kIdx.dangXuLy) return 'No'
+              if (ci === kIdx.chiNhanh) return cell(r, bIdx.chiNhanh)
               return ''
             })
-            // Đảm bảo đủ độ rộng header (A..S) để không bị trim lệch
-            while (newRow.length < KH.length) newRow.push('')
             await updateRangeValues(`Kho_Hang!A${appendRowNum}`, [newRow])
             appendRowNum++
           }

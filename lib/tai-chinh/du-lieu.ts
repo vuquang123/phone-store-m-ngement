@@ -271,6 +271,8 @@ export async function docBanHang(): Promise<DongBan[]> {
     mau: colIndex(H, "Màu Sắc"),
     pin: colIndex(H, "Pin (%)"),
     tt: colIndex(H, "Tình Trạng Máy"),
+    trang: colIndex(H, "Trạng Thái"),
+    loaiDon: colIndex(H, "Loại Đơn"),
   }
   const c = (r: any[], j: number) => (j === -1 ? "" : String(r[j] ?? "").trim())
   type Tam = Omit<DongBan, "doanhThu" | "chuaThu" | "tongThuDon"> & { tongThu: number; ht: string; vc: string; k: number }
@@ -279,6 +281,8 @@ export async function docBanHang(): Promise<DongBan[]> {
   ;(data.rows || []).forEach((r: any[], k: number) => {
     const ma = c(r, i.ma)
     if (!ma) return
+    // Máy đã hoàn trả: không tính là đã bán (máy quay lại kho, tiền đã hoàn cho khách)
+    if (c(r, i.trang) === "Hoàn trả" || c(r, i.loaiDon) === "Hoàn trả") return
     const imei = c(r, i.imei)
     const serial = c(r, i.serial)
     const t: Tam = {
