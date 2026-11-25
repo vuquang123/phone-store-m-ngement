@@ -50,6 +50,28 @@ async function lienKetChuShop(ma: string, chatId: number) {
   }
 }
 
+async function ghiTopicCheckMay(chatId: number, threadId: number) {
+  try {
+    const choPhep = [process.env.TELEGRAM_CHAT_ID, process.env.TELEGRAM_CHAT_OFFLINE, "-1002895849744"]
+      .map((v) => Number(v))
+      .filter((v) => Number.isFinite(v) && v !== 0)
+    if (!choPhep.includes(Number(chatId))) {
+      console.warn("[TG] /checkmay từ nhóm lạ, bỏ qua:", chatId)
+      return
+    }
+    const { ghiCaiDat, KHOA_PHU } = await import("@/lib/tai-chinh/cai-dat")
+    await ghiCaiDat({ [KHOA_PHU.checkMayChatId]: String(chatId), [KHOA_PHU.checkMayThreadId]: String(threadId) })
+    const { sendTelegramMessage } = await import("@/lib/telegram")
+    await sendTelegramMessage("✅ Đã chọn topic này nhận form <b>Báo thu máy khách</b>.", undefined, {
+      branch: "1",
+      chat_id: chatId,
+      message_thread_id: threadId,
+    })
+  } catch (e) {
+    console.error("[TG] lưu topic CHECK MÁY KHÁCH lỗi:", e)
+  }
+}
+
 export async function POST(req: Request) {
   try {
     // BẢO MẬT: chỉ chấp nhận request kèm đúng secret token (Telegram gắn vào header khi setWebhook).
@@ -64,6 +86,12 @@ export async function POST(req: Request) {
     const startText = String(update?.message?.text || "")
     if (startText.startsWith("/start cs_") && update?.message?.chat?.type === "private") {
       await lienKetChuShop(startText.slice(7).trim(), update.message.chat.id)
+      return NextResponse.json({ ok: true })
+    }
+    // Form "Báo thu máy khách": gõ /checkmay trong topic "CHECK MÁY KHÁCH" của nhóm DEV PỒ
+    // để app nhớ topic đó (chỉ nhận từ nhóm chính, tránh người lạ đổi đích gửi).
+    if (/^\/checkmay(@\w+)?\b/i.test(startText) && update?.message?.message_thread_id) {
+      await ghiTopicCheckMay(update.message.chat?.id, update.message.message_thread_id)
       return NextResponse.json({ ok: true })
     }
     const cb = update?.callback_query

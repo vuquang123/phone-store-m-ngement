@@ -34,6 +34,9 @@ export const KHOA_PHU = {
   soDuTay: "so_du_nhap_tay",
   soDuTayNgay: "so_du_nhap_tay_ngay",
   chanBaiDang: "chan_bai_dang",
+  // Topic "CHECK MÁY KHÁCH" cho form Báo thu máy khách (ghi khi gõ /checkmay trong topic)
+  checkMayChatId: "telegram_check_may_chat_id",
+  checkMayThreadId: "telegram_check_may_thread_id",
 } as const
 
 export const CHAN_BAI_DANG_MAC_DINH =
