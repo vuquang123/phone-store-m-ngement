@@ -431,7 +431,7 @@ function ChiTietLo({ ma }: { ma: string }) {
                   <td className="font-mono text-xs">{m.imei || m.serial}</td>
                   <td className="text-right tabular-nums">
                     {m.giaNhap ? vnd(m.giaNhap) : <span className="text-amber-600">chưa có</span>}
-                    {!!m.chiPhiThem && <div className="text-xs text-muted-foreground" title="Giá nhập trên kho cao hơn giá nhập lô (CNC, sửa...). Nợ đầu hàng không tính phần này.">+ chi phí thêm {vnd(m.chiPhiThem)}</div>}
+                    {!!m.chiPhiThem && <div className="text-xs text-muted-foreground" title="Lãi tính theo giá nhập trên kho (đã sửa). Nợ đầu hàng vẫn theo giá nhập lô.">giá nhập kho {vnd(m.giaVon ?? m.giaNhap + m.chiPhiThem)}</div>}
                   </td>
                   <td className="text-right tabular-nums">
                     {ban ? vnd(m.doanhThu) : vnd(m.giaBanMucTieu)}

@@ -13,7 +13,6 @@ import { Plus, ListChecks } from "lucide-react"
 import { toast } from "sonner"
 
 import { CNCTable } from "@/components/kho-hang/cnc-table"
-import { CncChiPhiDialog, type MayCnc } from "@/components/kho-hang/cnc-chi-phi-dialog"
 import { BaoHanhTable } from "@/components/kho-hang/bao-hanh-table"
 import { PartnerTable } from "@/components/kho-hang/partner-table"
 import { AccessoryTable } from "@/components/kho-hang/accessory-table"
@@ -83,17 +82,6 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
   // State cục bộ của từng panel
   const [isEditMode, setIsEditMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  // Quản lý bấm Xong CNC -> hỏi chi phí CNC từng máy (cộng vào giá vốn). Nhân viên: xong luôn như cũ.
-  const [hoiChiPhi, setHoiChiPhi] = useState<{ ids: string[]; may: MayCnc[] } | null>(null)
-  const xongCnc = (ids: string[]) => {
-    const employeeId = me?.employeeId || "NV-UNKNOWN"
-    if (!isManager) {
-      completeCNC({ productIds: ids, employeeId })
-      return
-    }
-    const may = cncProducts.filter((p: any) => ids.includes(p.imei) || ids.includes(p.id)) as MayCnc[]
-    setHoiChiPhi({ ids, may })
-  }
   const [isAddCNCMachineOpen, setIsAddCNCMachineOpen] = useState(false)
   const [isAddBaoHanhMachineOpen, setIsAddBaoHanhMachineOpen] = useState(false)
   const [isHangDoiTacDialogOpen, setIsHangDoiTacDialogOpen] = useState(false)
@@ -260,7 +248,7 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
                   size="sm"
                   className="h-8 bg-green-600 hover:bg-green-700 shadow-sm"
                   onClick={() => {
-                    xongCnc(selectedIds)
+                    completeCNC({ productIds: selectedIds, employeeId: me?.employeeId || "NV-UNKNOWN" })
                     clearSelection()
                   }}
                   disabled={isCompletingCNC}
@@ -281,18 +269,8 @@ export function ManageTabs({ tab, isManager, onAddPartnerToCart }: ManageTabsPro
                     else setSelectedIds(processingCNC.map((p: any, idx: number) => p.imei || p.id || `unknown-${idx}`))
                   }}
                   isEditMode={isEditMode}
-                  onComplete={(p) => xongCnc([p.imei || p.id])}
+                  onComplete={(p) => completeCNC({ productIds: [p.imei || p.id], employeeId: me?.employeeId || "NV-UNKNOWN" })}
                   totalCount={processingCNC.length}
-                />
-                <CncChiPhiDialog
-                  open={!!hoiChiPhi}
-                  may={hoiChiPhi?.may || []}
-                  dangGui={isCompletingCNC}
-                  onClose={() => setHoiChiPhi(null)}
-                  onConfirm={(chiPhi) => {
-                    if (hoiChiPhi) completeCNC({ productIds: hoiChiPhi.ids, employeeId: me?.employeeId || "NV-UNKNOWN", chiPhi })
-                    setHoiChiPhi(null)
-                  }}
                 />
                 <TablePaginationFooter
                   page={cncProcessingPage}

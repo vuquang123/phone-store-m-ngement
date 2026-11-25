@@ -6,11 +6,11 @@ export function useInventoryActions() {
   const queryClient = useQueryClient()
 
   const completeCNCMutation = useMutation({
-    mutationFn: async ({ productIds, employeeId, chiPhi }: { productIds: string[], employeeId: string, chiPhi?: Record<string, number> }) => {
+    mutationFn: async ({ productIds, employeeId }: { productIds: string[], employeeId: string }) => {
       const res = await fetch("/api/kho-hang/complete-cnc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productIds, employeeId, chiPhi }),
+        body: JSON.stringify({ productIds, employeeId }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -18,10 +18,10 @@ export function useInventoryActions() {
       }
       return res.json()
     },
-    onSuccess: (data: any) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
       queryClient.invalidateQueries({ queryKey: ["cnc-inventory"] })
-      toast.success(data?.daCongChiPhi?.length ? data.message : "Đã hoàn thành CNC")
+      toast.success("Đã hoàn thành CNC")
     },
     onError: (error: any) => {
       toast.error(`Lỗi: ${error.message}`)

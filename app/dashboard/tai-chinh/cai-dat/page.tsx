@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { DangTai, KhungTrang, Nhan, OTien, goiApi } from "@/components/tai-chinh/chung"
+import { DangTai, KhungTrang, Nhan, goiApi } from "@/components/tai-chinh/chung"
 
-type Data = { caiDat: Record<string, number | string>; macDinh: Record<string, number | string>; moTa: Record<string, string>; telegramDaKetNoi: boolean; chanBaiDang: string; chiPhiCncLock: string }
+type Data = { caiDat: Record<string, number | string>; macDinh: Record<string, number | string>; moTa: Record<string, string>; telegramDaKetNoi: boolean; chanBaiDang: string }
 const NHOM: { ten: string; khoa: string[] }[] = [
   { ten: "Tuổi tồn", khoa: ["tuoi1", "tuoi2", "tuoi3", "heSoLock"] },
   { ten: "Lãi và giá đề xuất", khoa: ["laiCao", "laiThap", "laiToiThieu", "laiGiuLaiCao16_30", "giamLaiCao8_15", "loToiDaTren30"] },
@@ -22,7 +22,6 @@ function Trang() {
   const [d, setD] = useState<Data | null>(null)
   const [f, setF] = useState<Record<string, string>>({})
   const [chan, setChan] = useState("")
-  const [cnc, setCnc] = useState<number | "">("")
   const [link, setLink] = useState("")
   const tai = useCallback(async () => {
     try {
@@ -30,7 +29,6 @@ function Trang() {
       setD(r)
       setF(Object.fromEntries(Object.entries(r.caiDat).map(([k, v]) => [k, String(v)])))
       setChan(r.chanBaiDang)
-      setCnc(r.chiPhiCncLock ? Number(r.chiPhiCncLock) || "" : "")
     } catch (e: any) {
       toast({ title: "Không tải được", description: e.message, variant: "destructive" })
     }
@@ -40,7 +38,7 @@ function Trang() {
   }, [tai])
   const luu = async () => {
     try {
-      await goiApi("/api/tai-chinh/cai-dat", "PUT", { caiDat: f, chanBaiDang: chan, chiPhiCncLock: cnc })
+      await goiApi("/api/tai-chinh/cai-dat", "PUT", { caiDat: f, chanBaiDang: chan })
       toast({ title: "Đã lưu cài đặt" })
       tai()
     } catch (e: any) {
@@ -105,17 +103,6 @@ function Trang() {
               </div>
             </section>
           ))}
-          <section className="rounded-xl border bg-card p-3">
-            <h2 className="mb-1 font-medium">Chi phí thêm vào giá vốn</h2>
-            <p className="mb-2 text-sm text-muted-foreground">
-              Khi quản lý bấm “Xong” máy gửi CNC, app hỏi chi phí từng máy và cộng vào Giá nhập trên kho (giá vốn). Nợ đầu hàng vẫn tính theo giá nhập lô.
-            </p>
-            <label className="grid max-w-xs gap-1 text-sm">
-              <span>Chi phí CNC mặc định cho máy Lock (đ)</span>
-              <OTien value={cnc} onChange={setCnc} placeholder="VD: 500.000" />
-              <span className="text-xs text-muted-foreground">Điền sẵn cho máy Lock, sửa được từng máy. Bỏ trống = không điền sẵn.</span>
-            </label>
-          </section>
           <section className="rounded-xl border bg-card p-3">
             <h2 className="mb-2 font-medium">Chân bài đăng báo giá</h2>
             <Textarea rows={3} value={chan} onChange={(e) => setChan(e.target.value)} />
