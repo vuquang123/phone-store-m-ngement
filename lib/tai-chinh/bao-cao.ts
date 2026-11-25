@@ -10,6 +10,7 @@ import {
   diemUuTien,
   hanTraLo,
   laiMay,
+  giaVon,
   nhomMay,
   nhomTuoiTon,
   soNgay,
@@ -93,6 +94,8 @@ export type MayChiTiet = {
   pin: string
   tinhTrang: string
   giaNhap: number
+  chiPhiThem: number // còn tồn: CNC / sửa... (Giá nhập Kho − giá nhập lô)
+  giaVon: number // giá nhập + chi phí thêm
   giaBanMucTieu: number
   giaSan: number
   ngayNhap: string
@@ -134,6 +137,8 @@ export function chiTietMay(d: DuLieu, m: MaySo, loNoDenHan7: boolean): MayChiTie
     pin: m.pin,
     tinhTrang: m.tinhTrang,
     giaNhap: m.giaNhap,
+    chiPhiThem: ton ? m.chiPhiThem || 0 : 0,
+    giaVon: ton ? giaVon(m) : m.giaNhap,
     giaBanMucTieu: m.giaBanMucTieu,
     giaSan: m.giaSan,
     ngayNhap: m.ngayNhap,
@@ -151,7 +156,7 @@ export function chiTietMay(d: DuLieu, m: MaySo, loNoDenHan7: boolean): MayChiTie
     chiPhiPhuKien: m.chiPhiPhuKien,
     ctvBan: m.ctvBan,
     nguoiBan: m.nguoiBan,
-    lai: ban ? laiMay(m) : ton ? m.giaBanMucTieu - m.giaNhap : null,
+    lai: ban ? laiMay(m) : ton ? m.giaBanMucTieu - giaVon(m) : null,
     tuoi: ton ? Math.max(0, soNgay(m.ngayNhap, d.homNay)) : null,
     deXuat: ton ? deXuatGia(m, d.homNay, d.caiDat.caiDat) : null,
     diem: ton ? diemUuTien(m, d.homNay, d.caiDat.caiDat, loNoDenHan7) : null,
@@ -336,7 +341,7 @@ export function tongQuan(d: DuLieu, active: ActiveBranch) {
   for (const m of ton) {
     const g = nhomTuoiTon(m.tuoi || 0, cd)
     tuoi[g].n++
-    tuoi[g].von += m.giaNhap
+    tuoi[g].von += m.giaVon
   }
   // Khách còn nợ: máy đã bán trong sổ lô, phần trả góp / COD chưa về và chưa đánh dấu "Đã Thu Đủ"
   const khachConNo = theoChiNhanh(d.may, active)
@@ -345,7 +350,7 @@ export function tongQuan(d: DuLieu, active: ActiveBranch) {
   return {
     homNay: d.homNay,
     khachConNo,
-    vonTon: ton.reduce((s, m) => s + m.giaNhap, 0),
+    vonTon: ton.reduce((s, m) => s + m.giaVon, 0),
     soMayTon: ton.length,
     mayChuaCoLo: ton.filter((m) => !m.coLo).length,
     mayThieuGiaNhap: ton.filter((m) => !m.giaNhap).length,

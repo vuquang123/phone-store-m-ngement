@@ -3,10 +3,33 @@ import { updateProductsStatus, logProductHistory, readFromGoogleSheets, updateRo
 
 import { addNotification } from "@/lib/notifications";
 import { sendStockEventNotification } from "@/lib/telegram";
+import { branchContextFromHeaders } from "@/lib/branch-context";
+import { isManagerRole } from "@/lib/roles";
+import { KHOA_PHU, docCaiDat } from "@/lib/tai-chinh/cai-dat";
+
+/** GET: chi phí CNC mặc định cho máy Lock (chỉ quản lý / chủ shop) để điền sẵn hộp "Chi phí CNC". */
+export async function GET(req: Request) {
+  if (!isManagerRole(branchContextFromHeaders(req.headers)?.role)) return NextResponse.json({ chiPhiCncLock: 0 });
+  try {
+    const { phu } = await docCaiDat();
+    return NextResponse.json({ chiPhiCncLock: Math.max(0, Math.round(Number(phu[KHOA_PHU.chiPhiCncLock]) || 0)) });
+  } catch {
+    return NextResponse.json({ chiPhiCncLock: 0 });
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    const { productIds, employeeId } = await req.json();
+    const { productIds, employeeId, chiPhi } = await req.json();
+    // chiPhi: { [IMEI]: số tiền } — chi phí CNC cộng vào Giá nhập (giá vốn) của máy trong kho. Chỉ quản lý / chủ shop.
+    const laQuanLy = isManagerRole(branchContextFromHeaders(req.headers)?.role);
+    const chiPhiTheoImei = new Map<string, number>();
+    if (laQuanLy && chiPhi && typeof chiPhi === "object") {
+      for (const [k, v] of Object.entries(chiPhi)) {
+        const n = Math.round(Number(v) || 0);
+        if (n > 0 && n < 100_000_000) chiPhiTheoImei.set(String(k).trim(), n);
+      }
+    }
     if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
       return NextResponse.json({ success: false, error: "Thiếu danh sách sản phẩm" }, { status: 400 });
     }
@@ -64,6 +87,9 @@ export async function POST(req: Request) {
     const idxKhoTen = colIndex(khoHeader, "Tên Sản Phẩm", "Tên máy", "Sản phẩm", "Model");
     const idxKhoTrangThai = colIndex(khoHeader, "Trạng Thái");
     const idxKhoGhiChu = colIndex(khoHeader, "Ghi Chú");
+    const idxKhoGiaNhap = colIndex(khoHeader, "Giá nhập", "Giá Nhập");
+    const homNay = new Date().toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit" });
+    const daCongChiPhi: { imei: string; soTien: number }[] = [];
 
 
     // Cập nhật trạng thái trong sheet Kho_Hang cho tất cả sản phẩm hoàn thành CNC
@@ -76,6 +102,17 @@ export async function POST(req: Request) {
       // Nếu IMEI nằm trong danh sách hoàn thành CNC, cập nhật trạng thái
       if (idxKhoIMEI !== -1 && imeisToProcess.includes(row[idxKhoIMEI])) {
         if (idxKhoTrangThai !== -1) row[idxKhoTrangThai] = "Còn hàng";
+        // Chi phí CNC -> cộng vào Giá nhập (giá vốn) + ghi chú để truy lại
+        const cp = chiPhiTheoImei.get(String(row[idxKhoIMEI]).trim());
+        if (cp && idxKhoGiaNhap !== -1) {
+          const cu = Number(String(row[idxKhoGiaNhap] ?? "").replace(/[^\d]/g, "")) || 0;
+          row[idxKhoGiaNhap] = String(cu + cp);
+          if (idxKhoGhiChu !== -1) {
+            const note = `CNC +${cp.toLocaleString("vi-VN")} (${homNay})`;
+            row[idxKhoGhiChu] = row[idxKhoGhiChu] ? `${row[idxKhoGhiChu]} | ${note}` : note;
+          }
+          daCongChiPhi.push({ imei: String(row[idxKhoIMEI]), soTien: cp });
+        }
       }
       return row;
     });
@@ -150,7 +187,12 @@ export async function POST(req: Request) {
       employee: employeeId,
     })
   } catch (e) { console.warn('[TG] complete-cnc message fail:', e) }
-  return NextResponse.json({ success: true, message: `Đã xử lý xong ${imeisToProcess.length} sản phẩm!` });
+  const tongCp = daCongChiPhi.reduce((s, x) => s + x.soTien, 0);
+  return NextResponse.json({
+    success: true,
+    message: `Đã xử lý xong ${imeisToProcess.length} sản phẩm!${daCongChiPhi.length ? ` Cộng chi phí CNC ${tongCp.toLocaleString("vi-VN")}đ vào giá vốn ${daCongChiPhi.length} máy.` : ""}`,
+    daCongChiPhi,
+  });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message || "Lỗi xử lý hoàn thành CNC" }, { status: 500 });
   }

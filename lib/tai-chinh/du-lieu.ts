@@ -442,6 +442,8 @@ export function ganTinhTrang(soLo: Dong[], kho: MayKho[], ban: DongBan[]): MaySo
         m.trangThai = trongKho.trangThai === "Đã bán" ? "Đã bán" : trongKho.trangThai
         if (m.trangThai === "Tồn" && m.ctvGiu) m.trangThai = "CTV giữ"
         if (trongKho.giaBan > 0) m.giaBanMucTieu = trongKho.giaBan
+        // Giá nhập trên Kho cao hơn giá nhập lô = chi phí thêm (CNC, sửa...) -> tính vào giá vốn
+        if (m.giaNhap > 0 && trongKho.giaNhap > m.giaNhap) m.chiPhiThem = trongKho.giaNhap - m.giaNhap
         return
       }
       const b = dsBan.find((x) => x.ngayBan >= m.ngayNhap && (!tiep || x.ngayBan <= tiep.ngayNhap))

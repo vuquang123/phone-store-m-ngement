@@ -108,7 +108,7 @@ export async function taoBaoCao21h(d: DuLieu, active: ActiveBranch): Promise<Bao
   }
   const ton = mayTon(d, active).filter((m) => m.trangThai === "Tồn" || m.trangThai === "CTV giữ")
   const coGia = ton.filter((m) => m.giaNhap > 0)
-  const giaVonTB = coGia.length ? Math.round(coGia.reduce((s, m) => s + m.giaNhap, 0) / coGia.length) : 0
+  const giaVonTB = coGia.length ? Math.round(coGia.reduce((s, m) => s + m.giaVon, 0) / coGia.length) : 0
   const tienThieu = Math.max(0, no7 - tienHienCo)
   const soMayCanBan = tienThieu > 0 && giaVonTB > 0 ? Math.ceil(tienThieu / giaVonTB) : 0
   // 3. Top 10 máy cần đẩy

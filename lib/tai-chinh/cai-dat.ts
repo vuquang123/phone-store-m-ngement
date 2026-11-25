@@ -42,6 +42,8 @@ export const KHOA_PHU = {
   tienDonChuyenKhoan: "tien_don_nguon_chuyen_khoan",
   tienDonThe: "tien_don_nguon_the",
   tienDonSoNgayThe: "tien_don_so_ngay_the_ve",
+  // Chi phí CNC mặc định cho máy Lock (điền sẵn khi bấm Xong CNC, sửa được từng máy)
+  chiPhiCncLock: "chi_phi_cnc_lock_mac_dinh",
 } as const
 
 export const CHAN_BAI_DANG_MAC_DINH =

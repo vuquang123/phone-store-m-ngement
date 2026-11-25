@@ -113,7 +113,9 @@ export type MayLo = {
   ngayBan: string
   doanhThu: number // phần doanh thu của máy trong đơn
   chuaThu: number // phần chưa về (trả góp, COD chưa đối soát)
-  chiPhiPhuKien: number // giá nhập phụ kiện tặng kèm (Ban_Hang.Giá Nhập − giá nhập máy)
+  chiPhiPhuKien: number // máy đã bán: Ban_Hang.Giá Nhập − giá nhập lô (phụ kiện tặng kèm + chi phí thêm như CNC)
+  /** Máy còn tồn: chi phí thêm (CNC độ sim, sửa...) = Giá nhập trên Kho − giá nhập lô. Nợ đầu hàng KHÔNG tính phần này. */
+  chiPhiThem?: number
   hoaHong: number
   phiTraGop: number
   phiKhac: number
@@ -199,6 +201,9 @@ export function chiaDoanhThu(tongThu: number, giaBanTungMay: number[]): number[]
 }
 
 /* ---------------------------------------------------------------- máy */
+/** Giá vốn máy còn tồn = giá nhập lô (trả đầu hàng) + chi phí thêm. */
+export const giaVon = (m: MayLo) => m.giaNhap + (m.chiPhiThem || 0)
+
 export function laiMay(m: MayLo): number {
   return m.doanhThu - m.giaNhap - m.chiPhiPhuKien - m.hoaHong - m.phiTraGop - m.phiKhac
 }
@@ -299,8 +304,8 @@ export function tinhChiSoLo(
   const slNhap = may.length
   const doanhThu = ban.reduce((s, m) => s + m.doanhThu, 0)
   const laiDaChot = ban.reduce((s, m) => s + laiMay(m), 0) - lo.chiPhiLo
-  const vonTon = ton.reduce((s, m) => s + m.giaNhap, 0)
-  const laiDuKienTon = ton.reduce((s, m) => s + (m.giaBanMucTieu - m.giaNhap), 0)
+  const vonTon = ton.reduce((s, m) => s + giaVon(m), 0)
+  const laiDuKienTon = ton.reduce((s, m) => s + (m.giaBanMucTieu - giaVon(m)), 0)
   const daThu = ban.reduce((s, m) => s + daThuMay(m, daThuDu(m)), 0)
   const tongVon = may.reduce((s, m) => s + m.giaNhap, 0) + lo.chiPhiLo
   const phanTramThuHoi = tongVon > 0 ? (daThu / tongVon) * 100 : 0
@@ -360,8 +365,8 @@ export function tuoiQuyDoi(m: Pick<MayLo, "ngayNhap" | "ten" | "loaiMay">, homNa
 export function diemUuTien(m: MayLo, homNay: string, cd: CaiDat, loCoNoDenHan7: boolean) {
   const a = tuoiQuyDoi(m, homNay, cd)
   const diemTuoi = Math.min(a, cd.tuoi2) * cd.wTuoi + Math.max(0, a - cd.tuoi2) * cd.wTuoiSau
-  const lai = m.giaBanMucTieu - m.giaNhap
-  const diem = diemTuoi + (loCoNoDenHan7 ? cd.wNoDenHan : 0) + (m.giaNhap / 1_000_000) * cd.wGiaVon + (lai >= cd.laiCao ? cd.wLaiCao : 0)
+  const lai = m.giaBanMucTieu - giaVon(m)
+  const diem = diemTuoi + (loCoNoDenHan7 ? cd.wNoDenHan : 0) + (giaVon(m) / 1_000_000) * cd.wGiaVon + (lai >= cd.laiCao ? cd.wLaiCao : 0)
   return Math.round(diem * 10) / 10
 }
 
@@ -386,7 +391,7 @@ export function deXuatGia(m: MayLo, homNay: string, cd: CaiDat): DeXuatGia {
   const tuoi = tuoiTon(m, homNay)
   const tqd = tuoiQuyDoi(m, homNay, cd)
   const gia = m.giaBanMucTieu
-  const von = m.giaNhap
+  const von = giaVon(m)
   const lai = gia - von
   const ml = mucLai(lai, cd)
   const san = m.giaSan > 0 ? m.giaSan : von

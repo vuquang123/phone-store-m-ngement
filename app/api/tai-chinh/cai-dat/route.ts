@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
       soDuTay: phu[KHOA_PHU.soDuTay],
       soDuTayNgay: phu[KHOA_PHU.soDuTayNgay],
       chanBaiDang: phu[KHOA_PHU.chanBaiDang],
+      chiPhiCncLock: phu[KHOA_PHU.chiPhiCncLock],
       homNay: homNayVN(),
     })
   } catch (e) {
@@ -40,6 +41,7 @@ export async function PUT(req: NextRequest) {
       if (b.caiDat && b.caiDat[k] !== undefined && b.caiDat[k] !== "") ghi[k] = b.caiDat[k]
     }
     if (b.chanBaiDang !== undefined) ghi[KHOA_PHU.chanBaiDang] = String(b.chanBaiDang)
+    if (b.chiPhiCncLock !== undefined) ghi[KHOA_PHU.chiPhiCncLock] = b.chiPhiCncLock === "" || b.chiPhiCncLock === null ? "" : Math.max(0, Math.round(Number(b.chiPhiCncLock) || 0))
     if (b.soDuTay !== undefined) {
       ghi[KHOA_PHU.soDuTay] = b.soDuTay === "" || b.soDuTay === null ? "" : Math.round(Number(b.soDuTay) || 0)
       ghi[KHOA_PHU.soDuTayNgay] = b.soDuTay === "" || b.soDuTay === null ? "" : homNayVN()

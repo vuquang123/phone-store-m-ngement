@@ -24,7 +24,7 @@ type DauHang = { id: string; ten: string; soNgayNo: number }
 type MayCT = {
   dong: number; idMay: string; imei: string; serial: string; ten: string; loaiMay: string; dungLuong: string; mau: string; pin: string
   giaNhap: number; giaBanMucTieu: number; giaSan: number; ngayNhap: string; trangThai: string; ctvGiu: string; maDon: string; ngayBan: string
-  doanhThu: number; daThu: number; chuaThu: number; daThuDu: boolean; hoaHong: number; phiTraGop: number; phiKhac: number; chiPhiPhuKien: number
+  doanhThu: number; daThu: number; chuaThu: number; daThuDu: boolean; hoaHong: number; phiTraGop: number; phiKhac: number; chiPhiPhuKien: number; chiPhiThem?: number; giaVon?: number
   ctvBan: string; nguoiBan: string; lai: number | null; tuoi: number | null; diem: number | null
   deXuat: { giaDeXuat: number; canDuyet: boolean; lyDo: string } | null
   ghiChu: string
@@ -429,7 +429,10 @@ function ChiTietLo({ ma }: { ma: string }) {
                     <div className="text-xs text-muted-foreground">{[m.loaiMay, m.dungLuong, m.mau, m.pin && `pin ${m.pin}`].filter(Boolean).join(" · ")}</div>
                   </td>
                   <td className="font-mono text-xs">{m.imei || m.serial}</td>
-                  <td className="text-right tabular-nums">{m.giaNhap ? vnd(m.giaNhap) : <span className="text-amber-600">chưa có</span>}</td>
+                  <td className="text-right tabular-nums">
+                    {m.giaNhap ? vnd(m.giaNhap) : <span className="text-amber-600">chưa có</span>}
+                    {!!m.chiPhiThem && <div className="text-xs text-muted-foreground" title="Giá nhập trên kho cao hơn giá nhập lô (CNC, sửa...). Nợ đầu hàng không tính phần này.">+ chi phí thêm {vnd(m.chiPhiThem)}</div>}
+                  </td>
                   <td className="text-right tabular-nums">
                     {ban ? vnd(m.doanhThu) : vnd(m.giaBanMucTieu)}
                     {!ban && m.giaSan > 0 && <div className="text-xs text-muted-foreground">sàn {vnd(m.giaSan)}</div>}
@@ -446,7 +449,7 @@ function ChiTietLo({ ma }: { ma: string }) {
                     {m.lai !== null ? vnd(m.lai) : ""}
                     {!ban && m.lai !== null && <div className="text-xs text-muted-foreground">dự kiến</div>}
                     {ban && (m.hoaHong || m.phiTraGop || m.phiKhac || m.chiPhiPhuKien) > 0 && (
-                      <div className="text-xs text-muted-foreground">trừ {vnd(m.hoaHong + m.phiTraGop + m.phiKhac + m.chiPhiPhuKien)}</div>
+                      <div className="text-xs text-muted-foreground" title="Hoa hồng CTV + phí trả góp + phí khác + chi phí thêm/phụ kiện (giá nhập lúc bán − giá nhập lô)">trừ {vnd(m.hoaHong + m.phiTraGop + m.phiKhac + m.chiPhiPhuKien)}</div>
                     )}
                   </td>
                   <td className="max-w-[160px] text-xs text-muted-foreground">{m.ghiChu}</td>
