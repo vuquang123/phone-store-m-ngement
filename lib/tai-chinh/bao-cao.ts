@@ -338,8 +338,13 @@ export function tongQuan(d: DuLieu, active: ActiveBranch) {
     tuoi[g].n++
     tuoi[g].von += m.giaNhap
   }
+  // Khách còn nợ: máy đã bán trong sổ lô, phần trả góp / COD chưa về và chưa đánh dấu "Đã Thu Đủ"
+  const khachConNo = theoChiNhanh(d.may, active)
+    .filter((m) => m.trangThai === "Đã bán" && !m.daThuDu)
+    .reduce((s, m) => s + (m.chuaThu || 0), 0)
   return {
     homNay: d.homNay,
+    khachConNo,
     vonTon: ton.reduce((s, m) => s + m.giaNhap, 0),
     soMayTon: ton.length,
     mayChuaCoLo: ton.filter((m) => !m.coLo).length,

@@ -21,6 +21,8 @@ export const BANG = {
   LICH_SU_GIA: "Lich_Su_Gia",
   BAO_CAO_21H: "Bao_Cao_21h",
   CHI_PHI: "Chi_Phi_Ngoai",
+  TIEN_HIEN_CO: "Tien_Hien_Co",
+  LS_TIEN_HIEN_CO: "Lich_Su_Tien_Hien_Co",
 } as const
 
 export const COT: Record<string, string[]> = {
@@ -45,6 +47,10 @@ export const COT: Record<string, string[]> = {
   [BANG.BAO_CAO_21H]: ["Ngày", "Chi Nhánh", "Tạo Lúc", "Nội Dung", "Bài Đăng", "Đã Gửi Telegram", "Ghi Chú"],
   // Chi phí ngoài: quảng cáo, phụ kiện lẻ, ship đơn ngoài... Trừ vào lãi tháng; gắn lô thì trừ vào lãi lô.
   [BANG.CHI_PHI]: ["ID", "Ngày", "Loại", "Số Tiền", "Mã Đơn", "Mã Lô", "Nguồn Tiền", "ID Nguồn Tiền", "Ghi Chú", "Trạng Thái", "Người Ghi", "Ngày Tạo", "Chi Nhánh"],
+  // Tiền hiện có: mỗi nguồn tiền (tiền mặt, từng tài khoản, ví...) 1 dòng, chủ shop tự nhập số dư thật.
+  [BANG.TIEN_HIEN_CO]: ["ID", "Tên Nguồn", "Loại", "Số Dư", "Chi Nhánh", "Thứ Tự", "Trạng Thái", "Ghi Chú", "Cập Nhật Lúc", "Người Cập Nhật", "Ngày Tạo"],
+  // Mỗi lần đổi số dư / tên / ẩn hiện 1 dòng, KHÔNG XOÁ.
+  [BANG.LS_TIEN_HIEN_CO]: ["Thời Gian", "ID Nguồn", "Tên Nguồn", "Số Dư Cũ", "Số Dư Mới", "Chênh Lệch", "Người Ghi", "Ghi Chú", "Chi Nhánh"],
 }
 
 /* ------------------------------------------------------------ tiện ích */

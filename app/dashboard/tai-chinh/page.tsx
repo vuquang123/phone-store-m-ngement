@@ -1,5 +1,5 @@
 "use client"
-// Tài chính · Tổng quan (chỉ chủ shop): vốn tồn, nợ đầu hàng, lãi tháng, tuổi tồn, cảnh báo.
+// Tài chính · Tổng quan (chỉ chủ shop): tiền hiện có, tài sản ròng, vốn tồn, nợ đầu hàng, lãi tháng, tuổi tồn, cảnh báo.
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ProtectedRoute } from "@/components/auth/protected-route"
@@ -10,6 +10,9 @@ import { RefreshCw } from "lucide-react"
 
 type TongQuan = {
   homNay: string
+  khachConNo: number
+  tienHienCo: { coDuLieu: boolean; tong: number; soNguon: number; capNhatLuc: string; soNgayCu: number | null }
+  taiSanRong: number | null
   vonTon: number
   soMayTon: number
   mayChuaCoLo: number
@@ -29,6 +32,8 @@ type TongQuan = {
   canhBao: { maLo: string; conLai: number; vonTon: number }[]
   top5: { ten: string; imei: string; serial: string; maLo: string; tuoi: number; diem: number; giaBanMucTieu: number; deXuat: { giaDeXuat: number; canDuyet: boolean } | null }[]
 }
+
+const doCu = (n: number | null) => (n === null ? "có nguồn chưa nhập" : n <= 0 ? "cập nhật hôm nay" : n === 1 ? "cập nhật hôm qua" : `cập nhật ${n} ngày trước`)
 
 const MAU_TUOI: Record<string, string> = { "0-7": "bg-emerald-500", "8-15": "bg-sky-500", "16-30": "bg-amber-500", ">30": "bg-red-500" }
 
@@ -66,6 +71,33 @@ function Trang() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <The
+              nhan="Tiền hiện có"
+              giaTri={d.tienHienCo.coDuLieu ? vnd(d.tienHienCo.tong) : "Chưa nhập"}
+              phu={
+                <Link className="underline" href="/dashboard/tai-chinh/tien-hien-co">
+                  {d.tienHienCo.coDuLieu ? `${d.tienHienCo.soNguon} nguồn · ${doCu(d.tienHienCo.soNgayCu)}` : "Nhập số dư các nguồn tiền"}
+                </Link>
+              }
+              mau={!d.tienHienCo.coDuLieu || d.tienHienCo.soNgayCu === null || d.tienHienCo.soNgayCu > 2 ? "vang" : undefined}
+            />
+            <The
+              nhan="Tài sản ròng"
+              giaTri={d.taiSanRong === null ? "—" : vnd(d.taiSanRong)}
+              phu={
+                d.taiSanRong === null
+                  ? "Cần nhập Tiền hiện có"
+                  : `Tiền ${vnd(d.tienHienCo.tong)} + tồn ${vnd(d.vonTon)} + khách nợ ${vnd(d.khachConNo)} − nợ đầu hàng ${vnd(d.tongNo)}`
+              }
+              mau={d.taiSanRong !== null && d.taiSanRong < 0 ? "do" : d.taiSanRong !== null ? "xanh" : undefined}
+            />
+            <The nhan="Khách còn nợ" giaTri={vnd(d.khachConNo)} phu="Trả góp / COD chưa về, chưa đánh dấu đã thu đủ" />
+            <The
+              nhan="Tiền so với nợ 7 ngày"
+              giaTri={!d.tienHienCo.coDuLieu ? "—" : d.tienHienCo.tong >= d.lich.d7 ? "Đủ" : `Thiếu ${vnd(d.lich.d7 - d.tienHienCo.tong)}`}
+              phu={d.tienHienCo.coDuLieu ? `Nợ đến hạn 7 ngày ${vnd(d.lich.d7)}` : "Cần nhập Tiền hiện có"}
+              mau={!d.tienHienCo.coDuLieu ? undefined : d.tienHienCo.tong >= d.lich.d7 ? "xanh" : "do"}
+            />
             <The nhan="Vốn đang nằm trong tồn" giaTri={vnd(d.vonTon)} phu={`${d.soMayTon} máy`} />
             <The nhan="Tổng nợ đầu hàng" giaTri={vnd(d.tongNo)} phu={d.quaHan ? `Quá hạn ${vnd(d.quaHan)}` : "Không có khoản quá hạn"} mau={d.quaHan ? "do" : undefined} />
             <The nhan="Nợ đến hạn 7 ngày" giaTri={vnd(d.lich.d7)} phu={`14 ngày: ${vnd(d.lich.d14)} · 30 ngày: ${vnd(d.lich.d30)}`} mau={d.lich.d7 ? "vang" : undefined} />

@@ -24,6 +24,7 @@ export const pt = (n: number) => `${(Math.round((Number(n) || 0) * 10) / 10).toL
 
 const TABS = [
   { href: "/dashboard/tai-chinh", label: "Tổng quan" },
+  { href: "/dashboard/tai-chinh/tien-hien-co", label: "Tiền hiện có" },
   { href: "/dashboard/tai-chinh/lo-hang", label: "Lô hàng" },
   { href: "/dashboard/tai-chinh/cong-no", label: "Công nợ" },
   { href: "/dashboard/tai-chinh/chi-phi", label: "Chi phí ngoài" },

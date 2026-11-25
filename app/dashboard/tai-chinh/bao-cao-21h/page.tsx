@@ -1,6 +1,7 @@
 "use client"
 // Tài chính · Báo cáo 21h: xem báo cáo lúc này, lịch sử các ngày, bài đăng soạn sẵn, áp dụng giá đề xuất.
 import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,7 +15,7 @@ type Top = { ten: string; imei: string; maLo: string; tuoi: number; diem: number
 type BaoCao = {
   ngay: string; chiNhanh: string; taoLuc: string
   homNay: { soMay: number; soDon: number; doanhThu: number; lai: number; daThu: number; chiPhiNgoai?: number }
-  apLuc: { no3: number; no7: number; quaHan: number; tienHienCo: number; nguonTien: "nhap_tay" | "nguon_tien"; tienThieu: number; giaVonTB: number; soMayCanBan: number }
+  apLuc: { no3: number; no7: number; quaHan: number; tienHienCo: number; nguonTien: "nhap_tay" | "nguon_tien" | "tien_hien_co"; tienCapNhatLuc?: string; tienSoNgayCu?: number | null; tienThieu: number; giaVonTB: number; soMayCanBan: number }
   top: Top[]
   thuongCtv: { ten: string; imei: string; tuoi: number; thuong: number }[]
   baiDang: string
@@ -132,7 +133,19 @@ function Trang() {
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                   <The nhan="Nợ đến hạn 3 ngày" giaTri={vnd(b.apLuc.no3)} mau={b.apLuc.no3 ? "vang" : undefined} />
                   <The nhan="Nợ đến hạn 7 ngày" giaTri={vnd(b.apLuc.no7)} phu={b.apLuc.quaHan ? `Gồm quá hạn ${vnd(b.apLuc.quaHan)}` : undefined} />
-                  <The nhan="Tiền hiện có" giaTri={vnd(b.apLuc.tienHienCo)} phu={b.apLuc.nguonTien === "nhap_tay" ? "Số nhập tay hôm nay" : "Tổng các nguồn tiền khả dụng"} />
+                  <The nhan="Tiền hiện có" giaTri={vnd(b.apLuc.tienHienCo)} phu={
+                      b.apLuc.nguonTien === "nhap_tay" ? (
+                        "Số nhập tay hôm nay"
+                      ) : b.apLuc.nguonTien === "tien_hien_co" ? (
+                        <Link className="underline" href="/dashboard/tai-chinh/tien-hien-co">
+                          Tiền hiện có · {b.apLuc.tienSoNgayCu == null ? "có nguồn chưa nhập" : b.apLuc.tienSoNgayCu <= 0 ? "cập nhật hôm nay" : `cập nhật ${b.apLuc.tienSoNgayCu} ngày trước`}
+                        </Link>
+                      ) : (
+                        "App tự tính (chưa nhập Tiền hiện có)"
+                      )
+                    }
+                    mau={b.apLuc.nguonTien === "tien_hien_co" && (b.apLuc.tienSoNgayCu ?? 99) > 2 ? "vang" : undefined}
+                  />
                   <The
                     nhan={b.apLuc.tienThieu > 0 ? "Thiếu" : "Đủ tiền trả nợ 7 ngày"}
                     giaTri={b.apLuc.tienThieu > 0 ? vnd(b.apLuc.tienThieu) : "✓"}

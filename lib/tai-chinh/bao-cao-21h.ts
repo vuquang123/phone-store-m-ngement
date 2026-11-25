@@ -10,6 +10,7 @@ import { KHOA_PHU } from "./cai-dat"
 import { ZONE, ngayVN, theoChiNhanh, type DuLieu, type MaySo } from "./du-lieu"
 import { congNo, danhSachUuTien, mayTon, type MayTon } from "./bao-cao"
 import { vnd } from "./tinh-toan"
+import { docNguonTien, moTaDoCu, tomTatTien } from "./tien-hien-co"
 
 const khoa = (s: unknown) => String(s ?? "").trim().toUpperCase()
 
@@ -23,7 +24,9 @@ export type BaoCao21h = {
     no7: number
     quaHan: number
     tienHienCo: number
-    nguonTien: "nhap_tay" | "nguon_tien"
+    nguonTien: "nhap_tay" | "nguon_tien" | "tien_hien_co"
+    tienCapNhatLuc?: string
+    tienSoNgayCu?: number | null
     tienThieu: number
     giaVonTB: number
     soMayCanBan: number
@@ -79,10 +82,19 @@ export async function taoBaoCao21h(d: DuLieu, active: ActiveBranch): Promise<Bao
   const tayNgay = d.caiDat.phu[KHOA_PHU.soDuTayNgay]
   const tay = d.caiDat.phu[KHOA_PHU.soDuTay]
   let tienHienCo = 0
-  let nguonTien: "nhap_tay" | "nguon_tien" = "nguon_tien"
+  let nguonTien: "nhap_tay" | "nguon_tien" | "tien_hien_co" = "nguon_tien"
+  let tienCapNhatLuc = ""
+  let tienSoNgayCu: number | null = null
+  // Ưu tiên: số nhập tay hôm nay ở trang 21h > bảng Tiền hiện có (chủ shop tự nhập) > tổng nguồn tiền app tự tính
+  const thc = tomTatTien(await docNguonTien().catch(() => []), active)
   if (tay !== "" && tayNgay === hom) {
     tienHienCo = so(tay)
     nguonTien = "nhap_tay"
+  } else if (thc.coDuLieu) {
+    tienHienCo = thc.tong
+    nguonTien = "tien_hien_co"
+    tienCapNhatLuc = thc.capNhatLuc
+    tienSoNgayCu = thc.soNgayCu
   } else {
     const ten = active === "all" ? "" : BRANCHES.find((b) => b.id === active)?.name || ""
     const acc = await listCashAccountsForFinance()
@@ -127,7 +139,7 @@ export async function taoBaoCao21h(d: DuLieu, active: ActiveBranch): Promise<Bao
     chiNhanh: active === "all" ? "Tất cả" : BRANCHES.find((b) => b.id === active)?.name || "",
     taoLuc: DateTime.now().setZone(ZONE).toFormat("HH:mm d/M/yyyy"),
     homNay: { soMay: banHom.filter((b) => b.laMay).length, soDon: new Set(banHom.map((b) => b.maDon)).size, doanhThu, lai, daThu, chiPhiNgoai },
-    apLuc: { no3, no7, quaHan: cn.quaHan, tienHienCo, nguonTien, tienThieu, giaVonTB, soMayCanBan },
+    apLuc: { no3, no7, quaHan: cn.quaHan, tienHienCo, nguonTien, tienCapNhatLuc, tienSoNgayCu, tienThieu, giaVonTB, soMayCanBan },
     top,
     thuongCtv,
     baiDang,
@@ -146,7 +158,16 @@ export function tinTelegram(b: BaoCao21h, link: string) {
   L.push("")
   L.push(`<b>2. Áp lực tiền</b>`)
   L.push(`Nợ đến hạn 3 ngày: ${vnd(b.apLuc.no3)} · 7 ngày: ${vnd(b.apLuc.no7)}${b.apLuc.quaHan ? ` (quá hạn ${vnd(b.apLuc.quaHan)})` : ""}`)
-  L.push(`Tiền hiện có: ${vnd(b.apLuc.tienHienCo)}${b.apLuc.nguonTien === "nhap_tay" ? " (nhập tay)" : ""}`)
+  L.push(
+    `Tiền hiện có: ${vnd(b.apLuc.tienHienCo)}${
+      b.apLuc.nguonTien === "nhap_tay"
+        ? " (nhập tay hôm nay)"
+        : b.apLuc.nguonTien === "tien_hien_co"
+          ? ` (${moTaDoCu(b.apLuc.tienSoNgayCu ?? null)}${b.apLuc.tienCapNhatLuc ? `, ${b.apLuc.tienCapNhatLuc}` : ""})`
+          : " (app tự tính)"
+    }`,
+  )
+  if (b.apLuc.nguonTien === "tien_hien_co" && (b.apLuc.tienSoNgayCu ?? 99) > 2) L.push(`⚠️ Số tiền đã cũ, vào Tài chính → Tiền hiện có cập nhật lại`)
   if (b.apLuc.tienThieu > 0) L.push(`⚠️ Thiếu ${vnd(b.apLuc.tienThieu)} → cần bán ~${b.apLuc.soMayCanBan} máy ngày mai (giá vốn TB ${vnd(b.apLuc.giaVonTB)})`)
   else L.push(`✅ Đủ tiền trả nợ 7 ngày tới`)
   L.push("")
