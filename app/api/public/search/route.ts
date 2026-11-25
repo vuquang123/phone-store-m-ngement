@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 import { readFromGoogleSheets } from "@/lib/google-sheets"
+import { locMayDeOShop } from "@/lib/kho/de-o-shop"
 import { withCors, isValidApiKey, resolveAllowedOrigin } from "@/lib/public-api"
 import { buildPublicAccessories, buildPublicProducts, filterPublicSearch } from "@/lib/public-catalog"
 
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
       readFromGoogleSheets(SHEET_ACCESSORIES),
     ])
 
-    const products = buildPublicProducts(productsSheet.header, productsSheet.rows)
+    const products = buildPublicProducts(productsSheet.header, locMayDeOShop(productsSheet.header, productsSheet.rows, null))
     const accessories = buildPublicAccessories(accessoriesSheet.header, accessoriesSheet.rows)
     const data = filterPublicSearch(products, accessories, search, limit)
 

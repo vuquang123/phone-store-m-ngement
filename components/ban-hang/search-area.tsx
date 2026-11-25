@@ -248,6 +248,11 @@ export function SearchArea({
                             <span className="rounded-full border border-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-500">Kho trong</span>
                           )
                         )}
+                        {isManager && product.de_o_shop === "No" && (
+                          <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" title="Nhân viên chưa thấy máy này">
+                            Chưa để shop
+                          </span>
+                        )}
                         {isManager && !isAccessoryItem && product.nguon_nhap && (
                           <span className="max-w-[180px] truncate rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600" title={product.nguon_nhap}>
                             Nhập: {product.nguon_nhap}
@@ -494,6 +499,9 @@ export function SearchArea({
                                     <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/15 dark:text-blue-400 dark:border-transparent text-[10px] h-4 px-1 py-0 leading-none">Kho ngoài</Badge>
                                   ) : (
                                     <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-transparent text-[10px] h-4 px-1 py-0 leading-none">Kho trong</Badge>
+                                  )}
+                                  {isManager && product.de_o_shop === "No" && (
+                                    <Badge variant="outline" title="Nhân viên chưa thấy máy này" className="bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-500/15 dark:text-amber-300 dark:border-transparent text-[10px] h-4 px-1 py-0 leading-none">Chưa để shop</Badge>
                                   )}
                                   {isManager && product.nguon_nhap && (
                                     <Badge variant="outline" className="text-[10px] h-4 px-1 py-0 leading-none max-w-[150px] truncate" title={product.nguon_nhap}>

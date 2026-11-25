@@ -1,7 +1,11 @@
 // app/api/kho-hang/[id]/route.ts
 import { type NextRequest, NextResponse } from "next/server"
+import { chuanTenMay, chuanDungLuong, chuanMau } from "@/lib/chuan-hoa-may"
 import { readFromGoogleSheets, updateRangeValues } from "@/lib/google-sheets"
 import { sendStockEventNotification } from "@/lib/telegram"
+import { branchContextFromHeaders } from "@/lib/branch-context"
+import { isManagerRole } from "@/lib/roles"
+import { datDeOShop } from "@/lib/kho/de-o-shop"
 
 const SHEETS = {
   KHO_HANG: "Kho_Hang",
@@ -145,10 +149,10 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
 
     // Cập nhật hàng hiện tại
     const current = rows[rowIdx].slice()
-    if (K.tenSP !== -1 && typeof ten_san_pham !== "undefined") current[K.tenSP] = ten_san_pham
+    if (K.tenSP !== -1 && typeof ten_san_pham !== "undefined") current[K.tenSP] = chuanTenMay(ten_san_pham)
     if (K.loaiMay !== -1 && typeof loai_may !== "undefined") current[K.loaiMay] = loai_may
-    if (K.dungLuong !== -1 && typeof dung_luong !== "undefined") current[K.dungLuong] = dung_luong
-    if (K.mauSac !== -1 && typeof mau_sac !== "undefined") current[K.mauSac] = mau_sac
+    if (K.dungLuong !== -1 && typeof dung_luong !== "undefined") current[K.dungLuong] = chuanDungLuong(dung_luong)
+    if (K.mauSac !== -1 && typeof mau_sac !== "undefined") current[K.mauSac] = chuanMau(mau_sac)
     if (K.pin !== -1 && typeof pin !== "undefined") current[K.pin] = pin
     if (K.imei !== -1 && typeof imei !== "undefined") current[K.imei] = imei
     if (K.serial !== -1 && typeof serial !== "undefined") current[K.serial] = serial
@@ -162,6 +166,11 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
     const rowNumber = rowIdx + 2
     const lastCol = toColumnLetter(header.length)
     await updateRangeValues(`${SHEETS.KHO_HANG}!A${rowNumber}:${lastCol}${rowNumber}`, [current])
+
+    // "Để Ở Shop" (chỉ quản lý/chủ shop đổi được)
+    if (typeof body.de_o_shop !== "undefined" && isManagerRole(branchContextFromHeaders(request.headers)?.role)) {
+      await datDeOShop([String(params.id)], body.de_o_shop === "No" ? "No" : "Yes")
+    }
 
     // Gửi thông báo Telegram nếu có thay đổi nguồn hàng
     if (typeof body.nguon !== "undefined" && body.nguon !== "") {

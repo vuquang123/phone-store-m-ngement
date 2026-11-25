@@ -1,6 +1,8 @@
 "use client"
 // Quản trị dữ liệu · Nhập lô từ Excel (quản lý + chủ shop): chọn/tạo lô, tải file Excel của đầu hàng,
 // xem trước, điền giá, rồi nhập cả lô vào kho + sổ lô. ID máy tự tạo từ IMEI như khi nhập tay.
+// Mở từ Tài chính → Lô hàng (nút "Up file Excel vào lô") thì có ?lo=<mã lô> để chọn sẵn lô đó.
+// Máy nhập ở đây mặc định "Để Ở Shop" = No: chỉ chủ shop + quản lý thấy cho tới khi bấm "Để ở shop".
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { QuanTriTabs } from "@/components/quan-tri/quan-tri-tabs"
@@ -10,6 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { cn } from "@/lib/utils"
 import { docFileBang } from "@/lib/client/doc-bang-tinh"
+import { chuanTenMay, chuanDungLuong, chuanMau } from "@/lib/chuan-hoa-may"
 import { OTien, vnd } from "@/components/tai-chinh/chung"
 import { FileSpreadsheet, Loader2, Upload } from "lucide-react"
 import { ChonDauHang } from "@/components/tai-chinh/chon-dau-hang"
@@ -73,11 +76,11 @@ function phanTich(hang: string[][]) {
     const serial = g("serial").replace(/\s/g, "").toUpperCase()
     if (!imei && !serial && !g("ten")) continue
     ds.push({
-      ten: g("ten"),
-      mau: g("mau"),
+      ten: chuanTenMay(g("ten"), { soTronLaIphone: true }),
+      mau: chuanMau(g("mau")),
       imei,
       serial,
-      dungLuong: g("dungLuong"),
+      dungLuong: chuanDungLuong(g("dungLuong")),
       pin: g("pin"),
       tinhTrang: g("tinhTrang"),
       loai: g("loai"),
@@ -123,17 +126,29 @@ function Trang() {
   const [gnChung, setGnChung] = useState<number | "">("")
   const [gbChung, setGbChung] = useState<number | "">("")
   const [dang, setDang] = useState(false)
-  const [ketQua, setKetQua] = useState<{ added: number; boQua: string[]; soLo: any; maLo: string } | null>(null)
+  const [ketQua, setKetQua] = useState<{ added: number; boQua: string[]; soLo: any; maLo: string; deOShop: boolean } | null>(null)
+  const [deOShop, setDeOShop] = useState(false)
+  // ?lo=<mã> khi mở từ trang chi tiết lô
+  const [loTuUrl, setLoTuUrl] = useState("")
+  const [daTaiLo, setDaTaiLo] = useState(false)
 
   const taiLo = async () => {
     try {
       const r = await fetch("/api/tai-chinh/lo-nhap", { cache: "no-store" })
       const j = await r.json()
-      setLo((j.lo || []).filter((l: LoNgan) => !l.ma.startsWith("LO-CU")))
+      const tuUrl = new URLSearchParams(window.location.search).get("lo") || ""
+      setLo((j.lo || []).filter((l: LoNgan) => !l.ma.startsWith("LO-CU") || l.ma === tuUrl))
       setDauHang(j.dauHang || [])
     } catch {}
+    setDaTaiLo(true)
   }
   useEffect(() => {
+    const tuUrl = new URLSearchParams(window.location.search).get("lo") || ""
+    if (tuUrl) {
+      setLoTuUrl(tuUrl)
+      setMaLo(tuUrl)
+      setTaoMoi(false)
+    }
     taiLo()
   }, [])
 
@@ -193,6 +208,7 @@ function Trang() {
         gia_ban: giaBanCuoi(m),
         ngay_nhap: ngay || undefined,
         nguon_nhap: tenDH,
+        de_o_shop: deOShop ? "Yes" : "No",
       }))
       const r = await fetch("/api/kho-hang", {
         method: "POST",
@@ -201,7 +217,7 @@ function Trang() {
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `Lỗi ${r.status}`)
-      setKetQua({ added: j.added, boQua: j.bo_qua || [], soLo: j.so_lo, maLo: ma })
+      setKetQua({ added: j.added, boQua: j.bo_qua || [], soLo: j.so_lo, maLo: ma, deOShop })
       setDs([])
       setTenFile("")
       setTaoMoi(false)
@@ -225,6 +241,11 @@ function Trang() {
           File cần dòng tiêu đề có các cột: Tên, Màu, IMEI (hoặc Serial), Dung lượng, Pin, Hình thức. Có thể thêm cột Loại, Giá nhập, Giá bán, Dạng sim, Ghi chú. ID máy tự tạo từ IMEI.
         </p>
       </div>
+      {loTuUrl && daTaiLo && !lo.some((l) => l.ma === loTuUrl) && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/40">
+          Không thấy lô {loTuUrl} ở chi nhánh đang chọn (lô đã chốt hoặc thuộc chi nhánh khác). Đổi sang đúng chi nhánh của lô ở góc trên rồi tải lại trang.
+        </div>
+      )}
       {tatCa && <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/40">Đang xem tất cả chi nhánh. Chọn DEV PỒ hoặc T1s ở góc trên trước khi nhập.</div>}
 
       <section className="space-y-2 rounded-xl border bg-card p-3">
@@ -285,6 +306,13 @@ function Trang() {
             <OTien value={gbChung} onChange={setGbChung} />
           </label>
         </div>
+        <label className="flex items-start gap-2 pt-1 text-sm">
+          <input type="checkbox" className="mt-0.5 h-4 w-4" checked={deOShop} onChange={(e) => setDeOShop(e.target.checked)} />
+          <span>
+            Để ở shop ngay
+            <span className="block text-xs text-muted-foreground">Không tích: máy vào danh sách nhưng nhân viên chưa thấy (chưa chốt giá, chưa điền đủ thông tin). Chỉ chủ shop và quản lý thấy.</span>
+          </span>
+        </label>
       </section>
 
       <section className="space-y-2 rounded-xl border bg-card p-3">
@@ -317,6 +345,12 @@ function Trang() {
         {ketQua && (
           <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm dark:bg-emerald-950/40">
             Đã nhập {ketQua.added} máy vào kho và sổ lô {ketQua.maLo}.
+            {!ketQua.deOShop && ketQua.added > 0 && (
+              <div className="text-muted-foreground">Các máy này đang “Chưa để shop”: chỉ chủ shop và quản lý thấy. Khi chốt giá xong, vào Bán hàng → Chưa để shop, chọn máy rồi bấm “Để ở shop”.</div>
+            )}
+            <a className="mt-1 inline-block font-medium text-emerald-700 underline" href={`/dashboard/tai-chinh/lo-hang?ma=${encodeURIComponent(ketQua.maLo)}`}>
+              Xem lô {ketQua.maLo}
+            </a>
             {ketQua.boQua.length > 0 && <div className="text-amber-700">Bỏ qua {ketQua.boQua.length} máy đã có trong kho: {ketQua.boQua.join(", ")}</div>}
             {ketQua.soLo && ketQua.soLo.ok === false && <div className="text-red-600">{ketQua.soLo.error}</div>}
           </div>

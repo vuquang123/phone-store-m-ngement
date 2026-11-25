@@ -1,6 +1,7 @@
 import { branchContextFromHeaders, filterRowsByBranch } from "@/lib/branch-context"
 import { NextResponse, type NextRequest } from "next/server"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
+import { locMayDeOShop } from "@/lib/kho/de-o-shop"
 import { parseVietnameseNumber } from "@/lib/number"
 
 export const dynamic = "force-dynamic"
@@ -110,7 +111,7 @@ export async function GET(req: NextRequest) {
     let inventoryCost = 0
     try {
       const { header: khoHeader, rows: khoAll } = await readFromGoogleSheets(SHEETS.KHO_HANG)
-      const khoRows = filterRowsByBranch(khoHeader, khoAll, branchCtx)
+      const khoRows = locMayDeOShop(khoHeader, filterRowsByBranch(khoHeader, khoAll, branchCtx), branchCtx ? branchCtx.role : "")
       const idxGiaNhap = colIndex(khoHeader, "Giá Nhập", "Gia Nhap", "GiaNhap")
       const idxTrangThai = colIndex(khoHeader, "Trạng Thái", "Trang Thai")
       for (const row of khoRows) {

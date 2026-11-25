@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { DangTai, KhungTrang, Nhan, OTien, The, goiApi, homNayISO, ngayVN, pt, vnd, xuatCsv } from "@/components/tai-chinh/chung"
-import { ArrowLeft, Download, Plus } from "lucide-react"
+import { ArrowLeft, Download, Plus, Upload } from "lucide-react"
 import { ChonDauHang } from "@/components/tai-chinh/chon-dau-hang"
 
 type Lo = { ma: string; dauHangId: string; ngayNhap: string; chiPhiLo: number; chiPhiTinhNo: boolean; daTraLucNhap: number; hanTra: string; tongHoaDon: number; ghiChu: string; chiNhanh: string; trangThai: string }
@@ -360,6 +360,9 @@ function ChiTietLo({ ma }: { ma: string }) {
           </Button>
           <Button variant="outline" size="sm" onClick={() => setGan(true)}>
             Thêm máy vào lô (tồn hoặc đã bán)
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/quan-tri/nhap-lo?lo=${encodeURIComponent(d.ma)}`)}>
+            <Upload className="mr-1 h-4 w-4" /> Up file Excel vào lô
           </Button>
           <Button variant="outline" size="sm" onClick={xuat}>
             <Download className="mr-1 h-4 w-4" /> Excel

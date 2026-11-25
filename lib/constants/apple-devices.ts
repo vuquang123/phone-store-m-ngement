@@ -8,7 +8,9 @@
 // nhiều nhất — nhân viên không phải cuộn xuống cuối danh sách.
 // ---------------------------------------------------------------------------
 
-export const IPHONE_NAMES = [
+import { chuanTenMay } from "@/lib/chuan-hoa-may"
+
+const IPHONE_NAMES_GOC = [
   "iPhone Duo",
   "iPhone 18 Pro Max",
   "iPhone 18 Pro",
@@ -51,7 +53,7 @@ export const IPHONE_NAMES = [
   "iPhone 8",
 ] as const
 
-export const IPAD_NAMES = [
+const IPAD_NAMES_GOC = [
   "iPad Air 13-inch (M4)",
   "iPad Air 11-inch (M4)",
   "iPad Pro 13-inch (M5)",
@@ -87,6 +89,11 @@ export const IPAD_NAMES = [
   "iPad (5th generation)",
 ] as const
 
+// Danh sách hiển thị dùng cách viết chuẩn (lib/chuan-hoa-may.ts): "iPhone 16 ProMax", "iPad Air 5"...
+const chuanDs = (ds: readonly string[]) => [...new Set(ds.map((n) => chuanTenMay(n)))]
+export const IPHONE_NAMES: string[] = chuanDs(IPHONE_NAMES_GOC)
+export const IPAD_NAMES: string[] = chuanDs(IPAD_NAMES_GOC)
+
 /** Dropdown "Tên sản phẩm" cho form nhập kho / bảo hành: iPhone trước, iPad sau. */
 export const DEVICE_NAME_OPTIONS: string[] = [...IPHONE_NAMES, ...IPAD_NAMES]
 
@@ -95,7 +102,7 @@ export function isIpadName(name?: string) {
 }
 
 // iPad 5/6 còn bản 32GB; iPad Pro M4/M5 lên tới 2TB -> dải rộng hơn iPhone.
-export const STORAGE_OPTIONS = ["32GB", "64GB", "128GB", "256GB", "512GB", "1TB", "2TB"]
+export const STORAGE_OPTIONS = ["32 GB", "64 GB", "128 GB", "256 GB", "512 GB", "1 TB", "2 TB"]
 
 // iPad không có khái niệm Lock/Quốc tế; phân biệt theo việc có khe SIM hay không
 // — cũng chính là lý do bản Wi-Fi chỉ có Serial, không có IMEI.
@@ -203,7 +210,12 @@ export const FALLBACK_COLORS = [
   "(PRODUCT)RED",
 ]
 
+// Tra bảng màu theo tên đã chuẩn hoá, để "iPhone 16 ProMax", "16PM", "iPhone 16 Pro Max" đều ra cùng bảng.
+const COLOR_OPTIONS_CHUAN: Record<string, string[]> = Object.fromEntries(
+  Object.entries(COLOR_OPTIONS).map(([k, v]) => [chuanTenMay(k), v]),
+)
+
 export function getColorOptions(tenSanPham?: string) {
-  const mapped = COLOR_OPTIONS[String(tenSanPham || "")]
+  const mapped = COLOR_OPTIONS[String(tenSanPham || "")] || COLOR_OPTIONS_CHUAN[chuanTenMay(tenSanPham)]
   return mapped && mapped.length ? mapped : FALLBACK_COLORS
 }

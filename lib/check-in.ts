@@ -3,6 +3,7 @@
 
 import { DateTime } from "luxon"
 import { readFromGoogleSheets, appendToGoogleSheets, updateRangeValues, colIndex, khoColIndex } from "@/lib/google-sheets"
+import { locMayDeOShop } from "@/lib/kho/de-o-shop"
 import { parseVietnameseNumber } from "@/lib/number"
 import { currentBranchContext, filterRowsByBranch } from "@/lib/branch-context"
 import {
@@ -206,7 +207,8 @@ const KHO_HANG_SHEET = "Kho_Hang"
 export async function getWebStockCounts(force = false): Promise<WebStock> {
   const { header, rows: allRows } = await readFromGoogleSheets(KHO_HANG_SHEET, undefined, { force })
   // Chỉ đếm máy của chi nhánh đang check-in
-  const rows = filterRowsByBranch(header, allRows || [], await currentBranchContext())
+  // Máy lô mới chưa "Để Ở Shop" không nằm ở shop -> không tính vào số máy check-in
+  const rows = locMayDeOShop(header, filterRowsByBranch(header, allRows || [], await currentBranchContext()), null)
   const iTen = colIndex(header, "Tên Sản Phẩm")
   const iKho = khoColIndex(header)
   const iId = colIndex(header, "ID Máy")

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 import { readFromGoogleSheets, colIndex } from "@/lib/google-sheets"
+import { locMayDeOShop } from "@/lib/kho/de-o-shop"
 import { withCors, isValidApiKey, resolveAllowedOrigin } from "@/lib/public-api"
 
 export const dynamic = "force-dynamic"
@@ -77,7 +78,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { header, rows } = await readFromGoogleSheets(SHEET)
+    const { header, rows: allRows } = await readFromGoogleSheets(SHEET)
+    // Máy lô mới chưa "Để Ở Shop" (chưa chốt giá) không lên website
+    const rows = locMayDeOShop(header, allRows, null)
     const data = buildProducts(header, rows)
 
     return withCors(

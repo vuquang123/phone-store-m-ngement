@@ -1,4 +1,5 @@
 import { isManagerRole } from "@/lib/roles"
+import { chuanTenMay, chuanDungLuong, chuanMau } from "@/lib/chuan-hoa-may"
 import { type NextRequest, NextResponse } from "next/server"
 import { branchContextFromHeaders, filterRowsByBranch, branchColumnIndex } from "@/lib/branch-context"
 import { branchName, rowBranchId } from "@/lib/branches"
@@ -8,6 +9,8 @@ import { getDeviceId, last5FromDeviceId } from "@/lib/device-id"
 import { isConHangStatus } from "@/lib/utils/inventory-helpers"
 import { sendStockEventNotification, sendProcessingDeviceMessage, deleteTelegramMessage } from "@/lib/telegram"
 import { themMayVaoLo } from "@/lib/tai-chinh/ghi"
+import { COT_DE_O_SHOP, datDeOShop, giaTriDeOShop, locMayDeOShop } from "@/lib/kho/de-o-shop"
+import { ensureColumn } from "@/lib/google-sheets"
 
 export const dynamic = "force-dynamic"
 
@@ -117,13 +120,13 @@ function getValForHeader(
     return body.loai_phu_kien || body.loai_may || bodyNormMap["loaiphukien"] || bodyNormMap["loaimay"] || ""
   }
   if (k === "Tên Sản Phẩm") {
-    return body.ten_san_pham || bodyNormMap["tensanpham"] || ""
+    return chuanTenMay(body.ten_san_pham || bodyNormMap["tensanpham"] || "")
   }
   if (k === "Dung Lượng") {
-    return body.dung_luong || bodyNormMap["dungluong"] || ""
+    return chuanDungLuong(body.dung_luong || bodyNormMap["dungluong"] || "")
   }
   if (k === "Màu Sắc") {
-    return body.mau_sac || bodyNormMap["mausac"] || ""
+    return chuanMau(body.mau_sac || bodyNormMap["mausac"] || "")
   }
   if (k === "Pin (%)") {
     return body.pin || bodyNormMap["pin"] || ""
@@ -155,6 +158,10 @@ function getValForHeader(
   }
   if (k === "Dạng Sim" || k === "Dạng sim" || k === "Kiểu dạng sim") {
     return body.do_sim || bodyNormMap["dangsim"] || bodyNormMap["kieudangsim"] || ""
+  }
+  if (k === "Để Ở Shop" || nk === "eoshop" || nk === "deoshop") {
+    const v = body.de_o_shop ?? bodyNormMap["deoshop"]
+    return v === undefined || v === null ? "" : String(v)
   }
   if (nk === "dangxuly") {
     return body.dang_xu_ly || bodyNormMap["dangxuly"] || "No"
@@ -209,10 +216,10 @@ async function ghiSoLo(request: NextRequest, maLo: string, items: { p: any; idMa
         idMay,
         imei,
         serial,
-        ten: p.ten_san_pham || p["Tên Sản Phẩm"] || "",
+        ten: chuanTenMay(p.ten_san_pham || p["Tên Sản Phẩm"] || ""),
         loaiMay: p.loai_phu_kien || p.loai_may || p["Loại Máy"] || "",
-        dungLuong: p.dung_luong || p["Dung Lượng"] || "",
-        mau: p.mau_sac || p["Màu Sắc"] || "",
+        dungLuong: chuanDungLuong(p.dung_luong || p["Dung Lượng"] || ""),
+        mau: chuanMau(p.mau_sac || p["Màu Sắc"] || ""),
         pin: p.pin || p["Pin (%)"] || "",
         tinhTrang: p.tinh_trang || p.tinh_trang_may || p["Tình Trạng Máy"] || "",
         dangSim: p.do_sim || p["Dạng Sim"] || "",
@@ -235,7 +242,8 @@ export async function GET(request: NextRequest) {
     const force = new URL(request.url).searchParams.get("refresh") === "1"
     const { header, rows: allRows } = await readFromGoogleSheets(SHEET, undefined, { force })
     const branchCtx = branchContextFromHeaders(request.headers)
-    const rows = filterRowsByBranch(header, allRows, branchCtx)
+    // Máy "Để Ở Shop" = No (lô mới chưa chốt giá) chỉ chủ shop + quản lý thấy
+    const rows = locMayDeOShop(header, filterRowsByBranch(header, allRows, branchCtx), manager ? "quan_ly" : null)
     const bIdx = branchColumnIndex(header)
     const idx = idxKho(header)
     const products = rows.map((row) => ({
@@ -260,6 +268,7 @@ export async function GET(request: NextRequest) {
       do_sim: idx.doSim !== -1 ? row[idx.doSim] : "",
       dang_xu_ly: idx.dangXuLy !== -1 ? String(row[idx.dangXuLy] || "").trim() : "",
       ngay_nhap: row[idx.ngayNhap],
+      de_o_shop: giaTriDeOShop(header, row),
     }))
     return NextResponse.json({ data: products })
   } catch (error) {
@@ -272,16 +281,33 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { header, rows } = await readFromGoogleSheets(SHEET, undefined, body?.bo_qua_trung ? { force: true } : undefined)
+    // "Để Ở Shop": chỉ quản lý/chủ shop được nhập máy ẩn với nhân viên (lô mới chưa chốt giá)
+    let coDeOShop = false
+    if (Array.isArray(body?.products) && body.products.some((p: any) => p && p.de_o_shop !== undefined && p.de_o_shop !== "")) {
+      if (await isManager(request)) {
+        await ensureColumn(SHEET, COT_DE_O_SHOP)
+        coDeOShop = true
+      } else {
+        body.products.forEach((p: any) => p && delete p.de_o_shop)
+      }
+    }
+    if (body?.action === "set_de_o_shop") {
+      if (!(await isManager(request))) return NextResponse.json({ error: "Chỉ quản lý hoặc chủ shop được đổi Để ở shop" }, { status: 403 })
+      const ids = Array.isArray(body.productIds) ? body.productIds.map(String) : []
+      if (!ids.length) return NextResponse.json({ error: "Chưa chọn máy" }, { status: 400 })
+      const r = await datDeOShop(ids, body.value === "No" ? "No" : "Yes")
+      return NextResponse.json({ ok: true, cap_nhat: r.capNhat })
+    }
+    const { header, rows } = await readFromGoogleSheets(SHEET, undefined, body?.bo_qua_trung || coDeOShop ? { force: true } : undefined)
     const sendImportMessage = async (count: number, items: any[]) => {
       if (!count || !Array.isArray(items) || !items.length) return
       try {
         const devices = items.map((p: any) => ({
-          name: p.ten_san_pham || p["Tên Sản Phẩm"],
+          name: chuanTenMay(p.ten_san_pham || p["Tên Sản Phẩm"]),
           imei: p.imei || p["IMEI"],
           serial: p.serial || p["Serial"],
-          mau_sac: p.mau_sac || p["Màu Sắc"],
-          dung_luong: p.dung_luong || p["Dung Lượng"],
+          mau_sac: chuanMau(p.mau_sac || p["Màu Sắc"]),
+          dung_luong: chuanDungLuong(p.dung_luong || p["Dung Lượng"]),
           tinh_trang: p.tinh_trang || p.tinh_trang_may || p["Tình Trạng Máy"],
           pin: p.pin || p["Pin (%)"],
           do_sim: p.do_sim || p["Dạng Sim"] || p["Dạng sim"] || p["Kiểu dạng sim"],
@@ -346,8 +372,10 @@ export async function POST(request: NextRequest) {
           soLoItems.push({ p, idMay, imei: imeiStr, serial: serialStr })
         }
       }
-      if (added > 0) {
-        await sendImportMessage(added, body.products)
+      // Máy "Để Ở Shop" = No (nhân viên chưa thấy) thì không báo nhập kho lên nhóm Telegram
+      const baoNhap = soLoItems.map((x) => x.p).filter((p: any) => String(p?.de_o_shop || "") !== "No")
+      if (baoNhap.length > 0) {
+        await sendImportMessage(baoNhap.length, baoNhap)
       }
       const soLo = await ghiSoLo(request, String(body.ma_lo || "").trim(), soLoItems)
       return NextResponse.json({ ok: true, added, so_lo: soLo, bo_qua: boQua }, { status: 200 })

@@ -54,6 +54,7 @@ import { isConHangProduct } from "@/lib/utils/inventory-helpers"
 import { buildCustomerQuoteList, copyTextToClipboard } from "@/lib/utils/customer-quote"
 import { toast as sonnerToast } from "sonner"
 import { ListChecks } from "lucide-react"
+import { khopTenMay } from "@/lib/chuan-hoa-may"
 
 
 export default function BanHangPage() {
@@ -329,17 +330,17 @@ export default function BanHangPage() {
 
         const qLower = q.toLowerCase()
         const filteredKho = khoHangProducts.filter((item) => (
-          item.ten_san_pham?.toLowerCase().includes(qLower) ||
+          khopTenMay(item.ten_san_pham, q) ||
           item.imei?.toLowerCase().includes(qLower) ||
           item.serial?.toLowerCase().includes(qLower) ||
           (item.loai_phu_kien?.toLowerCase().includes(qLower) ?? false)
         ))
         const filteredPartner = partnerProducts.filter((item) => (
-          item.ten_san_pham?.toLowerCase().includes(qLower) ||
+          khopTenMay(item.ten_san_pham, q) ||
           item.imei?.toLowerCase().includes(qLower) ||
           item.serial?.toLowerCase().includes(qLower) ||
           item.loai_may?.toLowerCase().includes(qLower) ||
-          item.dung_luong?.toLowerCase().includes(qLower) ||
+          khopTenMay(item.dung_luong, q) ||
           item.mau_sac?.toLowerCase().includes(qLower)
         ))
         const filteredAccessories = accessoryProducts.filter((item) => (
@@ -419,6 +420,31 @@ export default function BanHangPage() {
 
   // Máy trong kho hệ thống (có trong sheet Kho_Hang) mới chỉnh/CNC/giao đối tác được.
   const allInventoryProducts: any[] = invResRaw?.data || []
+  // "Để ở shop": máy lô mới chưa chốt giá (de_o_shop = "No") chỉ quản lý/chủ shop thấy
+  const [chiChuaShop, setChiChuaShop] = useState(false)
+  const soChuaShop = useMemo(() => allInventoryProducts.filter((p: any) => p?.de_o_shop === "No").length, [allInventoryProducts])
+  const [dangDatShop, setDangDatShop] = useState(false)
+  const datDeOShop = async (value: "Yes" | "No") => {
+    if (!selectedIds.length) return
+    setDangDatShop(true)
+    try {
+      const res = await fetch("/api/kho-hang", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_de_o_shop", productIds: selectedIds, value }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || `Lỗi ${res.status}`)
+      sonnerToast.success(value === "Yes" ? `Đã đưa ${j.cap_nhat} máy ra shop, nhân viên thấy được` : `Đã ẩn ${j.cap_nhat} máy với nhân viên`)
+      await fetch("/api/kho-hang?refresh=1", { cache: "no-store" }).catch(() => {})
+      queryClient.invalidateQueries({ queryKey: ["inventory"] })
+      clearMachineSelection()
+    } catch (e: any) {
+      sonnerToast.error(e?.message || "Không cập nhật được")
+    } finally {
+      setDangDatShop(false)
+    }
+  }
 
   const handleSelectMachine = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -638,6 +664,7 @@ export default function BanHangPage() {
       if (filterType === 'sim_ghep') return isAccessoryItem(p) && isSimGhep(p)
       // Các tab còn lại: phụ kiện không hiển thị (đã chuyển sang tích kèm máy trong giỏ)
       if (isAccessoryItem(p)) return false
+      if (chiChuaShop && p.de_o_shop !== "No") return false
       if (filterSource === "kho" && isPartner) return false
       if (filterSource === "doi_tac" && !isPartner) return false
       if (filterType==='iphone') {
@@ -680,7 +707,7 @@ export default function BanHangPage() {
       }
       return true
     })
-  }, [searchResults, filterSource, filterType, productNameFilter, loaiMayFilter, colorFilter, capacityFilter, pinFilter, priceRange])
+  }, [searchResults, filterSource, filterType, productNameFilter, loaiMayFilter, colorFilter, capacityFilter, pinFilter, priceRange, chiChuaShop])
 
   // Tùy chọn động cho dropdown (lấy từ máy trong kết quả tìm kiếm, có cross-filter giống Kho hàng)
   const advancedFilterOptions = useMemo(() => {
@@ -1382,6 +1409,16 @@ export default function BanHangPage() {
                     <ListChecks className="w-4 h-4" />
                   </Button>
                   <RefreshButton onRefresh={handleRefreshAll} loading={refreshing} className="h-10 w-10" />
+                  {isManager && (soChuaShop > 0 || chiChuaShop) && (
+                    <Button
+                      variant="outline"
+                      title="Máy lô mới chưa để ở shop: chỉ quản lý và chủ shop thấy"
+                      className={chiChuaShop ? "border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" : "border-amber-300 text-amber-700"}
+                      onClick={() => setChiChuaShop((v) => !v)}
+                    >
+                      Chưa để shop ({soChuaShop})
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     className="border-sky-300 text-sky-700 hover:bg-sky-50 hover:text-sky-700 dark:border-sky-500/40 dark:text-sky-400 dark:hover:bg-sky-500/10 dark:hover:text-sky-300"
@@ -1417,6 +1454,22 @@ export default function BanHangPage() {
                     >
                       Gửi đối tác
                     </Button>
+                    {isManager && (
+                      <>
+                        <Button size="sm" variant="outline" disabled={dangDatShop}
+                          className="h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-400"
+                          title="Nhân viên sẽ thấy và bán được các máy này"
+                          onClick={() => datDeOShop("Yes")}>
+                          Để ở shop
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={dangDatShop}
+                          className="h-9 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-700 dark:border-amber-500/40 dark:text-amber-400"
+                          title="Ẩn với nhân viên, chỉ quản lý và chủ shop thấy"
+                          onClick={() => datDeOShop("No")}>
+                          Chưa để shop
+                        </Button>
+                      </>
+                    )}
                     <Select onValueChange={(val) => {
                       bulkUpdateNguon({
                         productIds: selectedIds,

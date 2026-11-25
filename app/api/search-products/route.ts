@@ -1,9 +1,11 @@
 // app/api/search/route.ts
 import { branchContextFromHeaders, filterRowsByBranch, type BranchContext } from "@/lib/branch-context"
 import { readFromGoogleSheets } from "@/lib/google-sheets"
+import { locMayDeOShop } from "@/lib/kho/de-o-shop"
 import { type NextRequest, NextResponse } from "next/server"
 import { parseVietnameseNumber } from "@/lib/number"
 import { isConHangStatus } from "@/lib/utils/inventory-helpers"
+import { khopTenMay } from "@/lib/chuan-hoa-may"
 
 export const dynamic = "force-dynamic"
 
@@ -43,7 +45,9 @@ const ACCESSORY_HEADERS = [
 // ========= ĐỌC DỮ LIỆU (Google Sheets hoặc Supabase tuỳ DATA_BACKEND) =========
 async function readSheetAll(sheetName: string, branchCtx: BranchContext | null) {
   const { header, rows: allRows } = await readFromGoogleSheets(sheetName)
-  const rows = filterRowsByBranch(header, allRows, branchCtx)
+  let rows = filterRowsByBranch(header, allRows, branchCtx)
+  // Máy chưa "Để Ở Shop" chỉ chủ shop + quản lý thấy
+  if (sheetName === SHEET_PRODUCTS) rows = locMayDeOShop(header, rows, branchCtx ? branchCtx.role : "")
   return (header.length || rows.length ? [header, ...rows] : []) as string[][]
 }
 
@@ -119,7 +123,7 @@ export async function GET(request: NextRequest) {
           const name = nameCol >= 0 ? norm(row[nameCol]) : ""
           const loai = loaiCol >= 0 ? norm(row[loaiCol]) : ""
           const imei = imeiCol >= 0 ? norm(row[imeiCol]) : ""
-          return name.includes(search) || loai.includes(search) || imei.includes(search)
+          return khopTenMay(name, search) || loai.includes(search) || imei.includes(search)
         })
         .map((row) => {
           const giaNhapRaw = giaNhapCol >= 0 ? row[giaNhapCol] : ""
@@ -173,7 +177,7 @@ export async function GET(request: NextRequest) {
           }
           const ten = tenCol >= 0 ? norm(row[tenCol]) : ""
           const loai = loaiCol >= 0 ? norm(row[loaiCol]) : ""
-          return ten.includes(search) || loai.includes(search)
+          return khopTenMay(ten, search) || loai.includes(search)
         })
         .map((row) => {
           const id = h("ID") >= 0 ? row[h("ID")] : undefined

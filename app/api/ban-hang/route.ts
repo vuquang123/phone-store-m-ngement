@@ -18,6 +18,7 @@ import { getGhtkTracking } from "@/lib/ghtk"
 import { parseVietnameseNumber } from "@/lib/number"
 import { docMayThu, nhapKhoMayThu } from "@/lib/kho/thu-may"
 import { currentWriteBranchName } from "@/lib/branch-context"
+import { chuanTenMay, chuanDungLuong, chuanMau } from "@/lib/chuan-hoa-may"
 
 const SHEETS = {
   BAN_HANG: "Ban_Hang",
@@ -896,16 +897,16 @@ export async function POST(request: NextRequest) {
           return body["employeeId"] || may["Người Bán"] || body["Người Bán"] || ""
         }
         // Map từng trường sản phẩm máy
-        if (k === "Tên Sản Phẩm") return may.ten_san_pham || may["Tên Sản Phẩm"] || ""
+        if (k === "Tên Sản Phẩm") return chuanTenMay(may.ten_san_pham || may["Tên Sản Phẩm"] || "")
         if (k === "Loại Máy") return may.loai_may || may["Loại Máy"] || ""
-        if (k === "Dung Lượng") return may.dung_luong || may["Dung Lượng"] || ""
+        if (k === "Dung Lượng") return chuanDungLuong(may.dung_luong || may["Dung Lượng"] || "")
         if (k === "Dạng Sim" || k === "Dạng sim" || k === "Kiểu dạng sim") {
           return may.do_sim || may["Dạng Sim"] || may["Dạng sim"] || may["Kiểu dạng sim"] || ""
         }
         if (k === "IMEI") return may.imei || may["IMEI"] || ""
         // Máy chỉ có serial (iPad wifi, Apple Watch...) vẫn phải ghi được định danh xuống sheet
         if (k === "Serial") return may.serial || may["Serial"] || ""
-        if (k === "Màu Sắc") return may.mau_sac || may["Màu Sắc"] || ""
+        if (k === "Màu Sắc") return chuanMau(may.mau_sac || may["Màu Sắc"] || "")
         if (k === "Pin (%)") return may.pin || may["Pin (%)"] || ""
         if (k === "Tình Trạng Máy") return may.tinh_trang_may || may["Tình Trạng Máy"] || ""
         // Ghi trạng thái máy vào cột "Trạng Thái Máy" nếu có
