@@ -11,7 +11,7 @@ import { RefreshCw } from "lucide-react"
 type TongQuan = {
   homNay: string
   khachConNo: number
-  tienHienCo: { coDuLieu: boolean; tong: number; soNguon: number; capNhatLuc: string; soNgayCu: number | null }
+  tienHienCo: { coDuLieu: boolean; tong: number; tienDon: number; sapVe: number; soNguon: number; capNhatLuc: string; soNgayCu: number | null }
   taiSanRong: number | null
   vonTon: number
   soMayTon: number
@@ -76,7 +76,9 @@ function Trang() {
               giaTri={d.tienHienCo.coDuLieu ? vnd(d.tienHienCo.tong) : "Chưa nhập"}
               phu={
                 <Link className="underline" href="/dashboard/tai-chinh/tien-hien-co">
-                  {d.tienHienCo.coDuLieu ? `${d.tienHienCo.soNguon} nguồn · ${doCu(d.tienHienCo.soNgayCu)}` : "Nhập số dư các nguồn tiền"}
+                  {d.tienHienCo.coDuLieu
+                    ? `${d.tienHienCo.soNguon} nguồn · ${doCu(d.tienHienCo.soNgayCu)}${d.tienHienCo.tienDon ? ` · gồm tiền đơn ${vnd(d.tienHienCo.tienDon)}` : ""}${d.tienHienCo.sapVe ? ` · thẻ sắp về ${vnd(d.tienHienCo.sapVe)}` : ""}`
+                    : "Nhập số dư các nguồn tiền"}
                 </Link>
               }
               mau={!d.tienHienCo.coDuLieu || d.tienHienCo.soNgayCu === null || d.tienHienCo.soNgayCu > 2 ? "vang" : undefined}

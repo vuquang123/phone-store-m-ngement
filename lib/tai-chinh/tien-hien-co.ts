@@ -22,6 +22,7 @@ export type NguonTien = {
   ghiChu: string
   capNhatLuc: string // "HH:mm dd/MM/yyyy"
   nguoiCapNhat: string
+  ngayTao: string
   _dong: number
 }
 
@@ -58,6 +59,7 @@ export async function docNguonTien(): Promise<NguonTien[]> {
       ghiChu: d["Ghi Chú"] || "",
       capNhatLuc: d["Cập Nhật Lúc"] || "",
       nguoiCapNhat: d["Người Cập Nhật"] || "",
+      ngayTao: d["Ngày Tạo"] || "",
       _dong: d._dong,
     }))
     .sort((a, b) => a.thuTu - b.thuTu || a._dong - b._dong)
@@ -96,10 +98,20 @@ export type TomTatTien = {
   capNhatLuc: string // lần cập nhật gần nhất trong các nguồn đang tính
   capNhatCuNhat: string // nguồn lâu chưa cập nhật nhất
   soNgayCu: number | null // số ngày kể từ lần cập nhật CŨ NHẤT (độ "cũ" của tổng)
+  daNhap: number // tổng số chủ shop đã nhập (chưa gồm tiền đơn)
+  tienDon: number // tiền đơn đã cộng từ lúc nhập
+  sapVe: number // tiền quẹt thẻ chưa tới ngày về
 }
 
-export function tomTatTien(ds: NguonTien[], active: ActiveBranch): TomTatTien {
+/** Khoản tiền đơn đã quy về nguồn (xem lib/tai-chinh/tien-don.ts). */
+export type KhoanTheoNguon = { nguonId: string; soTien: number; trangThai: string }
+
+export function tomTatTien(ds: NguonTien[], active: ActiveBranch, khoan: KhoanTheoNguon[] = []): TomTatTien {
   const tinh = nguonTheoChiNhanh(ds, active)
+  const idTinh = new Set(tinh.map((n) => n.id))
+  const cua = (tt: string) => khoan.filter((k) => idTinh.has(k.nguonId) && k.trangThai === tt).reduce((s, k) => s + k.soTien, 0)
+  const daNhap = tinh.reduce((s, n) => s + n.soDu, 0)
+  const tienDon = cua("Đã cộng")
   const tg = tinh.map((n) => docThoiGian(n.capNhatLuc)).filter((x): x is DateTime => !!x)
   const moi = tg.length ? DateTime.max(...tg) : null
   const cu = tg.length ? DateTime.min(...tg) : null
@@ -108,7 +120,10 @@ export function tomTatTien(ds: NguonTien[], active: ActiveBranch): TomTatTien {
   const soNgayCu = cu && !coNguonChuaNhap ? Math.floor(bayGio().startOf("day").diff(cu.startOf("day"), "days").days) : null
   return {
     coDuLieu: tinh.length > 0 && tg.length > 0,
-    tong: tinh.reduce((s, n) => s + n.soDu, 0),
+    tong: daNhap + tienDon,
+    daNhap,
+    tienDon,
+    sapVe: cua("Sắp về"),
     soNguon: tinh.length,
     capNhatLuc: moi ? moi.toFormat(DINH_DANG) : "",
     capNhatCuNhat: cu ? cu.toFormat(DINH_DANG) : "",

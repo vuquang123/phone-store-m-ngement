@@ -15,7 +15,7 @@ type Top = { ten: string; imei: string; maLo: string; tuoi: number; diem: number
 type BaoCao = {
   ngay: string; chiNhanh: string; taoLuc: string
   homNay: { soMay: number; soDon: number; doanhThu: number; lai: number; daThu: number; chiPhiNgoai?: number }
-  apLuc: { no3: number; no7: number; quaHan: number; tienHienCo: number; nguonTien: "nhap_tay" | "nguon_tien" | "tien_hien_co"; tienCapNhatLuc?: string; tienSoNgayCu?: number | null; tienThieu: number; giaVonTB: number; soMayCanBan: number }
+  apLuc: { no3: number; no7: number; quaHan: number; tienHienCo: number; nguonTien: "nhap_tay" | "nguon_tien" | "tien_hien_co"; tienCapNhatLuc?: string; tienSoNgayCu?: number | null; tienSapVe?: number; tienThieu: number; giaVonTB: number; soMayCanBan: number }
   top: Top[]
   thuongCtv: { ten: string; imei: string; tuoi: number; thuong: number }[]
   baiDang: string
@@ -139,6 +139,7 @@ function Trang() {
                       ) : b.apLuc.nguonTien === "tien_hien_co" ? (
                         <Link className="underline" href="/dashboard/tai-chinh/tien-hien-co">
                           Tiền hiện có · {b.apLuc.tienSoNgayCu == null ? "có nguồn chưa nhập" : b.apLuc.tienSoNgayCu <= 0 ? "cập nhật hôm nay" : `cập nhật ${b.apLuc.tienSoNgayCu} ngày trước`}
+                          {b.apLuc.tienSapVe ? ` · thẻ sắp về ${vnd(b.apLuc.tienSapVe)}` : ""}
                         </Link>
                       ) : (
                         "App tự tính (chưa nhập Tiền hiện có)"

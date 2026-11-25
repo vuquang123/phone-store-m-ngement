@@ -3,10 +3,13 @@
 //   POST  { ten, loai, chiNhanh, soDu? }    -> thêm nguồn
 //   PUT   { soDu: { [id]: number }, ghiChu } -> lưu số dư (đóng dấu thời gian mọi nguồn đang dùng)
 //   PATCH { id, ten?, loai?, chiNhanh?, an?, thuTu? } -> sửa / ẩn / hiện nguồn
+//   PUT   { tienDon: { tienMat, chuyenKhoan, the, soNgayThe } } -> nguồn nhận tiền đơn theo hình thức
 import { NextResponse, type NextRequest } from "next/server"
 import { chiChuShop, loiApi } from "@/lib/tai-chinh/api"
 import { BRANCHES } from "@/lib/branches"
-import { LOAI_NGUON, docLichSuTien, docNguonTien, luuSoDu, suaNguonTien, themNguonTien, tomTatTien } from "@/lib/tai-chinh/tien-hien-co"
+import { LOAI_NGUON, docLichSuTien, luuSoDu, suaNguonTien, themNguonTien, tomTatTien } from "@/lib/tai-chinh/tien-hien-co"
+import { taiTienHienCo } from "@/lib/tai-chinh/tien-don"
+import { KHOA_PHU, ghiCaiDat } from "@/lib/tai-chinh/cai-dat"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -15,11 +18,12 @@ export async function GET(req: NextRequest) {
   const c = chiChuShop(req)
   if (c instanceof NextResponse) return c
   try {
-    const [nguon, lichSu] = await Promise.all([docNguonTien(), docLichSuTien(100)])
+    const [t, lichSu] = await Promise.all([taiTienHienCo(c.active), docLichSuTien(100)])
     return NextResponse.json({
-      nguon: nguon.map(({ _dong, ...n }) => n),
-      tomTat: tomTatTien(nguon, c.active),
-      tomTatTatCa: tomTatTien(nguon, "all"),
+      nguon: t.soDu.map(({ _dong, ...n }) => n),
+      tomTat: t.tomTat,
+      tomTatTatCa: tomTatTien(t.nguon, "all", t.khoan),
+      tienDon: { caiDat: t.caiDat, khoan: t.khoan.filter((k) => k.trangThai !== "Trước lần nhập số dư").slice(0, 200) },
       lichSu,
       loai: LOAI_NGUON,
       chiNhanh: BRANCHES.map((b) => b.name),
@@ -47,6 +51,17 @@ export async function PUT(req: NextRequest) {
   if (c instanceof NextResponse) return c
   try {
     const b = await req.json()
+    if (b.tienDon) {
+      const v = b.tienDon
+      const id = (x: unknown) => (x === "" || x === null || x === undefined ? "-" : String(x))
+      await ghiCaiDat({
+        [KHOA_PHU.tienDonTienMat]: id(v.tienMat),
+        [KHOA_PHU.tienDonChuyenKhoan]: id(v.chuyenKhoan),
+        [KHOA_PHU.tienDonThe]: id(v.the),
+        [KHOA_PHU.tienDonSoNgayThe]: Math.max(0, Math.min(30, Math.round(Number(v.soNgayThe) || 0))),
+      })
+      return NextResponse.json({ ok: true })
+    }
     const soDu: Record<string, number> = {}
     for (const [k, v] of Object.entries(b.soDu || {})) {
       if (v === "" || v === null || v === undefined) continue

@@ -37,6 +37,11 @@ export const KHOA_PHU = {
   // Topic "CHECK MÁY KHÁCH" cho form Báo thu máy khách (ghi khi gõ /checkmay trong topic)
   checkMayChatId: "telegram_check_may_chat_id",
   checkMayThreadId: "telegram_check_may_thread_id",
+  // Tiền đơn tự cộng vào Tiền hiện có: ID nguồn nhận từng hình thức + số ngày tiền quẹt thẻ về
+  tienDonTienMat: "tien_don_nguon_tien_mat",
+  tienDonChuyenKhoan: "tien_don_nguon_chuyen_khoan",
+  tienDonThe: "tien_don_nguon_the",
+  tienDonSoNgayThe: "tien_don_so_ngay_the_ve",
 } as const
 
 export const CHAN_BAI_DANG_MAC_DINH =
