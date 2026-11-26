@@ -1,10 +1,11 @@
 "use client"
 
+import { veTrangDangNhap } from "@/lib/client/phien-het-han"
 import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
-import { useAuthMe } from "@/hooks/use-auth-me"
+import { useAuthMe, kiemTraLaiPhien } from "@/hooks/use-auth-me"
 import { useToast } from "@/hooks/use-toast"
 import { isManagerRole, isOwnerRole } from "@/lib/roles"
 
@@ -69,6 +70,35 @@ export function ProtectedRoute({ children, requiredRole, redirectTo }: Protected
 
     setIsAuthorized(true)
   }, [isLoading, me, error, toast, router, requiredRole, redirectTo])
+
+  // Phiên 4 giờ có thể hết trong lúc trang vẫn mở (điện thoại để app chạy nền rồi mở lại).
+  // Khi trang hiện lại hoặc tới giờ hết hạn: hết phiên -> về đăng nhập ngay, thay vì để dữ liệu trống.
+  useEffect(() => {
+    if (!me) return
+    const het = Number(me.sessionExpiresAt) || 0
+    let anLuc = 0
+    const kiemTra = async (hoiServer: boolean) => {
+      if (het && Date.now() >= het) return veTrangDangNhap()
+      if (hoiServer && !(await kiemTraLaiPhien())) veTrangDangNhap()
+    }
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        anLuc = Date.now()
+        return
+      }
+      // ẩn trên 5 phút thì hỏi lại server (cookie có thể đã bị xoá / hết hạn)
+      kiemTra(!!anLuc && Date.now() - anLuc > 5 * 60_000)
+    }
+    const onShow = (e: PageTransitionEvent) => e.persisted && kiemTra(true)
+    document.addEventListener("visibilitychange", onVis)
+    window.addEventListener("pageshow", onShow)
+    const hen = het ? window.setTimeout(() => kiemTra(false), Math.max(0, Math.min(het - Date.now() + 1000, 2 ** 31 - 1))) : 0
+    return () => {
+      document.removeEventListener("visibilitychange", onVis)
+      window.removeEventListener("pageshow", onShow)
+      if (hen) window.clearTimeout(hen)
+    }
+  }, [me])
 
   if (isLoading) {
     return (

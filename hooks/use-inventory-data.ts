@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { getAuthHeaders } from "@/components/auth/protected-route"
+import { laPhienHetHan, xuLy401 } from "@/lib/client/phien-het-han"
 
 // Fetch JSON có TIMEOUT: nếu request bị treo, abort -> reject -> React Query mới retry được.
 // (Trước đây fetch không timeout -> treo là pending vĩnh viễn -> skeleton xoay mãi, phải refresh.)
@@ -8,6 +9,8 @@ async function fetchJson(url: string, timeoutMs = 12000, headers?: Record<string
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(url, { cache: "no-store", signal: controller.signal, headers })
+    // 401 = phiên đăng nhập hết hạn (mở lại app sau >4 giờ): về trang đăng nhập, KHÔNG hiện danh sách trống
+    if (res.status === 401) xuLy401()
     if (!res.ok) throw new Error(`Fetch ${url} thất bại: ${res.status}`)
     return res.json()
   } finally {
@@ -16,9 +19,12 @@ async function fetchJson(url: string, timeoutMs = 12000, headers?: Record<string
 }
 
 // Tự retry vài lần (kèm backoff) để không cần refresh tay khi request đầu treo/lỗi tạm.
+// Hết phiên thì không retry (đã chuyển về đăng nhập). Mạng điện thoại chập chờn / app mở lại từ nền:
+// tự tải lại khi có mạng trở lại.
 const RESILIENT = {
-  retry: 3,
+  retry: (count: number, err: unknown) => !laPhienHetHan(err) && count < 3,
   retryDelay: (attempt: number) => Math.min(1000 * 2 ** attempt, 8000),
+  refetchOnReconnect: true,
 } as const
 
 export function useInventoryData() {

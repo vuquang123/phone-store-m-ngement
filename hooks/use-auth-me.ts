@@ -51,6 +51,28 @@ async function loadMe(): Promise<AuthMe | null> {
   return pending
 }
 
+/**
+ * Hỏi lại server xem phiên còn không. Dùng khi mở lại app từ nền.
+ * Trả false CHỈ khi server trả 401 (hết phiên thật); mất mạng / lỗi tạm -> coi như còn phiên.
+ */
+export async function kiemTraLaiPhien(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/auth/me", { headers: getAuthHeaders(), cache: "no-store" })
+    if (res.status === 401) {
+      cachedMe = null
+      cachedAt = 0
+      return false
+    }
+    if (res.ok) {
+      cachedMe = (await res.json()) as AuthMe
+      cachedAt = Date.now()
+    }
+    return true
+  } catch {
+    return true
+  }
+}
+
 export function useAuthMe() {
   const [me, setMe] = useState<AuthMe | null>(cachedMe)
   const [isLoading, setIsLoading] = useState(!cachedMe)

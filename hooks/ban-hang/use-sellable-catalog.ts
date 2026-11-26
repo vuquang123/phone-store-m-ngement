@@ -26,6 +26,10 @@ export interface SellableCatalog {
   /** Toàn bộ phụ kiện, kể cả đã hết tồn — dùng để tra cứu trong giỏ. */
   allAccessoryProducts: CatalogAccessory[]
   isLoading: boolean
+  /** Kho máy không tải được (đã retry hết): trang hiện báo lỗi + nút Thử lại thay vì danh sách trống. */
+  khoLoi: boolean
+  /** Đang tải lại (sau lỗi / bấm Thử lại). */
+  dangTaiLai: boolean
 }
 
 export function useSellableCatalog(): SellableCatalog {
@@ -53,5 +57,7 @@ export function useSellableCatalog(): SellableCatalog {
     accessoryProducts,
     allAccessoryProducts,
     isLoading: inventory.isLoading || accessories.isLoading || partner.isLoading,
+    khoLoi: inventory.isError && !inventory.data,
+    dangTaiLai: inventory.isFetching,
   }
 }

@@ -262,6 +262,9 @@ export default function BanHangPage() {
     partnerProducts,
     accessoryProducts,
     allAccessoryProducts,
+    isLoading: dangTaiKho,
+    khoLoi,
+    dangTaiLai,
   } = useSellableCatalog()
   // Desktop search table UX enhancements
   const [sortKey, setSortKey] = useState<SortKey>('san_pham')
@@ -1387,6 +1390,19 @@ export default function BanHangPage() {
                 <Button size="sm" variant={mobileView==='gio-hang'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('gio-hang')}>Giỏ hàng ({cart.length})</Button>
                 <Button size="sm" variant={mobileView==='thanh-toan'? 'default':'outline'} className="flex-1" onClick={()=> setMobileView('thanh-toan')}>Thanh toán</Button>
               </div>
+            )}
+
+            {/* Kho không tải được (mạng điện thoại chập chờn...): báo rõ + Thử lại, không để danh sách trống */}
+            {(!isMobile || mobileView === 'san-pham') && khoLoi && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                <span>Không tải được danh sách máy. Kiểm tra mạng rồi bấm Thử lại.</span>
+                <Button size="sm" variant="outline" onClick={handleRefreshAll} disabled={refreshing || dangTaiLai}>
+                  {refreshing || dangTaiLai ? "Đang tải…" : "Thử lại"}
+                </Button>
+              </div>
+            )}
+            {(!isMobile || mobileView === 'san-pham') && dangTaiKho && !khoLoi && (
+              <div className="mt-3 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">Đang tải danh sách máy…</div>
             )}
 
             {/* Toolbar quản lý kho — gộp từ trang Kho hàng cũ */}

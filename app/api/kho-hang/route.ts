@@ -1,4 +1,5 @@
 import { isManagerRole } from "@/lib/roles"
+import { getServerUser } from "@/lib/auth"
 import { chuanTenMay, chuanDungLuong, chuanMau } from "@/lib/chuan-hoa-may"
 import { type NextRequest, NextResponse } from "next/server"
 import { branchContextFromHeaders, filterRowsByBranch, branchColumnIndex } from "@/lib/branch-context"
@@ -55,6 +56,10 @@ const normalizeKey = (s: string) =>
     .replace(/[^a-z0-9]/g, "")
 
 async function isManager(request: NextRequest): Promise<boolean> {
+  // Vai trò đã nằm trong phiên đăng nhập (middleware ghi header x-user-role từ token đã verify):
+  // dùng luôn, khỏi đọc cả bảng USERS mỗi lần tải kho. Chỉ đọc USERS khi thiếu header.
+  const role = getServerUser(request)?.role
+  if (role) return isManagerRole(role)
   const email = request.headers.get("x-user-email")
   if (!email) return false
   try {
