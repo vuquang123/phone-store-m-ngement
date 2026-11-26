@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { useAuthMe } from "@/hooks/use-auth-me"
 import { cn } from "@/lib/utils"
-import { docFileBang } from "@/lib/client/doc-bang-tinh"
+import { docFileBang, docSoTien } from "@/lib/client/doc-bang-tinh"
 import { chuanTenMay, chuanDungLuong, chuanMau } from "@/lib/chuan-hoa-may"
 import { OTien, vnd } from "@/components/tai-chinh/chung"
 import { FileSpreadsheet, Loader2, Upload } from "lucide-react"
@@ -64,10 +64,8 @@ function phanTich(hang: string[][]) {
     const i = tieuDe.findIndex((x) => ds.includes(x))
     if (i !== -1) viTri[k] = i
   }
-  const so = (s: string) => {
-    const d = String(s || "").replace(/[^\d]/g, "")
-    return d ? Number(d) : ("" as const)
-  }
+  // Ô tiền: đọc đúng ô số "9700000.0", "9.700.000", "9,700,000", "9tr7"... (trước đây bỏ dấu chấm -> nhân 10)
+  const so = (s: string) => docSoTien(s)
   const ds: May[] = []
   for (const r of hang.slice(h + 1)) {
     if (!r || !r.some((x) => String(x || "").trim())) continue
@@ -103,6 +101,9 @@ function kiemTra(ds: May[]): May[] {
     else if (m.imei && !/^\d{15}$/.test(m.imei)) loi = "IMEI không đủ 15 số"
     else if ([m.imei, m.serial].filter(Boolean).some((id) => (dem.get(id) || 0) > 1)) loi = "Trùng trong file"
     else if (!m.ten) loi = "Thiếu tên máy"
+    // giá dưới 100.000 gần như chắc là gõ tắt (vd 9.7 = 9,7 triệu): bắt sửa tay trước khi nhập
+    else if (m.giaNhap !== "" && m.giaNhap > 0 && m.giaNhap < 100_000) loi = "Giá nhập dưới 100.000, sửa lại"
+    else if (m.giaBan !== "" && m.giaBan > 0 && m.giaBan < 100_000) loi = "Giá bán dưới 100.000, sửa lại"
     return { ...m, loi }
   })
 }

@@ -147,3 +147,38 @@ export async function docFileBang(file: File): Promise<string[][]> {
   if (/\.(csv|txt|tsv)$/i.test(file.name)) return docCsv(await file.text())
   return docXlsx(await file.arrayBuffer())
 }
+
+/**
+ * Đọc ô tiền từ file Excel/CSV thành số đồng. Trước đây bỏ hết ký tự không phải số nên
+ * ô số lưu dạng "9700000.0" thành 97.000.000 (nhân 10).
+ *   9700000 / 9700000.0 / 9.7E6  -> 9.700.000 (ô số)
+ *   "9.700.000" / "9.700.000 đ"  -> 9.700.000 (chấm ngăn nghìn kiểu VN)
+ *   "9,700,000" / "9,700,000.00" -> 9.700.000 (phẩy ngăn nghìn)
+ *   "9tr7" / "9.7tr" / "9,7 triệu" -> 9.700.000
+ * Không chắc chắn -> "" (để trống, dòng bị đánh dấu thiếu giá).
+ */
+export function docSoTien(raw: unknown): number | "" {
+  let s = String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[₫đ]|vnd|vnđ/g, "")
+    .replace(/\s+/g, "")
+  if (!s) return ""
+  // 9tr7, 9.7tr, 9,7triệu, 10tr
+  const tr = s.match(/^(\d+(?:[.,]\d+)?)(?:tr|triệu|trieu|m)(\d{0,3})$/)
+  if (tr) {
+    const goc = Number(tr[1].replace(",", "."))
+    const le = tr[2] ? Number(`0.${tr[2]}`) : 0
+    return Number.isFinite(goc) ? Math.round((goc + le) * 1_000_000) : ""
+  }
+  if (/^-?\d+(\.\d+)?e[+-]?\d+$/.test(s)) {
+    const n = Number(s)
+    return Number.isFinite(n) ? Math.round(n) : ""
+  }
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, "")) // 9.700.000
+  if (/^\d{1,3}(\.\d{3})+,\d+$/.test(s)) return Math.round(Number(s.replace(/\./g, "").replace(",", "."))) // 9.700.000,00
+  if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) return Math.round(Number(s.replace(/,/g, ""))) // 9,700,000(.00)
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.round(Number(s)) // ô số: 9700000 / 9700000.0
+  if (/^\d+,\d{1,2}$/.test(s)) return Math.round(Number(s.replace(",", "."))) // 9700000,5
+  return ""
+}
