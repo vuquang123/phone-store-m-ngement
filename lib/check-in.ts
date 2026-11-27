@@ -226,11 +226,15 @@ export async function getWebStockCounts(force = false): Promise<WebStock> {
       // Bỏ dòng trống: phải có ít nhất 1 định danh máy.
       const hasDevice = [iId, iImei, iSerial].some((i) => i !== -1 && String(row[i] || "").trim())
       if (!hasDevice) continue
-      // Máy đang gửi đối tác (thợ / khách sỉ giữ) không nằm ở shop -> không tính vào số máy check-in
-      const dangGuiDoiTac =
-        (iTrangThai !== -1 && stripVi(row[iTrangThai]).includes("giao doi tac")) ||
+      // Máy không nằm ở shop -> không tính vào số máy check-in:
+      //  - đang gửi đối tác (thợ / khách sỉ giữ): Trạng Thái "Giao đối tác" hoặc ghi chú [GiaoĐốiTác: ...]
+      //  - đang gửi CNC / đi xử lý: Trạng Thái "Đang CNC"
+      const trangThai = iTrangThai !== -1 ? stripVi(row[iTrangThai]) : ""
+      const khongOShop =
+        trangThai.includes("giao doi tac") ||
+        trangThai.includes("dang cnc") ||
         (iGhiChu !== -1 && String(row[iGhiChu] || "").includes("[GiaoĐốiTác:"))
-      if (dangGuiDoiTac) continue
+      if (khongOShop) continue
 
       const kho = stripVi(row[iKho])
       if (!kho) continue
