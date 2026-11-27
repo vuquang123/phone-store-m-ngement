@@ -10,6 +10,8 @@ import { ProtectedRoute } from "@/components/auth/protected-route"
 import { QuanTriTabs } from "@/components/quan-tri/quan-tri-tabs"
 import { ColorChip, TypeChip, chipKind } from "@/components/quan-tri/value-chips"
 import { ColumnFilter, cellKey, dayKey, type FacetValue } from "@/components/quan-tri/column-filter"
+import { OThemDong } from "@/components/quan-tri/o-them-dong"
+import { chuanTenMay, chuanDungLuong, chuanMau } from "@/lib/chuan-hoa-may"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -245,6 +247,23 @@ function DataAdmin() {
   }, [hist, histQ])
 
   const header = useMemo(() => data?.header || [], [data])
+  // Form Thêm dòng: cột tên máy (để màu / loại máy theo đời máy) + gợi ý giá trị đang có cho ô gõ
+  const tenCotThem = useMemo(() => String(header.find((h) => fold(String(h || "").trim()) === "ten san pham") || ""), [header])
+  const goiYThem = useMemo(() => {
+    const out: Record<number, string[]> = {}
+    if (!addOpen || !data) return out
+    header.forEach((h, c) => {
+      const k = fold(String(h || "").trim())
+      if (!["nguon nhap", "nguon hang", "nguon", "ma lo", "nguoi ban", "loai don", "hinh thuc van chuyen"].includes(k)) return
+      const dem = new Map<string, number>()
+      for (const r of data.rows) {
+        const v = String(r.cells[c] || "").trim()
+        if (v) dem.set(v, (dem.get(v) || 0) + 1)
+      }
+      out[c] = [...dem].sort((a, b) => b[1] - a[1]).map(([v]) => v)
+    })
+    return out
+  }, [addOpen, data, header])
   const visibleCols = useMemo(() => header.map((h, i) => (h === null ? -1 : i)).filter((i) => i >= 0), [header])
   const valueOf = useCallback((r: Row, c: number) => edits[ek(r.rowNumber, c)] ?? r.cells[c] ?? "", [edits])
   /** Ghi tạm giá trị một ô (bỏ đánh dấu nếu trùng giá trị gốc). */
@@ -433,7 +452,13 @@ function DataAdmin() {
   const doAdd = async () => {
     setSaving(true)
     try {
-      const res = await api({ action: "append", table, rows: [addVals] })
+      // Chuẩn hoá cách viết tên máy / dung lượng / màu như các form nhập khác
+      const row: Record<string, string> = {}
+      for (const [h, v] of Object.entries(addVals)) {
+        const k = fold(h.trim())
+        row[h] = k === "ten san pham" ? chuanTenMay(v) : k === "dung luong" ? chuanDungLuong(v) : k === "mau sac" ? chuanMau(v) : v
+      }
+      const res = await api({ action: "append", table, rows: [row] })
       toast({ title: res.added ? "Đã thêm 1 dòng" : "Chưa nhập thông tin nào" })
       setAddOpen(false)
       setAddVals({})
@@ -814,7 +839,15 @@ function DataAdmin() {
                   {isBranchColumn(h) ? (
                     <div className="mt-0.5"><BranchToggle value={addVals[h] || "?"} onPick={(name) => setAddVals((p) => ({ ...p, [h]: name }))} /></div>
                   ) : (
-                    <Input className="mt-0.5 h-8 text-sm" value={addVals[h] || ""} onChange={(e) => setAddVals((p) => ({ ...p, [h]: e.target.value }))} />
+                    <OThemDong
+                      h={h}
+                      bang={table}
+                      value={addVals[h] || ""}
+                      onChange={(v) => setAddVals((p) => ({ ...p, [h]: v }))}
+                      vals={addVals}
+                      tenCot={tenCotThem}
+                      goiY={goiYThem[c] || []}
+                    />
                   )}
                 </label>
               )
