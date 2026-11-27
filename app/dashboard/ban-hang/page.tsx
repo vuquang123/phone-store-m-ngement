@@ -75,6 +75,7 @@ export default function BanHangPage() {
     capacityFilter,
     pinFilter,
     priceRange,
+    deOShopFilter, setDeOShopFilter,
     resetFilters: resetAdvancedFilters,
   } = useInventoryStore()
   // Nhớ bộ lọc giữa các lần vào trang (localStorage, nạp sau mount)
@@ -424,7 +425,6 @@ export default function BanHangPage() {
   // Máy trong kho hệ thống (có trong sheet Kho_Hang) mới chỉnh/CNC/giao đối tác được.
   const allInventoryProducts: any[] = invResRaw?.data || []
   // "Để ở shop": máy lô mới chưa chốt giá (de_o_shop = "No") chỉ quản lý/chủ shop thấy
-  const [chiChuaShop, setChiChuaShop] = useState(false)
   const soChuaShop = useMemo(() => allInventoryProducts.filter((p: any) => p?.de_o_shop === "No").length, [allInventoryProducts])
   const [dangDatShop, setDangDatShop] = useState(false)
   const datDeOShop = async (value: "Yes" | "No") => {
@@ -667,7 +667,9 @@ export default function BanHangPage() {
       if (filterType === 'sim_ghep') return isAccessoryItem(p) && isSimGhep(p)
       // Các tab còn lại: phụ kiện không hiển thị (đã chuyển sang tích kèm máy trong giỏ)
       if (isAccessoryItem(p)) return false
-      if (chiChuaShop && p.de_o_shop !== "No") return false
+      // Bộ lọc "Để ở shop" chỉ áp cho chủ shop / quản lý (nhân viên không thấy máy chưa để shop)
+      if (isManager && deOShopFilter === "chua" && p.de_o_shop !== "No") return false
+      if (isManager && deOShopFilter === "o_shop" && p.de_o_shop === "No") return false
       if (filterSource === "kho" && isPartner) return false
       if (filterSource === "doi_tac" && !isPartner) return false
       if (filterType==='iphone') {
@@ -710,7 +712,7 @@ export default function BanHangPage() {
       }
       return true
     })
-  }, [searchResults, filterSource, filterType, productNameFilter, loaiMayFilter, colorFilter, capacityFilter, pinFilter, priceRange, chiChuaShop])
+  }, [searchResults, filterSource, filterType, productNameFilter, loaiMayFilter, colorFilter, capacityFilter, pinFilter, priceRange, deOShopFilter, isManager])
 
   // Tùy chọn động cho dropdown (lấy từ máy trong kết quả tìm kiếm, có cross-filter giống Kho hàng)
   const advancedFilterOptions = useMemo(() => {
@@ -1425,16 +1427,6 @@ export default function BanHangPage() {
                     <ListChecks className="w-4 h-4" />
                   </Button>
                   <RefreshButton onRefresh={handleRefreshAll} loading={refreshing} className="h-10 w-10" />
-                  {isManager && (soChuaShop > 0 || chiChuaShop) && (
-                    <Button
-                      variant="outline"
-                      title="Máy lô mới chưa để ở shop: chỉ quản lý và chủ shop thấy"
-                      className={chiChuaShop ? "border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" : "border-amber-300 text-amber-700"}
-                      onClick={() => setChiChuaShop((v) => !v)}
-                    >
-                      Chưa để shop ({soChuaShop})
-                    </Button>
-                  )}
                   <Button
                     variant="outline"
                     className="border-sky-300 text-sky-700 hover:bg-sky-50 hover:text-sky-700 dark:border-sky-500/40 dark:text-sky-400 dark:hover:bg-sky-500/10 dark:hover:text-sky-300"
@@ -1538,6 +1530,9 @@ export default function BanHangPage() {
                   setCart={setCart}
                   toast={toast}
                   isManager={isManager}
+                  deOShopFilter={deOShopFilter}
+                  setDeOShopFilter={setDeOShopFilter}
+                  soChuaShop={soChuaShop}
                   cartProductKeys={cartProductKeys}
                   isEditMode={isEditMode}
                   selectedIds={selectedIds}

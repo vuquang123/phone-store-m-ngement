@@ -10,6 +10,8 @@ export type LoaiMayFilter = "all" | "Lock" | "Qte"
 export type PinFilter = "all" | "100" | "9x" | "8x" | "7x" | "lt70"
 /** Nhóm hàng đang xem ở trang Bán hàng. */
 export type FilterType = "all" | "iphone" | "ipad" | "phu_kien" | "sim_ghep"
+/** "Để ở shop" (chỉ chủ shop / quản lý): tất cả / máy đang ở shop / máy lô mới chưa để ở shop. */
+export type DeOShopFilter = "all" | "o_shop" | "chua"
 
 export const MAX_PRICE = 50000000
 
@@ -24,6 +26,7 @@ export interface InventoryFilters {
   capacityFilter: string
   pinFilter: PinFilter
   priceRange: [number, number]
+  deOShopFilter: DeOShopFilter
 }
 
 interface InventoryState extends InventoryFilters {
@@ -37,6 +40,7 @@ interface InventoryState extends InventoryFilters {
   setCapacityFilter: (filter: string) => void
   setPinFilter: (filter: PinFilter) => void
   setPriceRange: (range: [number, number]) => void
+  setDeOShopFilter: (filter: DeOShopFilter) => void
   /** Nạp nhiều bộ lọc một lượt (dùng khi hydrate từ localStorage). */
   setFilters: (filters: Partial<InventoryFilters>) => void
   resetFilters: () => void
@@ -52,6 +56,7 @@ const DEFAULT_FILTERS: InventoryFilters = {
   capacityFilter: "all",
   pinFilter: "all",
   priceRange: [0, MAX_PRICE],
+  deOShopFilter: "all",
 }
 
 export const useInventoryStore = create<InventoryState>((set) => ({
@@ -66,6 +71,7 @@ export const useInventoryStore = create<InventoryState>((set) => ({
   setCapacityFilter: (capacityFilter) => set({ capacityFilter }),
   setPinFilter: (pinFilter) => set({ pinFilter }),
   setPriceRange: (priceRange) => set({ priceRange }),
+  setDeOShopFilter: (deOShopFilter) => set({ deOShopFilter }),
 
   setFilters: (filters) => set(filters),
   resetFilters: () => set({ ...DEFAULT_FILTERS }),

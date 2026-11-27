@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { buildCustomerQuote, copyTextToClipboard } from "@/lib/utils/customer-quote"
 import { toast as sonnerToast } from "sonner"
 import { cn } from "@/lib/utils"
-import type { FilterType, SourceFilter } from "@/lib/store/inventory-store"
+import type { DeOShopFilter, FilterType, SourceFilter } from "@/lib/store/inventory-store"
 
 interface SearchAreaProps {
   isMobile: boolean
@@ -48,6 +48,10 @@ interface SearchAreaProps {
   advancedFilter?: React.ReactNode
   cartProductKeys?: Set<string>
   isManager?: boolean
+  /** Bộ lọc "Để ở shop" (chỉ chủ shop / quản lý) */
+  deOShopFilter?: DeOShopFilter
+  setDeOShopFilter?: (v: DeOShopFilter) => void
+  soChuaShop?: number
   // ===== Chế độ quản lý kho (gộp từ trang Kho hàng cũ) =====
   // Bật isEditMode -> mỗi dòng có checkbox chọn hàng loạt; tắt -> hiện cụm nút hành động.
   isEditMode?: boolean
@@ -92,6 +96,9 @@ export function SearchArea({
   advancedFilter,
   cartProductKeys,
   isManager = false,
+  deOShopFilter = "all",
+  setDeOShopFilter,
+  soChuaShop = 0,
   isEditMode = false,
   selectedIds = [],
   onSelect,
@@ -195,6 +202,22 @@ export function SearchArea({
               className={filterType === 'sim_ghep' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50'}
               onClick={() => setFilterType('sim_ghep')}>Sim ghép</Button>
           </div>
+          {isManager && setDeOShopFilter && (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-xs text-muted-foreground mr-1" title="Máy lô mới chưa để ở shop: chỉ chủ shop và quản lý thấy">Để ở shop:</span>
+              {([
+                ["all", "Tất cả"],
+                ["o_shop", "Đang ở shop"],
+                ["chua", `Chưa để shop (${soChuaShop})`],
+              ] as const).map(([v, nhan]) => (
+                <Button key={v} size="sm" variant={deOShopFilter === v ? 'default' : 'outline'}
+                  className={deOShopFilter === v
+                    ? (v === 'chua' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-blue-600 text-white hover:bg-blue-700')
+                    : (v === 'chua' ? 'border-amber-300 text-amber-700 hover:border-amber-400' : 'hover:text-blue-700 hover:border-blue-300 active:bg-blue-50')}
+                  onClick={() => setDeOShopFilter(v)}>{nhan}</Button>
+              ))}
+            </div>
+          )}
         </div>
 
         {advancedFilter && <div className="mb-3">{advancedFilter}</div>}

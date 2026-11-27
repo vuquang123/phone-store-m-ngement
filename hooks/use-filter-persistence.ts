@@ -12,6 +12,7 @@ import {
   type LoaiMayFilter,
   type PinFilter,
   type SourceFilter,
+  type DeOShopFilter,
 } from "@/lib/store/inventory-store"
 
 const KEYS = {
@@ -24,7 +25,9 @@ const KEYS = {
   capacityFilter: "bh_filter_capacity",
   pinFilter: "bh_filter_pin",
   priceRange: "bh_filter_price",
+  deOShopFilter: "bh_filter_de_o_shop",
 } as const
+const DE_O_SHOP_VALUES: DeOShopFilter[] = ["all", "o_shop", "chua"]
 
 const PIN_VALUES: PinFilter[] = ["all", "100", "9x", "8x", "7x", "lt70"]
 const LOAI_MAY_VALUES: LoaiMayFilter[] = ["all", "Lock", "Qte"]
@@ -82,6 +85,9 @@ export function useFilterPersistence() {
         }
       }
 
+      const deo = get(KEYS.deOShopFilter)
+      if (deo && DE_O_SHOP_VALUES.includes(deo as DeOShopFilter)) patch.deOShopFilter = deo
+
       if (Object.keys(patch).length > 0) setFilters(patch)
     } catch {}
     hydrated.current = true
@@ -102,6 +108,7 @@ export function useFilterPersistence() {
         localStorage.setItem(KEYS.capacityFilter, state.capacityFilter)
         localStorage.setItem(KEYS.pinFilter, state.pinFilter)
         localStorage.setItem(KEYS.priceRange, JSON.stringify(state.priceRange))
+        localStorage.setItem(KEYS.deOShopFilter, state.deOShopFilter)
       } catch {}
     })
   }, [])
