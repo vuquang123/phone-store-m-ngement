@@ -60,9 +60,22 @@ function phanTich(hang: string[][]) {
   if (h < 0) throw new Error("Không thấy cột IMEI hoặc Serial trong file. Dòng tiêu đề cần có chữ IMEI.")
   const tieuDe = hang[h].map(bo)
   const viTri: Partial<Record<keyof typeof COT, number>> = {}
+  // 1) khớp đúng tên cột
   for (const [k, ds] of Object.entries(COT) as [keyof typeof COT, string[]][]) {
     const i = tieuDe.findIndex((x) => ds.includes(x))
     if (i !== -1) viTri[k] = i
+  }
+  // 2) tên cột có thêm đơn vị / chú thích: "Dung Lượng (Gb)", "Giá nhập (VNĐ)", "Màu sắc máy"...
+  //    -> khớp theo phần đầu, chỉ với tên đủ dài (>= 4 ký tự) để "gia" không ăn nhầm "giaban",
+  //    và không lấy cột đã được gán cho trường khác.
+  const daDung = new Set(Object.values(viTri))
+  for (const [k, ds] of Object.entries(COT) as [keyof typeof COT, string[]][]) {
+    if (viTri[k] !== undefined) continue
+    const i = tieuDe.findIndex((x, j) => !daDung.has(j) && x && ds.some((d) => d.length >= 4 && x.startsWith(d)))
+    if (i !== -1) {
+      viTri[k] = i
+      daDung.add(i)
+    }
   }
   // Ô tiền: đọc đúng ô số "9700000.0", "9.700.000", "9,700,000", "9tr7"... (trước đây bỏ dấu chấm -> nhân 10)
   const so = (s: string) => docSoTien(s)
