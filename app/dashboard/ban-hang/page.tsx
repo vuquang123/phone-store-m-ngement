@@ -54,7 +54,7 @@ import { isConHangProduct } from "@/lib/utils/inventory-helpers"
 import { buildCustomerQuoteList, copyTextToClipboard } from "@/lib/utils/customer-quote"
 import { toast as sonnerToast } from "sonner"
 import { ListChecks } from "lucide-react"
-import { khopTenMay } from "@/lib/chuan-hoa-may"
+import { khopTenMay, chuanTenMay, chuanDungLuong, chuanMau } from "@/lib/chuan-hoa-may"
 
 
 export default function BanHangPage() {
@@ -746,6 +746,47 @@ export default function BanHangPage() {
     }
   }, [searchResults, filterSource, productNameFilter, colorFilter, capacityFilter])
 
+  // Bộ lọc nhớ trong máy (localStorage) có thể giữ giá trị CŨ không còn khớp máy nào — vd "iPhone 16 Pro Max"
+  // / "256GB" từ trước khi chuẩn hoá tên (nay là "iPhone 16 ProMax" / "256 GB"). Dropdown không hiện được giá trị
+  // lạ nên nhìn như "Tất cả" mà danh sách trống (hay gặp trên điện thoại). Khi đã có dữ liệu: đổi sang cách viết
+  // mới nếu khớp, không thì bỏ bộ lọc đó.
+  const setFiltersStore = useInventoryStore((s) => s.setFilters)
+  useEffect(() => {
+    const tatCa = [...khoHangProducts, ...partnerProducts, ...allAccessoryProducts] as any[]
+    if (!tatCa.length) return
+    const ten = new Set(tatCa.map((p) => String(p.ten_san_pham || "")).filter(Boolean))
+    const dl = new Set(tatCa.map((p) => String(p.dung_luong || "")).filter(Boolean))
+    const mau = new Set(tatCa.map((p) => String(p.mau_sac || "")).filter(Boolean))
+    const patch: Record<string, string> = {}
+    const sua = (khoa: string, v: string, tap: Set<string>, chuan: (x: string) => string) => {
+      if (v === "all" || tap.has(v)) return
+      const c = chuan(v)
+      patch[khoa] = tap.has(c) ? c : "all"
+    }
+    sua("productNameFilter", productNameFilter, ten, (x) => chuanTenMay(x))
+    sua("capacityFilter", capacityFilter, dl, chuanDungLuong)
+    sua("colorFilter", colorFilter, mau, chuanMau)
+    if (Object.keys(patch).length) setFiltersStore(patch as any)
+  }, [khoHangProducts, partnerProducts, allAccessoryProducts, productNameFilter, capacityFilter, colorFilter, setFiltersStore])
+
+  // Bộ lọc đang bật (để báo rõ khi lọc làm danh sách trống)
+  const boLocDangBat = useMemo(() => {
+    const ds: string[] = []
+    if (searchQuery.trim()) ds.push(`tìm "${searchQuery.trim()}"`)
+    if (filterSource === "kho") ds.push("Kho trong")
+    if (filterSource === "doi_tac") ds.push("Kho ngoài")
+    if (filterType !== "all") ds.push({ iphone: "iPhone", ipad: "iPad", phu_kien: "Phụ kiện", sim_ghep: "Sim ghép" }[filterType] || filterType)
+    if (isManager && deOShopFilter === "chua") ds.push("Chưa để shop")
+    if (isManager && deOShopFilter === "o_shop") ds.push("Đang ở shop")
+    if (productNameFilter !== "all") ds.push(productNameFilter)
+    if (loaiMayFilter !== "all") ds.push(loaiMayFilter === "Qte" ? "Quốc tế" : loaiMayFilter)
+    if (colorFilter !== "all") ds.push(colorFilter)
+    if (capacityFilter !== "all") ds.push(capacityFilter)
+    if (pinFilter !== "all") ds.push(`Pin ${pinFilter}`)
+    if (priceRange[0] > 0 || priceRange[1] < BH_MAX_PRICE) ds.push("Khoảng giá")
+    return ds
+  }, [searchQuery, filterSource, filterType, isManager, deOShopFilter, productNameFilter, loaiMayFilter, colorFilter, capacityFilter, pinFilter, priceRange, BH_MAX_PRICE])
+
   // Sort results based on column and order
   const sortedSearchResults = useMemo(() => {
     const arr = [...filteredSearchResults]
@@ -1405,6 +1446,14 @@ export default function BanHangPage() {
             )}
             {(!isMobile || mobileView === 'san-pham') && dangTaiKho && !khoLoi && (
               <div className="mt-3 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">Đang tải danh sách máy…</div>
+            )}
+            {/* Có máy nhưng bộ lọc / tìm kiếm ẩn hết: nói rõ đang lọc gì + nút Bỏ lọc */}
+            {(!isMobile || mobileView === 'san-pham') && !dangTaiKho && !khoLoi && !isSearching &&
+              filteredSearchResults.length === 0 && boLocDangBat.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                <span>Không có máy khớp bộ lọc đang bật: {boLocDangBat.join(" · ")}</span>
+                <Button size="sm" variant="outline" onClick={() => resetAdvancedFilters()}>Bỏ lọc</Button>
+              </div>
             )}
 
             {/* Toolbar quản lý kho — gộp từ trang Kho hàng cũ */}
